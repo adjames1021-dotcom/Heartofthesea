@@ -19,7 +19,7 @@ const iron = toon('#3a3f45');
 const red = toon('#b8342a');
 const cream = toon('#efe2c4');
 
-function makeBarrel() {
+export function makeBarrel() {
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.1, 14), wood);
   const bulge = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.55, 14), wood);
@@ -36,7 +36,7 @@ function makeBarrel() {
   return { object: holder, draft: 0.12, size: 0.6 };
 }
 
-function makeCrate() {
+export function makeCrate() {
   const g = new THREE.Group();
   g.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), wood));
   const plank = new THREE.BoxGeometry(1.04, 0.14, 0.14);
@@ -79,7 +79,8 @@ const qTilt = new THREE.Quaternion();
 const qYaw = new THREE.Quaternion();
 
 export class Flotsam {
-  constructor() {
+  /** buoy: world {x, z} for the moored lantern buoy. */
+  constructor({ buoy }) {
     this.group = new THREE.Group();
     this.items = [];
     const rand = mulberry32(7);
@@ -100,26 +101,15 @@ export class Flotsam {
     };
 
     this.buoy = makeBuoy();
-    add(this.buoy, 0, 0);
+    add(this.buoy, buoy.x, buoy.z);
     this.items[0].drift.set(0, 0); // the buoy is moored
     this.items[0].spin = 0;
-
-    for (let i = 0; i < 14; i++) {
-      const r = 8 + rand() * 55;
-      const a = rand() * Math.PI * 2;
-      add(rand() < 0.6 ? makeBarrel() : makeCrate(), Math.cos(a) * r, Math.sin(a) * r);
-    }
   }
 
   update(t, dt, waveScale, night) {
     for (const it of this.items) {
       it.ax += it.drift.x * dt;
       it.az += it.drift.y * dt;
-      // Wrap drifting junk around the buoy so the scene never empties.
-      if (Math.hypot(it.ax, it.az) > 80) {
-        it.ax = -it.ax * 0.9;
-        it.az = -it.az * 0.9;
-      }
       it.yaw += it.spin * dt;
 
       sampleSurface(it.ax, it.az, t, waveScale, surf);

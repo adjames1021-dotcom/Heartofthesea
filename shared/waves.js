@@ -48,6 +48,15 @@ export const RIPPLES = [
 
 export const DEFAULT_WAVE_SCALE = 0.62;
 
+// Optional shallow-water damping: (x, z) → 0..1 multiplier on swell height,
+// sampled at the undisplaced point. shared/world.js provides one (calm lagoons,
+// gentle lapping on beaches); without it the sea is the same everywhere.
+let dampingFn = null;
+
+export function setWaveDamping(fn) {
+  dampingFn = fn;
+}
+
 /** Phase of each wave at time t (seconds), wrapped to [0, 2π) in double precision. */
 export function wavePhases(waves, t, out = new Float32Array(waves.length)) {
   for (let i = 0; i < waves.length; i++) {
@@ -64,8 +73,9 @@ export function sampleSurface(x, z, t, scale = DEFAULT_WAVE_SCALE, out = {}) {
   let px = x, py = 0, pz = z;
   let tx = 1, ty = 0, tz = 0; // d/dx
   let bx = 0, by = 0, bz = 1; // d/dz
+  const damp = dampingFn ? dampingFn(x, z) : 1;
   for (const w of SWELLS) {
-    const q = w.steepness * scale;
+    const q = w.steepness * scale * damp;
     const a = q / w.k;
     const f = w.k * (w.dirX * x + w.dirZ * z) - ((w.omega * t) % TAU);
     const c = Math.cos(f);

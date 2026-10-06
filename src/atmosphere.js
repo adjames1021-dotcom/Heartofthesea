@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { sunDirection } from '../shared/environment.js';
 import { noiseGLSL, skyGLSL, skyUniformsGLSL } from './glsl.js';
 
 // Colour keyframes indexed by sun elevation (sunDir.y). Everything that sets
@@ -9,6 +10,7 @@ const KEYS = [
     zenith: '#050c22', horizon: '#1b2c4e', haze: '#000000', sun: '#000000',
     light: '#8fa6dc', lightI: 0.9,
     deep: '#020d1c', shallow: '#0a3452', scatter: '#14808a',
+    lagoon: '#0a3a4a', sandbed: '#1c2a33',
     cloudLit: '#3a4a6e', cloudShade: '#0b1224', fog: 0.0008, night: 1,
   },
   {
@@ -16,6 +18,7 @@ const KEYS = [
     zenith: '#07102a', horizon: '#1e2d52', haze: '#0a0a14', sun: '#000000',
     light: '#8fa6dc', lightI: 0.9,
     deep: '#030f1f', shallow: '#0b3654', scatter: '#14808a',
+    lagoon: '#0b3f50', sandbed: '#1e2d37',
     cloudLit: '#3a4a6e', cloudShade: '#0c1328', fog: 0.0008, night: 1,
   },
   {
@@ -23,6 +26,7 @@ const KEYS = [
     zenith: '#141c45', horizon: '#6b3f5e', haze: '#7a3a36', sun: '#ff6a3d',
     light: '#ff8a5c', lightI: 0.2,
     deep: '#041627', shallow: '#0b3a55', scatter: '#16808a',
+    lagoon: '#1d5a66', sandbed: '#4a4a52',
     cloudLit: '#a3546a', cloudShade: '#2a2346', fog: 0.0008, night: 0.6,
   },
   {
@@ -30,6 +34,7 @@ const KEYS = [
     zenith: '#2c4f8f', horizon: '#ff9a5a', haze: '#ff7a3a', sun: '#ffb070',
     light: '#ffa060', lightI: 1.4,
     deep: '#06263f', shallow: '#0d4f68', scatter: '#20a39a',
+    lagoon: '#2f9c98', sandbed: '#c8a07c',
     cloudLit: '#ffc08a', cloudShade: '#6a4f78', fog: 0.0007, night: 0.0,
   },
   {
@@ -37,6 +42,7 @@ const KEYS = [
     zenith: '#3d79c7', horizon: '#f5cf9e', haze: '#ffb36b', sun: '#ffd6a0',
     light: '#ffd2a0', lightI: 2.3,
     deep: '#053049', shallow: '#0a5b78', scatter: '#25c2ac',
+    lagoon: '#36bfb2', sandbed: '#e2cfa4',
     cloudLit: '#fff1dc', cloudShade: '#8a8fb0', fog: 0.0006, night: 0,
   },
   {
@@ -44,6 +50,7 @@ const KEYS = [
     zenith: '#2c78d8', horizon: '#b8dcf2', haze: '#ffe3b8', sun: '#fff1dc',
     light: '#fff3e2', lightI: 2.8,
     deep: '#04354f', shallow: '#086683', scatter: '#24d1b5',
+    lagoon: '#33cdbd', sandbed: '#e8ddb6',
     cloudLit: '#ffffff', cloudShade: '#9cb2cf', fog: 0.0005, night: 0,
   },
   {
@@ -51,17 +58,22 @@ const KEYS = [
     zenith: '#1f6ad0', horizon: '#a6d4f2', haze: '#fff0d0', sun: '#fff8ee',
     light: '#fffaf2', lightI: 3.0,
     deep: '#03374f', shallow: '#086a88', scatter: '#24d6b8',
+    lagoon: '#30d2c2', sandbed: '#ebe1bb',
     cloudLit: '#ffffff', cloudShade: '#a3b9d6', fog: 0.0005, night: 0,
   },
 ];
 
 const COLOR_FIELDS = [
   'zenith', 'horizon', 'haze', 'sun', 'light',
-  'deep', 'shallow', 'scatter', 'cloudLit', 'cloudShade',
+  'deep', 'shallow', 'scatter', 'cloudLit', 'cloudShade', 'lagoon', 'sandbed',
 ];
 for (const k of KEYS) for (const f of COLOR_FIELDS) k[f] = new THREE.Color(k[f]);
 
 const tmpA = new THREE.Color();
+const _X = new THREE.Vector3(1, 0, 0);
+const _Y = new THREE.Vector3(0, 1, 0);
+const _right = new THREE.Vector3();
+const _up = new THREE.Vector3();
 
 export class Atmosphere {
   constructor() {
@@ -117,9 +129,22 @@ export class Atmosphere {
     this.dome.frustumCulled = false;
     this.dome.renderOrder = -1;
 
-    // Real lights for regular meshes (barrels, the buoy, later: ships).
+    // Real lights for regular meshes (islands, props, boats). The sun (or moon)
+    // casts shadows in a box that follows whatever the camera is looking at.
     this.light = new THREE.DirectionalLight(0xffffff, 2);
     this.light.position.set(0, 100, 0);
+    this.light.castShadow = true;
+    this.light.shadow.mapSize.set(2048, 2048);
+    const sc = this.light.shadow.camera;
+    sc.left = -95;
+    sc.right = 95;
+    sc.top = 95;
+    sc.bottom = -95;
+    sc.near = 1;
+    sc.far = 700;
+    this.light.shadow.bias = -0.0004;
+    this.light.shadow.normalBias = 0.12;
+    this.shadowFocus = new THREE.Vector3();
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x0a3550, 0.6);
 
     this.fog = new THREE.FogExp2(0x000000, 0.0006);
@@ -132,9 +157,8 @@ export class Atmosphere {
 
   /** hours: 0..24 time of day. */
   setTimeOfDay(hours) {
-    const theta = ((hours - 6) / 24) * Math.PI * 2;
-    // Sun rises in the east (+x), arcs high to the south-ish, sets in the west.
-    this.sunDir.set(Math.cos(theta), Math.sin(theta) * 0.92, 0.38).normalize();
+    // Same sun as the server and the puzzles (shared/environment.js).
+    sunDirection(hours, this.sunDir);
     this.#interpolate(this.sunDir.y);
 
     const s = this.state;
@@ -160,13 +184,29 @@ export class Atmosphere {
 
     this.light.color.copy(s.light);
     this.light.intensity = lightI;
-    this.light.position.copy(this.lightDir).multiplyScalar(100);
     this.hemi.color.copy(s.zenith).lerp(s.horizon, 0.5);
     this.hemi.groundColor.copy(s.deep);
-    this.hemi.intensity = 0.6 + 0.6 * (1 - s.night);
+    this.hemi.intensity = 0.9 + 0.85 * (1 - s.night);
 
     this.fog.color.copy(s.horizon);
     this.fog.density = s.fog;
+  }
+
+  /** Centre the shadow box on a point of interest (snapped to shadow texels to stop shimmer). */
+  focusShadows(point) {
+    const cam = this.light.shadow.camera;
+    const texel = (cam.right - cam.left) / this.light.shadow.mapSize.x;
+    const f = this.shadowFocus.copy(point);
+    // Snap in light space so moving the camera doesn't make shadow edges crawl.
+    const up = Math.abs(this.lightDir.y) > 0.99 ? _X : _Y;
+    _right.crossVectors(up, this.lightDir).normalize();
+    _up.crossVectors(this.lightDir, _right);
+    const r = Math.round(f.dot(_right) / texel) * texel - f.dot(_right);
+    const u = Math.round(f.dot(_up) / texel) * texel - f.dot(_up);
+    f.addScaledVector(_right, r).addScaledVector(_up, u);
+    this.light.target.position.copy(f);
+    this.light.position.copy(f).addScaledVector(this.lightDir, 300);
+    this.light.target.updateMatrixWorld();
   }
 
   #interpolate(e) {

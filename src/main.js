@@ -5,15 +5,33 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { heightAt } from '../shared/waves.js';
+import { heightAt, setWaveDamping } from '../shared/waves.js';
+import { dampingAt, ISLAND_BY_ID, toWorld } from '../shared/world.js';
+import { hoursAt, swellScaleAt, cloudCoverAt } from '../shared/environment.js';
 import { Atmosphere } from './atmosphere.js';
 import { Ocean } from './ocean.js';
 import { Flotsam } from './flotsam.js';
+import { Islands } from './islands.js';
+import { buildWorldTexture } from './terrain.js';
 import { OceanAudio } from './audio.js';
 import { syncClock, worldTime } from './clock.js';
 import './style.css';
 
 const params = new URLSearchParams(location.search);
+const num = (k) => (params.has(k) ? Number(params.get(k)) : null);
+
+// Developer overrides for screenshots and testing only. Normal play takes
+// all of these from the shared clock so every player sees the same world.
+const dev = {
+  hours: num('t'),
+  swell: num('swell'),
+  clouds: num('clouds'),
+  fog: num('fog'),
+};
+
+// ---------- World data ----------
+const world = buildWorldTexture(); // bakes the seabed/damping grid
+setWaveDamping(dampingAt);
 
 // ---------- Renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -21,30 +39,64 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.92;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 12000);
-camera.position.set(27, 6.5, -6);
-
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.06;
-controls.minDistance = 6;
-controls.maxDistance = 260;
-controls.maxPolarAngle = Math.PI * 0.53;
-controls.target.set(0, 2.5, 0);
-controls.enablePan = false;
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.3, 9000);
 
 // ---------- World ----------
 const atmosphere = new Atmosphere();
 atmosphere.addTo(scene);
 
-const ocean = new Ocean(atmosphere);
+const ocean = new Ocean(atmosphere, world);
 scene.add(ocean.mesh);
 
-const flotsam = new Flotsam();
+const islands = new Islands();
+scene.add(islands.group);
+
+const saddle = ISLAND_BY_ID.saddle;
+const buoyAt = toWorld(saddle, saddle.features.buoy.x, saddle.features.buoy.z);
+const flotsam = new Flotsam({ buoy: buoyAt });
 scene.add(flotsam.group);
+
+// ---------- Camera ----------
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 6;
+controls.maxDistance = 900;
+controls.maxPolarAngle = Math.PI * 0.53;
+controls.enablePan = false;
+
+let followBuoy = true;
+const camMode = params.get('cam');
+if (camMode === 'free') {
+  // ?cam=free&pos=x,y,z&look=x,y,z
+  const [px, py, pz] = (params.get('pos') ?? '0,400,700').split(',').map(Number);
+  const [lx, ly, lz] = (params.get('look') ?? '0,0,0').split(',').map(Number);
+  camera.position.set(px, py, pz);
+  controls.target.set(lx, ly, lz);
+  followBuoy = false;
+} else if (camMode === 'island') {
+  // ?cam=island&id=horseshoe&az=0.5&el=0.3&dist=300&lift=10
+  const isl = ISLAND_BY_ID[params.get('id') ?? 'saddle'];
+  const az = num('az') ?? 0.6;
+  const el = num('el') ?? 0.25;
+  const dist = num('dist') ?? 320;
+  const lift = num('lift') ?? 8;
+  controls.target.set(isl.x, lift, isl.z);
+  camera.position.set(
+    isl.x + Math.cos(az) * Math.cos(el) * dist,
+    lift + Math.sin(el) * dist,
+    isl.z + Math.sin(az) * Math.cos(el) * dist,
+  );
+  followBuoy = false;
+} else {
+  camera.position.set(buoyAt.x - 30, 8, buoyAt.z + 22);
+  controls.target.set(buoyAt.x, 2.5, buoyAt.z);
+}
 
 // ---------- Post ----------
 const composer = new EffectComposer(renderer);
@@ -62,46 +114,25 @@ addEventListener('resize', () => {
 
 // ---------- UI ----------
 const ui = {
-  time: document.getElementById('time'),
-  timeLabel: document.getElementById('time-label'),
-  waves: document.getElementById('waves'),
-  clouds: document.getElementById('clouds'),
-  cycle: document.getElementById('cycle'),
   sound: document.getElementById('sound'),
   panel: document.getElementById('panel'),
-  hide: document.getElementById('hide'),
+  toggle: document.getElementById('settings-toggle'),
 };
-
-let timeOfDay = Number(params.get('t') ?? 17.4);
-let cycling = !params.has('still');
-ui.time.value = timeOfDay;
-ui.cycle.checked = cycling;
-if (params.has('waves')) ui.waves.value = params.get('waves');
-ocean.setWaveScale(Number(ui.waves.value));
-atmosphere.uniforms.uCloudCover.value = Number(ui.clouds.value);
-
-ui.time.addEventListener('input', () => (timeOfDay = Number(ui.time.value)));
-ui.waves.addEventListener('input', () => ocean.setWaveScale(Number(ui.waves.value)));
-ui.clouds.addEventListener('input', () => (atmosphere.uniforms.uCloudCover.value = Number(ui.clouds.value)));
-ui.cycle.addEventListener('change', () => (cycling = ui.cycle.checked));
-
 const audio = new OceanAudio();
 ui.sound.addEventListener('click', async () => {
   const on = await audio.toggle();
-  ui.sound.textContent = on ? 'Sound: on' : 'Sound: off';
+  ui.sound.textContent = on ? 'Sound on' : 'Sound off';
   ui.sound.setAttribute('aria-pressed', String(on));
 });
-ui.hide.addEventListener('click', () => ui.panel.classList.toggle('collapsed'));
-
-const fmtTime = (h) => {
-  const hh = Math.floor(h) % 24;
-  const mm = Math.floor((h % 1) * 60);
-  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-};
+ui.toggle.addEventListener('click', () => {
+  const open = ui.panel.classList.toggle('open');
+  ui.toggle.setAttribute('aria-expanded', String(open));
+});
 
 // ---------- Loop ----------
-const followTarget = new THREE.Vector3(0, 2.5, 0);
+const followTarget = new THREE.Vector3(buoyAt.x, 2.5, buoyAt.z);
 const delta = new THREE.Vector3();
+const buoyFollow = new THREE.Vector3();
 let last = performance.now();
 
 function frame(now) {
@@ -109,37 +140,36 @@ function frame(now) {
   last = now;
   const t = worldTime();
 
-  if (cycling) {
-    // One in-game hour per 40 real seconds.
-    timeOfDay = (timeOfDay + dt / 40) % 24;
-    ui.time.value = timeOfDay;
-  }
-  ui.timeLabel.textContent = fmtTime(timeOfDay);
-
-  atmosphere.setTimeOfDay(timeOfDay);
+  atmosphere.setTimeOfDay(dev.hours ?? hoursAt(t));
   atmosphere.uniforms.uTime.value = t % 3600;
+  atmosphere.uniforms.uCloudCover.value = dev.clouds ?? cloudCoverAt(t);
+  if (dev.fog !== null) atmosphere.fog.density = dev.fog;
+  ocean.setWaveScale(dev.swell ?? swellScaleAt(t));
   ocean.update(t, camera);
   flotsam.update(t, dt, ocean.waveScale, atmosphere.uniforms.uNight.value);
+  islands.update(t);
+
   flotsam.buoy.lantern.light.getWorldPosition(ocean.uniforms.uLanternPos.value);
   ocean.uniforms.uLanternColor.value
     .setRGB(1.0, 0.55, 0.2)
     .multiplyScalar(flotsam.buoy.lantern.light.intensity / 20);
 
-  // Let the camera ride the swell with the buoy, softened like a sea legs sway.
-  const buoy = flotsam.buoy.object.position;
-  followTarget.lerp(new THREE.Vector3(buoy.x, buoy.y * 0.6 + 2.5, buoy.z), 1 - Math.exp(-dt * 2));
-  delta.subVectors(followTarget, controls.target);
-  controls.target.add(delta);
-  camera.position.add(delta);
+  if (followBuoy) {
+    // Ride the swell with the buoy, softened like sea legs.
+    const buoy = flotsam.buoy.object.position;
+    buoyFollow.set(buoy.x, buoy.y * 0.6 + 2.5, buoy.z);
+    followTarget.lerp(buoyFollow, 1 - Math.exp(-dt * 2));
+    delta.subVectors(followTarget, controls.target);
+    controls.target.add(delta);
+    camera.position.add(delta);
+  }
   controls.update();
 
   // Never dip below the surface.
   const water = heightAt(camera.position.x, camera.position.z, t, ocean.waveScale);
   if (camera.position.y < water + 1.2) camera.position.y = water + 1.2;
 
-  // Keep the sun/moon light aimed at the play area.
-  atmosphere.light.target.position.copy(controls.target);
-  atmosphere.light.position.copy(controls.target).addScaledVector(atmosphere.lightDir, 100);
+  atmosphere.focusShadows(controls.target);
 
   composer.render(dt);
   requestAnimationFrame(frame);

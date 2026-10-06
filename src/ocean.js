@@ -57,6 +57,12 @@ uniform float uSwellPhase[NUM_SWELLS];
 uniform vec4 uRipples[NUM_RIPPLES];
 uniform float uRipplePhase[NUM_RIPPLES];
 uniform float uWaveScale;
+uniform sampler2D uWorld;   // r: seabed height (m), g: swell damping 0..1
+uniform vec3 uWorldRect;    // min x, min z, size
+
+vec2 worldSample(vec2 p) {
+  return texture2D(uWorld, (p - uWorldRect.xy) / uWorldRect.z).rg;
+}
 
 // Fade a wave out once it gets too small to be resolved at this distance.
 float waveFade(float k, float dist, float near, float far) {
@@ -75,10 +81,11 @@ void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vec2 p = wp.xz;
   float dist = length(p - cameraPosition.xz);
+  float damp = worldSample(p).g;
   vec3 disp = vec3(0.0);
   for (int i = 0; i < NUM_SWELLS; i++) {
     vec4 w = uSwells[i];
-    float q = w.w * uWaveScale * waveFade(w.z, dist, 30.0, 70.0);
+    float q = w.w * uWaveScale * damp * waveFade(w.z, dist, 30.0, 70.0);
     float a = q / w.z;
     float f = w.z * dot(w.xy, p) - uSwellPhase[i];
     float c = cos(f);
@@ -104,6 +111,8 @@ uniform float uFogDensity;
 uniform float uMaxHeight;
 uniform vec3 uLanternPos;
 uniform vec3 uLanternColor;
+uniform vec3 uLagoon;
+uniform vec3 uSandbed;
 
 varying vec3 vWorld;
 varying vec2 vGrid;
@@ -115,12 +124,16 @@ void main() {
   float dist = length(toCam);
   vec3 V = toCam / dist;
 
+  vec2 ws = worldSample(p);
+  float damp = ws.g;
+  float depth = vWorld.y - ws.r; // water above the seabed right here
+
   // --- Per-pixel Gerstner normal + Jacobian (for crest foam) ---
   vec3 T = vec3(1.0, 0.0, 0.0);
   vec3 B = vec3(0.0, 0.0, 1.0);
   for (int i = 0; i < NUM_SWELLS; i++) {
     vec4 w = uSwells[i];
-    float q = w.w * uWaveScale * waveFade(w.z, dist, 30.0, 70.0);
+    float q = w.w * uWaveScale * damp * waveFade(w.z, dist, 30.0, 70.0);
     float f = w.z * dot(w.xy, p) - uSwellPhase[i];
     float s = sin(f), c = cos(f);
     T += vec3(-w.x * w.x * q * s, w.x * q * c, -w.x * w.y * q * s);
@@ -131,7 +144,7 @@ void main() {
   // Small chop only bends the normal.
   for (int i = 0; i < NUM_RIPPLES; i++) {
     vec4 w = uRipples[i];
-    float q = w.w * (0.6 + 0.6 * uWaveScale) * waveFade(w.z, dist, 18.0, 60.0);
+    float q = w.w * (0.6 + 0.6 * uWaveScale) * (0.45 + 0.55 * damp) * waveFade(w.z, dist, 18.0, 60.0);
     float f = w.z * dot(w.xy, p) - uRipplePhase[i];
     float s = sin(f), c = cos(f);
     T += vec3(-w.x * w.x * q * s, w.x * q * c, -w.x * w.y * q * s);
@@ -155,10 +168,22 @@ void main() {
   vec3 ambient = mix(uZenith, uHorizon, 0.5);
   float wrap = max(dot(N, L) * 0.5 + 0.5, 0.0);
   vec3 body = mix(uDeep, uShallow, h01 * h01 * 0.9);
+  // Shallows: turquoise over sand, paler still right at the waterline.
+  float shallow = exp(-max(depth, 0.0) / 3.4);
+  float sandy = exp(-max(depth, 0.0) / 0.9);
+  body = mix(body, uLagoon, shallow);
+  body = mix(body, uSandbed, sandy * 0.55);
   // Light the water mostly by intensity so a pink sky doesn't turn the sea grey.
   vec3 lightIn = uLightColor * 0.32 + ambient * 0.55;
   float lum = dot(lightIn, vec3(0.3, 0.59, 0.11));
   body *= (0.4 + 0.6 * wrap) * mix(vec3(lum), lightIn, 0.35) * 1.15;
+  // Soft caustic web on the sand under shallow water.
+  if (shallow > 0.03 && dist < 160.0) {
+    vec2 warp = vec2(fbm(p * 0.21 + uTime * 0.035), fbm(p * 0.21 - uTime * 0.03 + 5.3));
+    vec2 cw = worley(p * 0.9 + vec2(uTime * 0.08, uTime * 0.05) + warp * 1.8);
+    float caustic = pow(1.0 - smoothstep(0.0, 0.14, cw.y - cw.x), 4.0) * smoothstep(0.35, 0.65, warp.x);
+    body += uLightColor * caustic * shallow * 0.03 * (1.0 - smoothstep(30.0, 120.0, dist));
+  }
 
   // --- Subsurface scatter: the glowing jade crests when looking at the sun ---
   vec3 Hs = normalize(L + N * 0.55);
@@ -169,7 +194,7 @@ void main() {
   vec3 scatter = uScatter * sss * (uLightColor * 0.42 + ambient * 0.2);
 
   float fresnel = 0.02 + 0.98 * pow(1.0 - NdV, 5.0);
-  fresnel = min(fresnel, 0.8);
+  fresnel = min(fresnel, 0.8) * (1.0 - 0.4 * shallow);
   vec3 col = mix(body + scatter, refl, fresnel);
 
   // --- Sun glitter: punchy, slightly stylised ---
@@ -191,10 +216,17 @@ void main() {
   crest = clamp(crest * 1.4, 0.0, 1.0);
   // Faint marbling on the open sea, like leftover foam from old breakers.
   float vein = 1.0 - smoothstep(0.0, 0.028, abs(fbm(p * 0.05 + drift * 0.15) - 0.5));
-  float amount = max(crest, vein * 0.38 * foamFade);
+  float amount = max(crest, vein * 0.38 * foamFade * damp);
   float foam = smoothstep(1.0 - amount, 1.08 - amount, foamTex);
   // Far away, swap the pattern for its average so it doesn't shimmer.
   foam = mix(crest * 0.45, foam, foamFade);
+
+  // Gentle foam where the water runs up onto sand and rock.
+  float shoreBand = 1.0 - smoothstep(0.0, 0.6, depth);
+  float lap = 0.5 + 0.5 * sin(depth * 9.0 - uTime * 1.4 + patchN * 5.0);
+  float shoreFoam = smoothstep(0.5, 0.68, shoreBand * (0.42 + 0.3 * lap) + foamTex * 0.3 * shoreBand);
+  shoreFoam = max(shoreFoam, smoothstep(0.9, 0.98, shoreBand) * 0.8);
+  foam = max(foam, shoreFoam * 0.8 * (1.0 - smoothstep(250.0, 700.0, dist)));
 
   vec3 foamCol = uLightColor * 0.26 * wrap + ambient * 0.75 + uSunColor * 0.03;
   col = mix(col, foamCol, foam * 0.92);
@@ -218,7 +250,7 @@ void main() {
 `;
 
 export class Ocean {
-  constructor(atmosphere) {
+  constructor(atmosphere, world) {
     this.atmosphere = atmosphere;
     this.waveScale = DEFAULT_WAVE_SCALE;
     this.swellPhases = new Float32Array(NS);
@@ -240,6 +272,10 @@ export class Ocean {
       uMaxHeight: { value: maxHeight * this.waveScale },
       uLanternPos: { value: new THREE.Vector3() },
       uLanternColor: { value: new THREE.Color(0, 0, 0) },
+      uLagoon: { value: atmosphere.state.lagoon },
+      uSandbed: { value: atmosphere.state.sandbed },
+      uWorld: { value: world.texture },
+      uWorldRect: { value: world.rect },
     };
     this.maxHeightUnit = maxHeight;
 
