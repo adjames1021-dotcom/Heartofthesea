@@ -22,6 +22,8 @@ import { FollowCamera } from './camera.js';
 import { Hud } from './hud.js';
 import { Treasure, shovelModel } from './treasure.js';
 import { Puzzles } from './puzzles.js';
+import { WreckCourse } from './course.js';
+import { foreTopChest } from '../shared/wreck.js';
 import { OceanAudio } from './audio.js';
 import { syncClock, worldTime } from './clock.js';
 import './style.css';
@@ -33,6 +35,8 @@ const num = (k) => (params.has(k) ? Number(params.get(k)) : null);
 // all of these from the shared clock so every player sees the same world.
 const dev = {
   hours: num('t'),
+  // Run the sea on the simulation's own clock (slow machines, tests).
+  simTime: params.has('simtime'),
   swell: num('swell'),
   clouds: num('clouds'),
   fog: num('fog'),
@@ -99,6 +103,8 @@ const hud = new Hud();
 const audio = new OceanAudio();
 const treasure = new Treasure({ scene, world, hud });
 const puzzles = new Puzzles({ scene, world });
+const course = new WreckCourse({ scene, world, wreck: islands.wreck });
+treasure.placeCourseChest('wreck', foreTopChest());
 
 // ---------- Dev camera (screenshots) ----------
 let controls = null;
@@ -178,7 +184,7 @@ function putDown() {
 }
 
 function findInteraction() {
-  if (player.mode === 'station' || player.mode === 'dig' || player.flopT > 0) return null;
+  if (player.mode === 'station' || player.mode === 'dig' || player.flopT > 0 || player.clinging) return null;
   if (player.carrying) return { key: 'E', label: 'Put down', act: putDown };
   const near = treasure.nearest(player.pos);
   if (near) {
@@ -190,6 +196,7 @@ function findInteraction() {
         near.platform = null;
         near.rise = null;
         player.carrying = near;
+        if (near.course) treasure.claim(near);
       },
     };
   }
@@ -236,11 +243,16 @@ let last = performance.now();
 let acc = 0;
 const STEP = 1 / 60;
 let started = false;
+let simT = null;
 
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
-  const t = worldTime();
+  let t = worldTime();
+  if (dev.simTime) {
+    simT = (simT ?? t) + dt;
+    t = simT;
+  }
   const swell = dev.swell ?? swellScaleAt(t);
 
   atmosphere.setTimeOfDay(dev.hours ?? hoursAt(t));
@@ -269,6 +281,8 @@ function frame(now) {
     follow.yaw = Math.atan2(-Math.cos(boat.state.heading), -Math.sin(boat.state.heading)) + 0.5;
     started = true;
   }
+
+  course.update(t, dt, swell);
 
   // Player.
   const interaction = findInteraction();
@@ -333,7 +347,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, islands, scene, bloom, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, islands, scene, bloom, THREE };
 }
 
 syncClock().finally(() => {

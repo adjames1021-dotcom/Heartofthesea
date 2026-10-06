@@ -148,6 +148,8 @@ export class Loose {
     this.platform = null;
     this.resting = false;
     this.rise = null;
+    this.ground = null;
+    this.tilt = new THREE.Quaternion();
   }
 
   update(dt, world, t, waveScale) {
@@ -177,13 +179,29 @@ export class Loose {
       this.platform = null;
     }
     this.vel.y -= 22 * dt;
-    this.pos.addScaledVector(this.vel, dt);
+    // Short steps when falling fast, so it lands on decks instead of through them.
+    const steps = Math.min(8, Math.max(1, Math.ceil((this.vel.length() * dt) / 0.2)));
+    for (let i = 0; i < steps - 1; i++) {
+      this.pos.addScaledVector(this.vel, dt / steps);
+      if (world.probeDown(this.pos.x, this.pos.z, this.pos.y + 0.3, 0.3)) break;
+    }
+    this.pos.addScaledVector(this.vel, dt / steps);
     const c = this.pos.clone().add(new THREE.Vector3(0, this.half, 0));
+    const before = c.clone();
     world.resolveSphere(c, this.half * 0.9, { terrain: false });
+    // Pushed mostly upward means it's sitting on something: friction holds it
+    // there instead of letting it creep down a sloping deck.
+    const px = c.x - before.x;
+    const pz = c.z - before.z;
+    if (c.y - before.y > 0 && Math.hypot(px, pz) < (c.y - before.y) * 1.2) {
+      c.x = before.x;
+      c.z = before.z;
+    }
     this.pos.x = c.x;
     this.pos.z = c.z;
     const hit = world.probeDown(this.pos.x, this.pos.z, this.pos.y + 0.4, 0.6);
     this.resting = false;
+    this.ground = null;
     if (hit && this.pos.y <= hit.y + 0.02 && this.vel.y <= 0) {
       this.pos.y = hit.y;
       this.vel.y = 0;
@@ -191,6 +209,7 @@ export class Loose {
       this.vel.z *= Math.exp(-8 * dt);
       this.platform = hit.collider?.body ?? null;
       this.resting = true;
+      this.ground = hit.normal;
     }
     // Never through the sand, whatever the step size.
     const floor = groundAt(this.pos.x, this.pos.z);
@@ -201,9 +220,22 @@ export class Loose {
       this.resting = true;
     }
     this.object.position.copy(this.pos);
-    this.object.rotation.y = -this.yaw;
+    // Sit flush on whatever it's resting on.
+    _yaw.setFromAxisAngle(_up, -this.yaw);
+    if (this.ground && this.ground.y > 0.6) {
+      _tilt.setFromUnitVectors(_up, this.ground);
+      this.tilt.slerp(_tilt, 0.25);
+    } else {
+      this.tilt.slerp(_noTilt, 0.1);
+    }
+    this.object.quaternion.copy(this.tilt).multiply(_yaw);
   }
 }
+
+const _up = new THREE.Vector3(0, 1, 0);
+const _yaw = new THREE.Quaternion();
+const _tilt = new THREE.Quaternion();
+const _noTilt = new THREE.Quaternion();
 
 // ---------------------------------------------------------------------------
 
@@ -333,6 +365,30 @@ export class Treasure {
     return c;
   }
 
+  /** A chest left somewhere hard to get to (top of a climb). Once per player. */
+  placeCourseChest(id, at) {
+    if (this.state.puzzles.includes(id)) return null;
+    const c = this.spawnChest(at.x, at.y, at.z, { from: id, rise: false });
+    c.course = id;
+    c.yaw = 0.35;
+    return c;
+  }
+
+  /** Tell the server we've got the chest off the top. */
+  async claim(c) {
+    if (c.claimed) return;
+    c.claimed = true;
+    try {
+      const res = await this.#post('/api/claim', { course: c.course, x: c.pos.x, y: c.pos.y, z: c.pos.z });
+      if (res.result === 'chest' && !this.state.puzzles.includes(c.course)) {
+        this.state.puzzles.push(c.course);
+        this.save();
+      }
+    } catch {
+      c.claimed = false;
+    }
+  }
+
   spawnCrab(x, y, z) {
     const obj = crabModel();
     obj.position.set(x, y, z);
@@ -368,7 +424,8 @@ export class Treasure {
         c.pos.y += player.mode === 'swim' ? 0.75 : 0.42;
         c.yaw = -player.heading;
         c.object.position.copy(c.pos);
-        c.object.rotation.y = player.heading;
+        c.object.rotation.set(0, player.heading, 0);
+        c.tilt.identity();
         continue;
       }
       c.update(dt, this.world, t, waveScale);

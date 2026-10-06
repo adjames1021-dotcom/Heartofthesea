@@ -3,7 +3,7 @@
 // Static files (the game client in ./dist) are served directly by Workers
 // Static Assets. Only /api/* reaches this script.
 
-import { issueMap, dig } from './treasure.js';
+import { issueMap, dig, claim } from './treasure.js';
 
 const json = (data, init = {}) =>
   Response.json(data, {
@@ -53,6 +53,13 @@ export default {
         if (!b) return json({ error: 'POST a JSON body' }, { status: 400 });
         const maps = Array.isArray(b.maps) ? b.maps.filter((s) => typeof s === 'string') : [];
         return json(await dig(secret, { x: Number(b.x), z: Number(b.z), maps }));
+      }
+
+      // Somebody picked up the chest at the top of a climb. Body: { course, x, y, z }
+      case '/api/claim': {
+        const b = await body(request);
+        if (!b) return json({ error: 'POST a JSON body' }, { status: 400 });
+        return json(claim({ course: String(b.course), x: Number(b.x), y: Number(b.y), z: Number(b.z) }));
       }
 
       // Placeholder for the future multiplayer socket, e.g.:

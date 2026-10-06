@@ -7,6 +7,7 @@
 
 import { ISLAND_BY_ID, toWorld, dirToWorld, pellsBar } from '../shared/world.js';
 import { sunDirection } from '../shared/environment.js';
+import { foreTopChest } from '../shared/wreck.js';
 
 const DIG_RADIUS = 2.2; // metres from the true spot that still finds the chest
 const PACE = 0.75;
@@ -230,6 +231,19 @@ export async function dig(secret, { x, z, maps = [] }) {
   // Same patch of sand, same answer: about one hole in four has a crab in it.
   const c = await hmac(secret, `crab:${Math.round(x / 2)}:${Math.round(z / 2)}`);
   return { result: c[0] < 64 ? 'crab' : 'nothing' };
+}
+
+// Chests that sit at the top of a climb rather than in a hole.
+export const COURSES = {
+  wreck: () => foreTopChest(),
+};
+
+/** Is the player really up there with the chest? */
+export function claim({ course, x, y, z }) {
+  const at = Object.hasOwn(COURSES, course) ? COURSES[course]() : null;
+  if (!at || ![x, y, z].every(Number.isFinite)) return { result: 'nothing' };
+  if (Math.hypot(at.x - x, at.y - y, at.z - z) > 3) return { result: 'nothing' };
+  return { result: 'chest', course };
 }
 
 export { dirToWorld };

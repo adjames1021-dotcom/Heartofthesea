@@ -1,38 +1,17 @@
 import * as THREE from 'three';
 import { loftHull, loftDeck, canvasTexture } from './hull.js';
 import { segment, paint, mergeParts } from './props.js';
-import { smoothstep } from '../shared/noise.js';
+import { WRECK, halfBreadth, deckHeight, sheerHeight, keelDepth } from '../shared/wreck.js';
 
-// The wreck on Molly Ann Reef: a two-masted trader that broke her back on the
-// reef. The stern half sits heeled on the coral; the bow half has slumped
-// lower, a few metres away, with the foremast still standing.
-//
-// Everything is laid out in "wreck-local" metres (+x toward the bow, +y up
-// from sea level, +z to starboard), so the parkour course and the
-// counterweight puzzle can hang their colliders off the same numbers.
+// The wreck on Molly Ann Reef, drawn from the numbers in shared/wreck.js: the
+// stern half heeled on the coral, the bow half a few metres off with the
+// foremast still standing.
 
-export const WRECK = {
-  length: 27,
-  keel: 2.2,
-  deck: 2.8,
-  quarterRise: 1.2,
-  sternU: [0.53, 1],
-  bowU: [0, 0.36],
-  heel: -0.3, // starboard (pool side) up
-  pitch: 0.03,
-  bow: { offset: new THREE.Vector3(0.7, -1.5, 1.3), yaw: 0.22, heel: -0.42, pitch: -0.07 },
-  mainmast: { x: -2.2, top: 10.5, r: 0.36 },
-  foremast: { x: 7.56, top: 18, r: 0.33, foreTop: 12.5 },
-  channel: { x0: -5.2, x1: -1.6, y: 2.6, width: 0.45 },
-  hatch: { x: -5.6, w: 2.2, d: 1.7 },
-};
-
-const hb = (u) =>
-  3.6 * (u < 0.4 ? Math.pow(Math.sin((u / 0.4) * (Math.PI / 2)), 0.6) : 1 - 0.18 * smoothstep(0.62, 1, u));
-const deckY = (u) =>
-  WRECK.deck + 0.5 * ((u - 0.55) / 0.55) ** 2 + WRECK.quarterRise * smoothstep(0.74, 0.77, u) + 0.8 * smoothstep(0.13, 0.1, u);
-const sheer = (u) => deckY(u) + 0.8;
-const keel = (u) => WRECK.keel * Math.pow(smoothstep(0, 0.14, u), 0.7);
+export { WRECK };
+const hb = halfBreadth;
+const deckY = deckHeight;
+const sheer = sheerHeight;
+const keel = keelDepth;
 
 let textures = null;
 function wreckTextures() {
@@ -218,7 +197,7 @@ export function buildWreck() {
   root.add(stern);
 
   const bow = section(WRECK.bowU[0], WRECK.bowU[1], 9);
-  bow.position.copy(WRECK.bow.offset);
+  bow.position.set(WRECK.bow.offset.x, WRECK.bow.offset.y, WRECK.bow.offset.z);
   bow.rotation.order = 'YXZ';
   bow.rotation.y = WRECK.bow.yaw;
   bow.rotation.x = WRECK.bow.heel;
@@ -232,7 +211,7 @@ export function buildWreck() {
 
   // The rest of the mainmast, lying on the reef beside the wreck.
   const fallen = new THREE.Mesh(
-    mergeParts([paint(segment(new THREE.Vector3(-6, 0.6, -6.5), new THREE.Vector3(5.5, -0.6, -10.5), 0.3, 0.24, 7), WOOD)]),
+    mergeParts([paint(segment(new THREE.Vector3(-6, -0.15, -6.8), new THREE.Vector3(5.5, -0.75, -10.5), 0.3, 0.24, 7), WOOD)]),
     woodMat,
   );
   fallen.castShadow = true;
