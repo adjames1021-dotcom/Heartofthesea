@@ -10,7 +10,7 @@ import * as THREE from 'three';
 
 export const LOOKS = {
   brown: {
-    fur: '#b9762f', patch: '#fbf3dc', ear: '#f2b33a', eye: '#2a180c', ink: '#4a2a12', zip: true, button: null,
+    fur: '#b9762f', patch: '#f4e8cc', ear: '#f2b33a', eye: '#2a180c', ink: '#4a2a12', zip: true, button: null,
   },
   white: {
     fur: '#f6eedb', patch: '#ffffff', ear: '#f4a3c4', eye: '#2a180c', ink: '#6a5a48', zip: false, button: '#d43b2e',
@@ -182,11 +182,24 @@ export class Bear {
       if (o.isMesh) o.receiveShadow = false;
     });
 
+    // A spade, only out while digging.
+    this.shovel = null;
+
     // Animation state
     this.phase = 0;
     this.blinkT = 2 + Math.random() * 3;
     this.idleT = 0;
     this.pose = this.#emptyPose();
+  }
+
+  setShovel(visible, model = null) {
+    if (!this.shovel && model) {
+      this.shovel = model;
+      this.shovel.position.set(0.04, -0.24, 0.06);
+      this.shovel.rotation.x = 0.35;
+      this.arms[1].add(this.shovel);
+    }
+    if (this.shovel) this.shovel.visible = visible;
   }
 
   #emptyPose() {

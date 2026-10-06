@@ -20,6 +20,7 @@ import { Player } from './player.js';
 import { Input } from './input.js';
 import { FollowCamera } from './camera.js';
 import { Hud } from './hud.js';
+import { Treasure, shovelModel } from './treasure.js';
 import { OceanAudio } from './audio.js';
 import { syncClock, worldTime } from './clock.js';
 import './style.css';
@@ -46,8 +47,8 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.92;
-renderer.shadowMap.enabled = true;
+renderer.toneMappingExposure = 0.88;
+renderer.shadowMap.enabled = !params.has('noshadow');
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
 
@@ -89,11 +90,13 @@ const env = { wind: {}, ground: groundAt };
 // ---------- Player ----------
 const player = new Player(world, params.get('look') ?? 'brown');
 scene.add(player.bear.root);
+player.bear.setShovel(false, shovelModel());
 
 const input = new Input(renderer.domElement);
 const follow = new FollowCamera(camera);
 const hud = new Hud();
 const audio = new OceanAudio();
+const treasure = new Treasure({ scene, world, hud });
 
 // ---------- Dev camera (screenshots) ----------
 let controls = null;
@@ -120,7 +123,9 @@ if (camMode === 'free' || camMode === 'island') {
 // ---------- Post ----------
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.28, 0.55, 0.92));
+// Only the sun, its glints and lamps should bloom; white paint in daylight shouldn't.
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.28, 0.55, 1.4);
+composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
 addEventListener('resize', () => {
@@ -157,8 +162,35 @@ const STATION_KEYS = {
 const tmpV = new THREE.Vector3();
 const PLATFORM_LOCAL = new THREE.Vector3(-6.05, LAYOUT.platform.y, 0);
 
+function putDown() {
+  const c = player.carrying;
+  if (!c) return;
+  const f = new THREE.Vector3(Math.sin(player.heading), 0, Math.cos(player.heading));
+  c.held = false;
+  c.pos.copy(player.pos).addScaledVector(f, 0.75);
+  c.pos.y += player.mode === 'swim' ? 0.6 : 0.35;
+  c.vel.set(player.vel.x * 0.5, 0, player.vel.z * 0.5);
+  if (player.platformVel) c.vel.add(new THREE.Vector3(player.platformVel.x, 0, player.platformVel.z));
+  c.platform = player.platform;
+  player.carrying = null;
+}
+
 function findInteraction() {
-  if (player.mode === 'station') return null;
+  if (player.mode === 'station' || player.mode === 'dig' || player.flopT > 0) return null;
+  if (player.carrying) return { key: 'E', label: 'Put down', act: putDown };
+  const near = treasure.nearest(player.pos);
+  if (near) {
+    return {
+      key: 'E',
+      label: 'Pick up',
+      act: () => {
+        near.held = true;
+        near.platform = null;
+        near.rise = null;
+        player.carrying = near;
+      },
+    };
+  }
   if (player.mode === 'swim') {
     boat.toWorld(PLATFORM_LOCAL, tmpV);
     if (Math.hypot(tmpV.x - player.pos.x, tmpV.z - player.pos.z) < 2.2) return { key: 'E', label: 'Climb aboard', act: climbAboard };
@@ -241,7 +273,25 @@ function frame(now) {
     interaction.act();
     input.hits.delete('KeyE');
   }
+  // Digging and the map.
+  if (input.pressed('KeyF') && player.mode === 'ground' && player.grounded && !player.carrying && !player.platform) {
+    const p = player.digPoint;
+    if (treasure.canDig(p.x, p.z)) {
+      player.startDig(async (x, z) => {
+        const res = await treasure.dig(x, z);
+        if (res.result === 'crab') player.startle();
+      });
+    } else if (groundAt(p.x, p.z) > 0.2) {
+      hud.say('Too hard to dig here.');
+    }
+  }
+  if (input.pressed('KeyM')) treasure.toggleMap();
+  if (player.station !== 'helm') {
+    if (input.pressed('ArrowRight')) treasure.flip(1);
+    if (input.pressed('ArrowLeft')) treasure.flip(-1);
+  }
   player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis() });
+  treasure.update(dt, { t, waveScale: swell, boatBody: boat.body, player });
   for (const e of player.events) {
     if (e === 'horn') audio.horn();
     if (e === 'splash') audio.splash();
@@ -278,10 +328,11 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, islands, scene, bloom, THREE };
 }
 
 syncClock().finally(() => {
+  treasure.start();
   document.body.classList.add('ready');
   requestAnimationFrame((n) => {
     last = n;

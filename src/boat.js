@@ -501,6 +501,9 @@ export class Boat {
   update(dt, t, waveScale) {
     const b = this.state;
     const v = this.vis;
+    // Follow the water on world time, so a slow frame can't leave the hull
+    // behind the swell.
+    const dw = this.time === undefined ? dt : Math.min(Math.max(t - this.time, 0), 1);
     this.time = t;
     const c = Math.cos(b.heading);
     const s = Math.sin(b.heading);
@@ -510,7 +513,7 @@ export class Boat {
     const hPort = at(0, -1.7);
     const hStar = at(0, 1.7);
     const heave = (hBow + hStern + hPort + hStar) / 4;
-    const k = 1 - Math.exp(-dt * 4);
+    const k = 1 - Math.exp(-dw * 4);
     v.heave += (heave - v.heave) * k;
     v.pitch += (Math.atan2(hBow - hStern, 8.4) * 0.85 - v.pitch) * k;
     v.roll += (Math.atan2(hPort - hStar, 3.4) * 0.6 - v.roll) * k;

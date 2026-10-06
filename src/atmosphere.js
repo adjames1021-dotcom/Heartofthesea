@@ -185,8 +185,9 @@ export class Atmosphere {
     this.light.color.copy(s.light);
     this.light.intensity = lightI;
     this.hemi.color.copy(s.zenith).lerp(s.horizon, 0.5);
-    this.hemi.groundColor.copy(s.deep);
-    this.hemi.intensity = 0.9 + 0.85 * (1 - s.night);
+    // Light bouncing back up off sand and sea, so shaded sides aren't black.
+    this.hemi.groundColor.copy(s.sandbed).lerp(s.shallow, 0.35).multiplyScalar(0.7);
+    this.hemi.intensity = 1.5 + 1.6 * (1 - s.night);
 
     this.fog.color.copy(s.horizon);
     this.fog.density = s.fog;

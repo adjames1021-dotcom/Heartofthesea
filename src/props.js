@@ -217,10 +217,14 @@ export function stump(seed) {
  * the piglets). Tier rims are flat, so they read as ledges.
  * tiers: [{ r, y0, y1, ox, oz, taper? }]
  */
-export function rockColumn(tiers, seed, colorA = '#a7a196', colorB = '#928c82', sides = 11) {
+export function rockColumn(tiers, seed, colorA = '#a7a196', colorB = '#928c82', sides = 11, { guano = false } = {}) {
   const parts = [];
   const cA = new THREE.Color(colorA);
   const cB = new THREE.Color(colorB);
+  const white = new THREE.Color('#e4dfd0');
+  const _n = new THREE.Vector3();
+  const _a = new THREE.Vector3();
+  const _b = new THREE.Vector3();
   tiers.forEach((t, i) => {
     const h = t.y1 - t.y0;
     const g = new THREE.CylinderGeometry(t.r * (t.taper ?? 0.94), t.r * 1.04, h, sides, Math.max(2, Math.round(h / 3.5)), false);
@@ -235,6 +239,14 @@ export function rockColumn(tiers, seed, colorA = '#a7a196', colorB = '#928c82', 
       const y = (p.getY(f) + p.getY(f + 1) + p.getY(f + 2)) / 3;
       const band = Math.sin(y * 1.3 + i) > 0.2;
       c.copy(band ? cA : cB).multiplyScalar(0.94 + 0.1 * hash2(f, i, seed));
+      if (guano && i > 0) {
+        // Seabirds sit on the ledges: white on the rims, streaks just under them.
+        _a.fromBufferAttribute(p, f + 1).sub(_n.fromBufferAttribute(p, f));
+        _b.fromBufferAttribute(p, f + 2).sub(_n.fromBufferAttribute(p, f));
+        const up = _a.cross(_b).normalize().y;
+        const underRim = t.y1 - y < 2.2 && hash2(f >> 2, i, seed + 5) > 0.5;
+        if (up > 0.45 || underRim) c.lerp(white, up > 0.45 ? 0.85 : 0.6);
+      }
       for (let k = 0; k < 3; k++) col.set([c.r, c.g, c.b], (f + k) * 3);
     }
     flat.setAttribute('color', new THREE.BufferAttribute(col, 3));

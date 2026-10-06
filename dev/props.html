@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Props viewer</title>
+    <style>html,body{margin:0;height:100%;background:#d9e3e8}canvas{display:block}</style>
+  </head>
+  <body>
+    <script type="module">
+      import * as THREE from 'three';
+      import { palm, rock } from '../src/props.js';
+      import { chestModel } from '../src/treasure.js';
+      const params = new URLSearchParams(location.search);
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.shadowMap.enabled = !params.has('noshadow');
+      document.body.appendChild(renderer.domElement);
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color('#d9e3e8');
+      const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 200);
+      camera.position.set(6, 4, 9);
+      camera.lookAt(0, 2.5, 0);
+      scene.add(new THREE.HemisphereLight('#c8dcff', '#4a5a6a', 1.6));
+      const sun = new THREE.DirectionalLight('#fff4e0', 2.8);
+      sun.position.set(20, 30, 10);
+      sun.castShadow = true;
+      sun.shadow.normalBias = 0.12;
+      sun.shadow.bias = -0.0004;
+      scene.add(sun);
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshLambertMaterial({ color: '#e8d5a2' }));
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+      const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+      const p = palm({ height: 7, lean: 0.4, seed: 3 });
+      const trunk = new THREE.Mesh(p.trunk, mat);
+      trunk.castShadow = true; trunk.receiveShadow = true;
+      scene.add(trunk);
+      for (const c of p.crowns) { const m = new THREE.Mesh(c.geometry, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide })); m.position.copy(c.top); m.castShadow = true; scene.add(m); }
+      const ch = chestModel(); ch.position.set(2.2, 0, 1.5); ch.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); scene.add(ch);
+      const r = new THREE.Mesh(rock(1.2, 5), mat); r.position.set(-2.5, 0.4, 1); r.castShadow = true; r.receiveShadow = true; scene.add(r);
+      // Check normals on the trunk.
+      const n = p.trunk.attributes.normal, pos = p.trunk.attributes.position;
+      let outward = 0, inward = 0;
+      for (let i = 0; i < pos.count; i += 3) {
+        const cx = (pos.getX(i) + pos.getX(i+1) + pos.getX(i+2)) / 3, cz = (pos.getZ(i) + pos.getZ(i+1) + pos.getZ(i+2)) / 3;
+        const d = cx * n.getX(i) + cz * n.getZ(i);
+        if (d > 0) outward++; else inward++;
+      }
+      document.title = `out ${outward} in ${inward}`;
+      renderer.render(scene, camera);
+    </script>
+  </body>
+</html>

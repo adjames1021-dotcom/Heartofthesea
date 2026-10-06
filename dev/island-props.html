@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8" /><title>Island props</title><style>html,body{margin:0;height:100%}canvas{display:block}</style></head>
+  <body>
+    <script type="module">
+      import * as THREE from 'three';
+      import { Islands } from '../src/islands.js';
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      document.body.appendChild(renderer.domElement);
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color('#bcd');
+      const islands = new Islands();
+      const m = islands.group.children.find((o) => o.name === 'props:stack');
+      scene.add(m);
+      scene.add(new THREE.HemisphereLight('#c8dcff', '#4a5a6a', 1.6));
+      const sun = new THREE.DirectionalLight('#fff4e0', 2.8);
+      sun.position.set(20, 30, 10);
+      scene.add(sun);
+      const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.3, 2000);
+      camera.position.set(-370, 6, 446);
+      camera.lookAt(-375.8, 3, 440);
+      renderer.render(scene, camera);
+      document.title = 'done';
+    </script>
+  </body>
+</html>

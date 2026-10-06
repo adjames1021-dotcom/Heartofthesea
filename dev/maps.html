@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Map sheets</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Reenie+Beanie&display=swap" rel="stylesheet" />
+    <style>
+      html, body { margin: 0; background: #3a3f42; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, 560px); gap: 16px; padding: 16px; }
+      canvas { display: block; width: 560px; }
+    </style>
+  </head>
+  <body>
+    <div class="grid"></div>
+    <script type="module">
+      // Every outer island drawn as a treasure map, with the X at a sample spot.
+      import { ISLANDS, toWorld } from '../shared/world.js';
+      import { drawMap } from '../src/mapview.js';
+      await document.fonts.load('32px "Reenie Beanie"');
+      const grid = document.querySelector('.grid');
+      for (const isl of ISLANDS) {
+        if (isl.id === 'saddle') continue;
+        const p = isl.features?.palms?.[0] ?? { x: 0, z: 0 };
+        const mark = toWorld(isl, p.x + 4, p.z + 2);
+        grid.appendChild(drawMap({ id: 'sample-' + isl.id, island: isl.id, title: isl.name, mark: { x: mark.x, z: mark.z }, note: 'Sample note so the layout shows. Ten paces from the palm.' }));
+      }
+    </script>
+  </body>
+</html>

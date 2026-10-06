@@ -258,6 +258,7 @@ function sowIsland() {
     { x: 76, z: 32, r: 3.4, h: 5.5 },
     { x: 44, z: 46, r: 4.2, h: 8 },
   ];
+  const POCKET = { x: -45, z: -2, a: 6, b: 10 };
   return {
     name: 'Sow and Piglets',
     land: 92,
@@ -281,6 +282,12 @@ function sowIsland() {
         h = lerp(2.2 * sstep(0, 2.5, d), beach(d, 1.6, 10), lee);
         h = Math.max(h, dome * sstep(0.5, 7, d)) + (fbm(lx * 0.1, lz * 0.1, 73, 2) - 0.5) * 1.2 * sstep(2, 6, d);
       }
+      // A little pocket of beach on the lee side, where a boat can land.
+      const pd = Math.hypot((lx - POCKET.x) / POCKET.a, (lz - POCKET.z) / POCKET.b);
+      if (pd < 1.2) {
+        const sand = clamp(0.45 + 0.13 * (lx - POCKET.x + 4), 0.3, 1.5);
+        h = Math.min(h, lerp(sand, h, sstep(0.78, 1.2, pd)));
+      }
       for (const p of PIGLETS) {
         const dp = Math.hypot(lx - p.x, lz - p.z);
         if (dp < p.r + 8) h = Math.max(h, lerp(-7, 1.0, sstep(p.r + 8, p.r, dp)));
@@ -298,7 +305,7 @@ function burntIsland() {
     cell: 2,
     features: {
       palms: [{ x: -70, z: 40, height: 8, lean: 0.4 }, { x: 64, z: -52, height: 7, lean: 0.55 }],
-      stumps: [{ x: -20, z: 35 }, { x: 15, z: 52 }, { x: 44, z: 6 }],
+      stumps: [{ x: -20, z: 31 }, { x: -9, z: 37 }, { x: 2, z: 43 }],
       deadShrubs: [{ x: -40, z: -10 }, { x: -8, z: -44 }, { x: 30, z: 30 }, { x: 52, z: -20 }, { x: -55, z: 22 }],
       rocks: [{ x: 10, z: -10, s: 3.6 }, { x: -35, z: 50, s: 2.8 }, { x: 70, z: 12, s: 3.0 }],
     },
@@ -613,4 +620,27 @@ export function pellsBar() {
   const world = spot ? toWorld(isl, spot.lx, spot.lz) : null;
   pells = { line, local: spot, spot: world, shadowLocal: sl };
   return pells;
+}
+
+// ---------------------------------------------------------------------------
+// Digging
+// ---------------------------------------------------------------------------
+
+const _dn = {};
+
+/**
+ * Can you dig here? Sand, dirt or grass on an island, not too steep, above
+ * the water, and not on the bare-rock islets (except their beaches).
+ * Returns the island id, or null.
+ */
+export function diggableAt(x, z) {
+  const isl = islandNear(x, z, 10);
+  if (!isl) return null;
+  const g = islandGrid(isl);
+  if (x < g.minX || z < g.minZ || x > g.minX + (g.nx - 1) * g.cell || z > g.minZ + (g.nz - 1) * g.cell) return null;
+  const h = groundAt(x, z, _dn);
+  if (h < 0.35 || _dn.y < 0.8) return null;
+  if ((isl.id === 'stack' || isl.id === 'sow') && h > 2.3) return null;
+  if (isl.id === 'reef' && h < 0.9) return null;
+  return isl.id;
 }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ISLANDS, islandGrid, worldBake } from '../shared/world.js';
+import { ISLANDS, islandGrid, worldBake, groundAt, islandNear } from '../shared/world.js';
 import { hash2, fbm } from '../shared/noise.js';
 
 // Flat-shaded island terrain. The triangles are exactly the ones the player
@@ -13,8 +13,8 @@ const PALETTES = {
     dirt: C('#a5835a'), rock: C('#a19b90'), rock2: C('#8a847b'), seabed: C('#cdb98d'),
   },
   stack: {
-    sand: C('#bdb4a3'), wet: C('#9d9585'), grass: C('#9a9486'), grass2: C('#8f897c'),
-    dirt: C('#a39d91'), rock: C('#aaa498'), rock2: C('#918b81'), seabed: C('#b9ab8e'),
+    sand: C('#a89f8c'), wet: C('#8a8273'), grass: C('#8b8a62'), grass2: C('#7a7a55'),
+    dirt: C('#857b6c'), rock: C('#8a8175'), rock2: C('#756d63'), seabed: C('#b3a586'),
   },
   sow: {
     sand: C('#cfc3a6'), wet: C('#a99d84'), grass: C('#8f8a7f'), grass2: C('#86817a'),
@@ -49,6 +49,15 @@ function classify(isl, pal, h, ny, x, z, out) {
 
 function paletteFor(isl) {
   return PALETTES[isl.id] ?? PALETTES.base;
+}
+
+/** The colour the terrain is painted at (x, z), for things dug into it. */
+export function groundColorAt(x, z, out = new THREE.Color()) {
+  const isl = islandNear(x, z, 40);
+  if (!isl) return out.copy(PALETTES.base.seabed);
+  const n = new THREE.Vector3();
+  const h = groundAt(x, z, n);
+  return classify(isl, paletteFor(isl), h, n.y, x, z, out);
 }
 
 function buildIslandMesh(isl, material) {

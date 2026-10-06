@@ -169,3 +169,17 @@ html, body {
   text-shadow: 0 1px 5px rgba(0, 0, 0, 0.75);
 }
 .hud-notice.show { opacity: 1; }
+
+/* --- The map you hold up --- */
+.map-view {
+  position: fixed;
+  right: 22px;
+  bottom: 64px;
+  width: min(560px, 46vw);
+  display: none;
+  transform: rotate(-1.2deg);
+  pointer-events: none;
+}
+.map-view.open { display: block; }
+.map-view canvas { width: 100%; height: auto; display: block; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
+.map-count { margin-top: 6px; text-align: right; font-size: 0.85rem; color: var(--ink); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }

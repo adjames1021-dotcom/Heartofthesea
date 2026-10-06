@@ -86,7 +86,7 @@ export class Islands {
       this.colliders.push({ type: 'cyl', x: at.x, z: at.z, r: 0.3, y0: at.y - 1, y1: at.y + 1.6 });
     });
     (f.rocks ?? []).forEach((r, i) => {
-      const color = isl.id === 'burnt' ? '#4f4943' : isl.id === 'reef' ? '#a8977a' : '#9b958b';
+      const color = isl.id === 'burnt' ? '#4f4943' : isl.id === 'reef' ? '#a8977a' : isl.id === 'stack' ? '#7f776c' : '#9b958b';
       const at = place(rock(r.s, seedOf(isl.id) + 400 + i, color), r.x, r.z, { sink: r.s * 0.3 });
       this.colliders.push({ type: 'cyl', x: at.x, z: at.z, r: r.s * 0.85, y0: at.y - r.s, y1: at.y + r.s * 0.5 });
     });
@@ -107,8 +107,8 @@ export class Islands {
     }
   }
 
-  #column(isl, lx, lz, tiers, seed, colors) {
-    const geo = rockColumn(tiers, seed, ...(colors ?? []));
+  #column(isl, lx, lz, tiers, seed, colors, opts) {
+    const geo = rockColumn(tiers, seed, ...(colors ?? []), 11, opts);
     geo.rotateY(yawOf(isl.rot));
     const w = toWorld(isl, lx, lz);
     geo.translate(w.x, 0, w.z);
@@ -121,7 +121,7 @@ export class Islands {
 
   #spire(isl, parts) {
     const s = isl.features.spire;
-    parts.push(this.#column(isl, s.x, s.z, s.tiers, 7001, ['#aba599', '#958f85']));
+    parts.push(this.#column(isl, s.x, s.z, s.tiers, 7001, ['#867d71', '#70695f'], { guano: true }));
     const w = toWorld(isl, s.x, s.z);
     this.landmarks.spire = { x: w.x, y: 57, z: w.z, island: isl.id };
   }

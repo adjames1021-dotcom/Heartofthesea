@@ -73,6 +73,7 @@ export class Player {
     }
 
     if (this.mode === 'station') this.#station(input);
+    else if (this.mode === 'dig') this.#dig(dt);
     else if (this.flopT > 0) this.#flop(dt);
     else if (this.mode === 'swim') this.#swim(dt, input, ctx);
     else this.#walk(dt, input, ctx);
@@ -117,13 +118,15 @@ export class Player {
   #walk(dt, input, ctx) {
     const water = heightAt(this.pos.x, this.pos.z, ctx.t, ctx.waveScale);
     const wading = water - this.pos.y;
-    const wish = this.#wish(input, ctx);
+    // A startled hop carries on regardless of the keys for a moment.
+    this.startleT = Math.max(0, (this.startleT ?? 0) - dt);
+    const wish = this.startleT > 0 ? { x: 0, z: 0, len: 0 } : this.#wish(input, ctx);
     let speed = input.held('ShiftLeft', 'ShiftRight') ? SPEED.run : SPEED.walk;
     if (this.carrying) speed = SPEED.carry;
     if (wading > 0.35) speed = Math.min(speed, SPEED.wade);
 
     // Horizontal velocity, relative to whatever we're standing on.
-    const accel = this.grounded ? 16 : 5;
+    const accel = this.startleT > 0 ? 0 : this.grounded ? 16 : 5;
     const k = 1 - Math.exp(-dt * accel);
     this.vel.x += (wish.x * speed - this.vel.x) * k;
     this.vel.z += (wish.z * speed - this.vel.z) * k;
@@ -248,6 +251,43 @@ export class Player {
     }
     this.speed = Math.hypot(this.vel.x, this.vel.z);
     this.animMode = 'swim';
+  }
+
+  /** Dig a hole in front of you; `done(x, z)` fires when the shovel's done. */
+  startDig(done) {
+    if (this.mode !== 'ground' || !this.grounded || this.carrying) return false;
+    this.mode = 'dig';
+    this.digT = 1.7;
+    this.digDone = done;
+    this.vel.set(0, 0, 0);
+    this.bear.setShovel(true);
+    return true;
+  }
+
+  get digPoint() {
+    return { x: this.pos.x + Math.sin(this.heading) * 0.65, z: this.pos.z + Math.cos(this.heading) * 0.65 };
+  }
+
+  #dig(dt) {
+    this.digT -= dt;
+    this.animMode = 'dig';
+    this.speed = 0;
+    if (this.digT <= 0) {
+      this.mode = 'ground';
+      this.bear.setShovel(false);
+      const p = this.digPoint;
+      this.digDone?.(p.x, p.z);
+      this.digDone = null;
+    }
+  }
+
+  /** Jump back from something (a crab out of a hole). */
+  startle() {
+    if (this.mode !== 'ground' || !this.grounded) return;
+    this.vel.set(-Math.sin(this.heading) * 2.4, 3.6, -Math.cos(this.heading) * 2.4);
+    this.grounded = false;
+    this.startleT = 0.3;
+    this.#leavePlatform();
   }
 
   #flop(dt) {
