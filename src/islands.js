@@ -4,6 +4,7 @@ import { mulberry32, hash2 } from '../shared/noise.js';
 import { buildTerrain } from './terrain.js';
 import { palm, shrub, rock, stump, rockColumn, paint, mergeParts } from './props.js';
 import { buildWreck } from './wreck.js';
+import { deepenShadows } from './atmosphere.js';
 
 // Puts the islands in the scene: terrain plus a deliberately small number of
 // props per island. Also collects simple colliders (vertical cylinders and
@@ -29,8 +30,8 @@ export class Islands {
     this.landmarks = {};
     this.group.add(buildTerrain());
 
-    this.propMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-    this.frondMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
+    this.propMat = deepenShadows(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    this.frondMat = deepenShadows(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }));
 
     for (const isl of ISLANDS) this.#populate(isl);
   }

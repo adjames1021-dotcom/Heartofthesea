@@ -175,7 +175,8 @@ function horseshoeIsland() {
 }
 
 function barIsland() {
-  const ROCK = { x: -66, z: 8, height: 19, radius: 3.1 };
+  // `top` is the rock's flat crown (the top tier, offset and narrowed).
+  const ROCK = { x: -66, z: 8, height: 19, radius: 3.1, top: { ox: 0.9, oz: 0.3, r: 1.2 } };
   return {
     name: "Pell's Bar",
     land: 104,
@@ -186,7 +187,7 @@ function barIsland() {
       palms: [
         { id: 'split-palm', x: 22, z: 7, height: 8, lean: 0.4, split: true },
         { id: 'big-palm', x: 47, z: -3, height: 12.5, lean: 0.25 },
-        { x: -28, z: -5, height: 7, lean: 0.6 },
+        { x: -33, z: 6, height: 7, lean: 0.6 },
         { x: 61, z: 8, height: 6.5, lean: 0.5 },
       ],
       shrubs: [{ x: -44, z: 4 }, { x: 4, z: -2 }, { x: 34, z: 9 }],
@@ -337,8 +338,7 @@ const KINDS = {
 // Layout
 // ---------------------------------------------------------------------------
 
-/** Late-afternoon sun on Pell's Bar: the bar is turned so the rock's shadow runs up it. */
-export const PELLS_BAR_HOUR = 17.1;
+// Pell's Bar is turned so the rock's late-afternoon shadow runs up it.
 const BAR_SHADOW_ANGLE = 0.2967; // shadow crosses the bar at ~17° to its long axis
 
 function layout() {
@@ -574,12 +574,45 @@ export function groundAt(x, z, normal = null) {
 }
 
 // ---------------------------------------------------------------------------
-// Pell's Bar: the weed line and where the rock's late shadow crosses it.
+// Pell's Bar: the weed line, and where the tip of the rock's shadow touches it.
+// The shadow only reaches the weed line once a day, in the late afternoon, so
+// that moment fixes a single spot.
 // ---------------------------------------------------------------------------
 
 let pells = null;
 
-/** The wrack line along the bar's north beach, plus the shadow crossing (world coords). */
+/** Tip of the rock's shadow at `hours`, in Pell's Bar local coordinates. */
+export function barShadowTip(hours) {
+  const isl = ISLAND_BY_ID.bar;
+  const sun = sunDirection(hours);
+  if (sun.y < 0.03) return null;
+  const sx = isl.cos * sun.x + isl.sin * sun.z;
+  const sz = -isl.sin * sun.x + isl.cos * sun.z;
+  const hl = Math.hypot(sx, sz);
+  const dx = -sx / hl;
+  const dz = -sz / hl;
+  const slope = sun.y / hl; // metres of drop per metre along the ground
+  const rock = isl.features.rock;
+  // The far edge of the rock's flat top throws the tip.
+  const x0 = rock.x + rock.top.ox + dx * rock.top.r;
+  const z0 = rock.z + rock.top.oz + dz * rock.top.r;
+  const above = (s) => rock.height - s * slope - isl.height(x0 + dx * s, z0 + dz * s);
+  let lo = 0;
+  let hi = 0;
+  while (above(hi) > 0) {
+    lo = hi;
+    hi += 0.5;
+    if (hi > 600) return null;
+  }
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (above(mid) > 0) lo = mid;
+    else hi = mid;
+  }
+  return { x: x0 + dx * hi, z: z0 + dz * hi, length: hi };
+}
+
+/** The wrack line along the bar's north beach and the shadow spot (world coords). */
 export function pellsBar() {
   if (pells) return pells;
   const isl = ISLAND_BY_ID.bar;
@@ -596,29 +629,41 @@ export function pellsBar() {
     }
     line.push({ x: lx, z: hi });
   }
-  const rock = isl.features.rock;
-  const sun = sunDirection(PELLS_BAR_HOUR);
-  const sw = { x: -sun.x, z: -sun.z };
-  const sl = { x: isl.cos * sw.x + isl.sin * sw.z, z: -isl.sin * sw.x + isl.cos * sw.z };
-  const len = Math.hypot(sl.x, sl.z);
-  sl.x /= len;
-  sl.z /= len;
-  // Walk along the shadow line until it meets the weed line.
-  let spot = null;
-  for (let s = 5; s < 140 && !spot; s += 0.25) {
-    const px = rock.x + sl.x * s;
-    const pz = rock.z + sl.z * s;
+  const lineZ = (x) => {
     for (let i = 0; i + 1 < line.length; i++) {
       const a = line[i];
       const b = line[i + 1];
-      if (px < a.x || px > b.x) continue;
-      const zl = a.z + ((px - a.x) / (b.x - a.x)) * (b.z - a.z);
-      if (pz <= zl) spot = { lx: px, lz: pz, along: s };
+      if (x >= a.x && x <= b.x) return a.z + ((x - a.x) / (b.x - a.x)) * (b.z - a.z);
+    }
+    return null;
+  };
+  // Seaward of the weed line (> 0) or still on the bar (< 0)?
+  const past = (hours) => {
+    const tip = barShadowTip(hours);
+    const z = tip && lineZ(tip.x);
+    return z === null || z === undefined ? null : z - tip.z;
+  };
+  let hour = null;
+  let prev = null;
+  for (let h = 12; h < 19.5; h += 1 / 120) {
+    const p = past(h);
+    if (p !== null && prev !== null && prev.p <= 0 && p > 0) {
+      let lo = prev.h;
+      let hi = h;
+      for (let i = 0; i < 30; i++) {
+        const mid = (lo + hi) / 2;
+        const pm = past(mid);
+        if (pm !== null && pm > 0) hi = mid;
+        else lo = mid;
+      }
+      hour = hi;
       break;
     }
+    prev = p === null ? null : { h, p };
   }
-  const world = spot ? toWorld(isl, spot.lx, spot.lz) : null;
-  pells = { line, local: spot, spot: world, shadowLocal: sl };
+  const local = hour === null ? null : barShadowTip(hour);
+  const spot = local ? toWorld(isl, local.x, local.z) : null;
+  pells = { line, hour, local, spot };
   return pells;
 }
 

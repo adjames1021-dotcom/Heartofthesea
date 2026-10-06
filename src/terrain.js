@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ISLANDS, islandGrid, worldBake, groundAt, islandNear } from '../shared/world.js';
 import { hash2, fbm } from '../shared/noise.js';
+import { deepenShadows } from './atmosphere.js';
 
 // Flat-shaded island terrain. The triangles are exactly the ones the player
 // walks on (shared/world.js → groundAt), split along the same diagonal.
@@ -123,7 +124,7 @@ function buildIslandMesh(isl, material) {
 }
 
 export function buildTerrain() {
-  const material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const material = deepenShadows(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
   const group = new THREE.Group();
   group.name = 'terrain';
   for (const isl of ISLANDS) group.add(buildIslandMesh(isl, material));

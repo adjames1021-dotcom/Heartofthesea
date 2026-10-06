@@ -21,6 +21,7 @@ import { Input } from './input.js';
 import { FollowCamera } from './camera.js';
 import { Hud } from './hud.js';
 import { Treasure, shovelModel } from './treasure.js';
+import { Puzzles } from './puzzles.js';
 import { OceanAudio } from './audio.js';
 import { syncClock, worldTime } from './clock.js';
 import './style.css';
@@ -97,6 +98,7 @@ const follow = new FollowCamera(camera);
 const hud = new Hud();
 const audio = new OceanAudio();
 const treasure = new Treasure({ scene, world, hud });
+const puzzles = new Puzzles({ scene, world });
 
 // ---------- Dev camera (screenshots) ----------
 let controls = null;
@@ -191,6 +193,8 @@ function findInteraction() {
       },
     };
   }
+  const note = player.mode === 'swim' ? null : puzzles.nearest(player.pos);
+  if (note) return { key: 'E', label: puzzles.reading === note ? 'Look away' : 'Read', act: () => puzzles.read(note) };
   if (player.mode === 'swim') {
     boat.toWorld(PLATFORM_LOCAL, tmpV);
     if (Math.hypot(tmpV.x - player.pos.x, tmpV.z - player.pos.z) < 2.2) return { key: 'E', label: 'Climb aboard', act: climbAboard };
@@ -292,6 +296,7 @@ function frame(now) {
   }
   player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis() });
   treasure.update(dt, { t, waveScale: swell, boatBody: boat.body, player });
+  puzzles.update(player);
   for (const e of player.events) {
     if (e === 'horn') audio.horn();
     if (e === 'splash') audio.splash();
@@ -328,7 +333,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, islands, scene, bloom, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, islands, scene, bloom, THREE };
 }
 
 syncClock().finally(() => {

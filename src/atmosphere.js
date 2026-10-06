@@ -75,6 +75,28 @@ const _Y = new THREE.Vector3(0, 1, 0);
 const _right = new THREE.Vector3();
 const _up = new THREE.Vector3();
 
+// How much of the sky's fill light survives in full sun-shadow, for the
+// materials that opt in (terrain and island props). Low sun makes long, weak
+// shadows on flat ground; taking some sky light away keeps them readable.
+export const shadowFill = { value: 0.6 };
+const SHADOW_LINE = 'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;';
+
+export function deepenShadows(material) {
+  material.onBeforeCompile = (shader) => {
+    if (!THREE.ShaderChunk.lights_fragment_begin.includes(SHADOW_LINE)) return;
+    shader.uniforms.uShadowFill = shadowFill;
+    const begin = THREE.ShaderChunk.lights_fragment_begin.replace(
+      SHADOW_LINE,
+      SHADOW_LINE.replace('directLight.color *=', 'sunShadow =') + '\n\t\tdirectLight.color *= sunShadow;',
+    );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uShadowFill;')
+      .replace('#include <lights_fragment_begin>', 'float sunShadow = 1.0;\n' + begin)
+      .replace('#include <lights_fragment_maps>', 'irradiance *= mix( uShadowFill, 1.0, sunShadow );\n#include <lights_fragment_maps>');
+  };
+  return material;
+}
+
 export class Atmosphere {
   constructor() {
     this.sunDir = new THREE.Vector3(0, 1, 0);
@@ -188,6 +210,7 @@ export class Atmosphere {
     // Light bouncing back up off sand and sea, so shaded sides aren't black.
     this.hemi.groundColor.copy(s.sandbed).lerp(s.shallow, 0.35).multiplyScalar(0.7);
     this.hemi.intensity = 1.5 + 1.6 * (1 - s.night);
+    shadowFill.value = THREE.MathUtils.lerp(THREE.MathUtils.lerp(0.42, 0.72, THREE.MathUtils.smoothstep(e, 0.08, 0.6)), 0.8, s.night);
 
     this.fog.color.copy(s.horizon);
     this.fog.density = s.fog;
