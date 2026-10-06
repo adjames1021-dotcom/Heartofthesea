@@ -1,0 +1,276 @@
+import * as THREE from 'three';
+import { RIPPLES, SWELLS, DEFAULT_WAVE_SCALE, wavePhases } from '../shared/waves.js';
+import { noiseGLSL, skyGLSL, skyUniformsGLSL } from './glsl.js';
+
+const GRID = 420;          // vertices per side
+const RADIUS = 4500;       // metres from the camera to the mesh edge
+const INNER = 130;         // controls vertex density near the camera (~0.6 m)
+
+/**
+ * A single square grid whose vertices are packed densely near the centre and
+ * stretched out toward the horizon (x = a·u + (R − a)·u³). It follows the
+ * camera; displacement is computed from world position so the waves stay put.
+ */
+function buildGeometry() {
+  const n = GRID;
+  const pos = new Float32Array(n * n * 3);
+  const remap = (u) => Math.sign(u) * (INNER * Math.abs(u) + (RADIUS - INNER) * Math.abs(u) ** 3);
+  let p = 0;
+  for (let j = 0; j < n; j++) {
+    const z = remap((j / (n - 1)) * 2 - 1);
+    for (let i = 0; i < n; i++) {
+      pos[p++] = remap((i / (n - 1)) * 2 - 1);
+      pos[p++] = 0;
+      pos[p++] = z;
+    }
+  }
+  const idx = new Uint32Array((n - 1) * (n - 1) * 6);
+  let k = 0;
+  for (let j = 0; j < n - 1; j++) {
+    for (let i = 0; i < n - 1; i++) {
+      const a = j * n + i;
+      const b = a + 1;
+      const c = a + n;
+      const d = c + 1;
+      idx[k++] = a; idx[k++] = c; idx[k++] = b;
+      idx[k++] = b; idx[k++] = c; idx[k++] = d;
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), RADIUS * 1.5);
+  return g;
+}
+
+const packWaves = (waves) =>
+  waves.map((w) => new THREE.Vector4(w.dirX, w.dirZ, w.k, w.steepness));
+
+const NS = SWELLS.length;
+const NR = RIPPLES.length;
+
+const waveGLSL = /* glsl */ `
+#define NUM_SWELLS ${NS}
+#define NUM_RIPPLES ${NR}
+uniform vec4 uSwells[NUM_SWELLS];     // dir.xy, k, steepness
+uniform float uSwellPhase[NUM_SWELLS];
+uniform vec4 uRipples[NUM_RIPPLES];
+uniform float uRipplePhase[NUM_RIPPLES];
+uniform float uWaveScale;
+
+// Fade a wave out once it gets too small to be resolved at this distance.
+float waveFade(float k, float dist, float near, float far) {
+  float L = 6.2831853 / k;
+  return 1.0 - smoothstep(L * near, L * far, dist);
+}
+`;
+
+const vertexShader = /* glsl */ `
+${waveGLSL}
+varying vec3 vWorld;
+varying vec2 vGrid;
+varying float vHeight;
+
+void main() {
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vec2 p = wp.xz;
+  float dist = length(p - cameraPosition.xz);
+  vec3 disp = vec3(0.0);
+  for (int i = 0; i < NUM_SWELLS; i++) {
+    vec4 w = uSwells[i];
+    float q = w.w * uWaveScale * waveFade(w.z, dist, 30.0, 70.0);
+    float a = q / w.z;
+    float f = w.z * dot(w.xy, p) - uSwellPhase[i];
+    float c = cos(f);
+    disp += vec3(w.x * a * c, a * sin(f), w.y * a * c);
+  }
+  wp.xyz += disp;
+  vGrid = p;
+  vWorld = wp.xyz;
+  vHeight = disp.y;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}
+`;
+
+const fragmentShader = /* glsl */ `
+${skyUniformsGLSL}
+${noiseGLSL}
+${skyGLSL}
+${waveGLSL}
+uniform vec3 uDeep;
+uniform vec3 uShallow;
+uniform vec3 uScatter;
+uniform float uFogDensity;
+uniform float uMaxHeight;
+uniform vec3 uLanternPos;
+uniform vec3 uLanternColor;
+
+varying vec3 vWorld;
+varying vec2 vGrid;
+varying float vHeight;
+
+void main() {
+  vec2 p = vGrid;
+  vec3 toCam = cameraPosition - vWorld;
+  float dist = length(toCam);
+  vec3 V = toCam / dist;
+
+  // --- Per-pixel Gerstner normal + Jacobian (for crest foam) ---
+  vec3 T = vec3(1.0, 0.0, 0.0);
+  vec3 B = vec3(0.0, 0.0, 1.0);
+  for (int i = 0; i < NUM_SWELLS; i++) {
+    vec4 w = uSwells[i];
+    float q = w.w * uWaveScale * waveFade(w.z, dist, 30.0, 70.0);
+    float f = w.z * dot(w.xy, p) - uSwellPhase[i];
+    float s = sin(f), c = cos(f);
+    T += vec3(-w.x * w.x * q * s, w.x * q * c, -w.x * w.y * q * s);
+    B += vec3(-w.x * w.y * q * s, w.y * q * c, -w.y * w.y * q * s);
+  }
+  float jacobian = T.x * B.z - T.z * B.x;
+
+  // Small chop only bends the normal.
+  for (int i = 0; i < NUM_RIPPLES; i++) {
+    vec4 w = uRipples[i];
+    float q = w.w * (0.6 + 0.6 * uWaveScale) * waveFade(w.z, dist, 18.0, 60.0);
+    float f = w.z * dot(w.xy, p) - uRipplePhase[i];
+    float s = sin(f), c = cos(f);
+    T += vec3(-w.x * w.x * q * s, w.x * q * c, -w.x * w.y * q * s);
+    B += vec3(-w.x * w.y * q * s, w.y * q * c, -w.y * w.y * q * s);
+  }
+  vec3 N = normalize(cross(B, T));
+
+  // Soften normals with distance: the far sea turns into a glassy mirror.
+  N = normalize(mix(N, vec3(0.0, 1.0, 0.0), smoothstep(150.0, 2200.0, dist) * 0.85));
+
+  vec3 L = uLightDir;
+  float NdV = max(dot(N, V), 0.0);
+
+  // --- Reflection ---
+  vec3 R = reflect(-V, N);
+  R.y = abs(R.y);
+  vec3 refl = skyColor(R, false);
+
+  // --- Water body: deep colour, brighter where the swell rises ---
+  float h01 = clamp(vHeight / uMaxHeight * 0.5 + 0.5, 0.0, 1.0);
+  vec3 ambient = mix(uZenith, uHorizon, 0.5);
+  float wrap = max(dot(N, L) * 0.5 + 0.5, 0.0);
+  vec3 body = mix(uDeep, uShallow, h01 * h01 * 0.9);
+  // Light the water mostly by intensity so a pink sky doesn't turn the sea grey.
+  vec3 lightIn = uLightColor * 0.32 + ambient * 0.55;
+  float lum = dot(lightIn, vec3(0.3, 0.59, 0.11));
+  body *= (0.4 + 0.6 * wrap) * mix(vec3(lum), lightIn, 0.35) * 1.15;
+
+  // --- Subsurface scatter: the glowing jade crests when looking at the sun ---
+  vec3 Hs = normalize(L + N * 0.55);
+  float back = pow(clamp(dot(V, -Hs), 0.0, 1.0), 3.5);
+  float crestMask = smoothstep(0.35, 1.0, h01);
+  float sss = (back * 1.6 + 0.18) * crestMask;
+  sss *= smoothstep(-0.2, 0.7, 1.0 - NdV); // stronger at grazing angles
+  vec3 scatter = uScatter * sss * (uLightColor * 0.42 + ambient * 0.2);
+
+  float fresnel = 0.02 + 0.98 * pow(1.0 - NdV, 5.0);
+  fresnel = min(fresnel, 0.8);
+  vec3 col = mix(body + scatter, refl, fresnel);
+
+  // --- Sun glitter: punchy, slightly stylised ---
+  vec3 H = normalize(L + V);
+  float spec = pow(max(dot(N, H), 0.0), 900.0);
+  spec = smoothstep(0.08, 0.5, spec) * 1.4 + spec * 0.6;
+  vec3 broad = uLightColor * pow(max(dot(N, H), 0.0), 60.0) * 0.08;
+  col += uLightColor * spec * 6.0 + broad;
+
+  // --- Foam: soft, bubbly patches that bloom on crests + marbled veins ---
+  float foamFade = 1.0 - smoothstep(60.0, 420.0, dist);
+  vec2 drift = vec2(uTime * 0.06, uTime * 0.025);
+  float patchN = fbm(p * 0.35 + drift);
+  vec2 wl = worley(p * 2.3 + drift * 3.0 + patchN * 2.0);
+  float bubbles = smoothstep(0.08, 0.38, wl.x);   // 0 inside the bubble holes
+  float foamTex = patchN * 0.75 + bubbles * 0.3;
+
+  float crest = smoothstep(0.8, 0.45, jacobian) * smoothstep(0.54, 0.8, h01);
+  crest = clamp(crest * 1.4, 0.0, 1.0);
+  // Faint marbling on the open sea, like leftover foam from old breakers.
+  float vein = 1.0 - smoothstep(0.0, 0.028, abs(fbm(p * 0.05 + drift * 0.15) - 0.5));
+  float amount = max(crest, vein * 0.38 * foamFade);
+  float foam = smoothstep(1.0 - amount, 1.08 - amount, foamTex);
+  // Far away, swap the pattern for its average so it doesn't shimmer.
+  foam = mix(crest * 0.45, foam, foamFade);
+
+  vec3 foamCol = uLightColor * 0.26 * wrap + ambient * 0.75 + uSunColor * 0.03;
+  col = mix(col, foamCol, foam * 0.92);
+
+  // --- Lantern: warm pool + glitter path on the water (point lights don't
+  // reach this custom shader, so it is done by hand) ---
+  vec3 toLamp = uLanternPos - vWorld;
+  float lampD2 = dot(toLamp, toLamp);
+  vec3 Ll = toLamp * inversesqrt(lampD2);
+  float lampSpec = pow(max(dot(N, normalize(Ll + V)), 0.0), 220.0);
+  col += uLanternColor * (lampSpec * 6.0 + 0.5 * max(dot(N, Ll), 0.0)) / (1.0 + lampD2 * 0.035);
+
+  // --- Aerial perspective: melt into the same horizon the sky paints ---
+  vec3 fogDir = normalize(vec3(-V.x, 0.0, -V.z));
+  vec3 fogCol = skyGradient(fogDir);
+  float fogF = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);
+  col = mix(col, fogCol, fogF);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+export class Ocean {
+  constructor(atmosphere) {
+    this.atmosphere = atmosphere;
+    this.waveScale = DEFAULT_WAVE_SCALE;
+    this.swellPhases = new Float32Array(NS);
+    this.ripplePhases = new Float32Array(NR);
+
+    const maxHeight = SWELLS.reduce((s, w) => s + w.steepness / w.k, 0);
+
+    this.uniforms = {
+      ...atmosphere.uniforms,
+      uSwells: { value: packWaves(SWELLS) },
+      uSwellPhase: { value: this.swellPhases },
+      uRipples: { value: packWaves(RIPPLES) },
+      uRipplePhase: { value: this.ripplePhases },
+      uWaveScale: { value: this.waveScale },
+      uDeep: { value: atmosphere.state.deep },
+      uShallow: { value: atmosphere.state.shallow },
+      uScatter: { value: atmosphere.state.scatter },
+      uFogDensity: { value: 0.0006 },
+      uMaxHeight: { value: maxHeight * this.waveScale },
+      uLanternPos: { value: new THREE.Vector3() },
+      uLanternColor: { value: new THREE.Color(0, 0, 0) },
+    };
+    this.maxHeightUnit = maxHeight;
+
+    this.mesh = new THREE.Mesh(
+      buildGeometry(),
+      new THREE.ShaderMaterial({
+        uniforms: this.uniforms,
+        vertexShader,
+        fragmentShader,
+      }),
+    );
+    this.mesh.frustumCulled = false;
+  }
+
+  setWaveScale(s) {
+    this.waveScale = s;
+    this.uniforms.uWaveScale.value = s;
+    this.uniforms.uMaxHeight.value = Math.max(this.maxHeightUnit * s, 0.01);
+  }
+
+  /** t: shared world clock in seconds (full double precision). */
+  update(t, camera) {
+    wavePhases(SWELLS, t, this.swellPhases);
+    wavePhases(RIPPLES, t, this.ripplePhases);
+    this.uniforms.uFogDensity.value = this.atmosphere.fog.density;
+    // Follow the camera horizontally. Snapping keeps vertex jitter down.
+    const snap = 2;
+    this.mesh.position.set(
+      Math.round(camera.position.x / snap) * snap,
+      0,
+      Math.round(camera.position.z / snap) * snap,
+    );
+  }
+}

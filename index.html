@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1428" />
+    <title>Heart of the Sea</title>
+    <meta name="description" content="A stylised open ocean — the beginnings of a multiplayer pirate game." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Spectral:wght@400;600&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <div class="vignette" aria-hidden="true"></div>
+
+    <header class="title" aria-hidden="true">
+      <h1>Heart of the Sea</h1>
+      <p>drag to look about · scroll to zoom</p>
+    </header>
+
+    <aside id="panel" class="panel">
+      <button id="hide" class="hide" type="button" aria-label="Toggle controls">☰</button>
+      <div class="rows">
+        <label>
+          <span>Time <output id="time-label">17:24</output></span>
+          <input id="time" type="range" min="0" max="24" step="0.01" value="17.4" />
+        </label>
+        <label class="check"><input id="cycle" type="checkbox" checked /> Day/night cycle</label>
+        <label>
+          <span>Swell</span>
+          <input id="waves" type="range" min="0.1" max="1.1" step="0.01" value="0.62" />
+        </label>
+        <label>
+          <span>Clouds</span>
+          <input id="clouds" type="range" min="0" max="1" step="0.01" value="0.45" />
+        </label>
+        <button id="sound" type="button" aria-pressed="false">Sound: off</button>
+      </div>
+    </aside>
+
+    <div class="curtain" aria-hidden="true"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
