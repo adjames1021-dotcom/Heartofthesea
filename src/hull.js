@@ -20,7 +20,7 @@ import { hash2 } from '../shared/noise.js';
 export function loftHull(spec) {
   const {
     length, u0 = 0, u1 = 1, stations = 24, ring = 8,
-    halfBreadth, sheer, keel, power = 2.5, jag = 0, seed = 1, transom = true,
+    halfBreadth, sheer, keel, power = 2.5, jag = 0, seed = 1, transom = true, vOfY = null,
   } = spec;
   const e = 2 / power;
   const cols = 2 * ring + 1;
@@ -44,7 +44,7 @@ export function loftHull(spec) {
       let x = xBase;
       if (ragged && jag > 0) x += (hash2(i, k, seed) - 0.5) * jag;
       pts.push(x, y, side * xs);
-      uvs.push(u, (sh - y) / Math.max(sh + kd, 1e-3));
+      uvs.push(u, vOfY ? vOfY(y) : (sh - y) / Math.max(sh + kd, 1e-3));
     }
   }
   const idx = [];

@@ -6,13 +6,20 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 import { heightAt, setWaveDamping } from '../shared/waves.js';
-import { dampingAt, ISLAND_BY_ID, toWorld } from '../shared/world.js';
-import { hoursAt, swellScaleAt, cloudCoverAt } from '../shared/environment.js';
+import { dampingAt, groundAt, ISLAND_BY_ID, toWorld } from '../shared/world.js';
+import { hoursAt, swellScaleAt, cloudCoverAt, windAt } from '../shared/environment.js';
+import { BOAT } from '../shared/boat.js';
 import { Atmosphere } from './atmosphere.js';
 import { Ocean } from './ocean.js';
 import { Flotsam } from './flotsam.js';
 import { Islands } from './islands.js';
 import { buildWorldTexture } from './terrain.js';
+import { Boat, STATIONS, LAYOUT } from './boat.js';
+import { CollisionWorld, Body } from './collision.js';
+import { Player } from './player.js';
+import { Input } from './input.js';
+import { FollowCamera } from './camera.js';
+import { Hud } from './hud.js';
 import { OceanAudio } from './audio.js';
 import { syncClock, worldTime } from './clock.js';
 import './style.css';
@@ -27,10 +34,11 @@ const dev = {
   swell: num('swell'),
   clouds: num('clouds'),
   fog: num('fog'),
+  wind: num('wind'),
 };
 
 // ---------- World data ----------
-const world = buildWorldTexture(); // bakes the seabed/damping grid
+const worldTex = buildWorldTexture(); // bakes the seabed/damping grid
 setWaveDamping(dampingAt);
 
 // ---------- Renderer ----------
@@ -46,13 +54,10 @@ document.getElementById('app').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.3, 9000);
 
-// ---------- World ----------
 const atmosphere = new Atmosphere();
 atmosphere.addTo(scene);
-
-const ocean = new Ocean(atmosphere, world);
+const ocean = new Ocean(atmosphere, worldTex);
 scene.add(ocean.mesh);
-
 const islands = new Islands();
 scene.add(islands.group);
 
@@ -61,48 +66,61 @@ const buoyAt = toWorld(saddle, saddle.features.buoy.x, saddle.features.buoy.z);
 const flotsam = new Flotsam({ buoy: buoyAt });
 scene.add(flotsam.group);
 
-// ---------- Camera ----------
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.06;
-controls.minDistance = 6;
-controls.maxDistance = 900;
-controls.maxPolarAngle = Math.PI * 0.53;
-controls.enablePan = false;
+// ---------- Collision ----------
+const world = new CollisionWorld();
+for (const c of islands.colliders) world.addStatic(c);
 
-let followBuoy = true;
+// ---------- The boat, at anchor in the Saddle Island bay ----------
+const bay = toWorld(saddle, saddle.features.bay.x, saddle.features.bay.z + 6);
+const boat = new Boat({ x: bay.x, z: bay.z, heading: Math.PI });
+scene.add(boat.root);
+boat.body = world.addBody(new Body(boat.colliders, 'boat'));
+boat.body.climbFromWater = true;
+{
+  const a = boat.state.anchor;
+  a.rode = 32;
+  a.set = true;
+  a.x = bay.x - 30;
+  a.z = bay.z;
+}
+
+const env = { wind: {}, ground: groundAt };
+
+// ---------- Player ----------
+const player = new Player(world, params.get('look') ?? 'brown');
+scene.add(player.bear.root);
+
+const input = new Input(renderer.domElement);
+const follow = new FollowCamera(camera);
+const hud = new Hud();
+const audio = new OceanAudio();
+
+// ---------- Dev camera (screenshots) ----------
+let controls = null;
 const camMode = params.get('cam');
-if (camMode === 'free') {
-  // ?cam=free&pos=x,y,z&look=x,y,z
-  const [px, py, pz] = (params.get('pos') ?? '0,400,700').split(',').map(Number);
-  const [lx, ly, lz] = (params.get('look') ?? '0,0,0').split(',').map(Number);
-  camera.position.set(px, py, pz);
-  controls.target.set(lx, ly, lz);
-  followBuoy = false;
-} else if (camMode === 'island') {
-  // ?cam=island&id=horseshoe&az=0.5&el=0.3&dist=300&lift=10
-  const isl = ISLAND_BY_ID[params.get('id') ?? 'saddle'];
-  const az = num('az') ?? 0.6;
-  const el = num('el') ?? 0.25;
-  const dist = num('dist') ?? 320;
-  const lift = num('lift') ?? 8;
-  controls.target.set(isl.x, lift, isl.z);
-  camera.position.set(
-    isl.x + Math.cos(az) * Math.cos(el) * dist,
-    lift + Math.sin(el) * dist,
-    isl.z + Math.sin(az) * Math.cos(el) * dist,
-  );
-  followBuoy = false;
-} else {
-  camera.position.set(buoyAt.x - 30, 8, buoyAt.z + 22);
-  controls.target.set(buoyAt.x, 2.5, buoyAt.z);
+if (camMode === 'free' || camMode === 'island') {
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  if (camMode === 'free') {
+    const [px, py, pz] = (params.get('pos') ?? '0,400,700').split(',').map(Number);
+    const [lx, ly, lz] = (params.get('look') ?? '0,0,0').split(',').map(Number);
+    camera.position.set(px, py, pz);
+    controls.target.set(lx, ly, lz);
+  } else {
+    const isl = ISLAND_BY_ID[params.get('id') ?? 'saddle'];
+    const az = num('az') ?? 0.6;
+    const el = num('el') ?? 0.25;
+    const dist = num('dist') ?? 320;
+    const lift = num('lift') ?? 8;
+    controls.target.set(isl.x, lift, isl.z);
+    camera.position.set(isl.x + Math.cos(az) * Math.cos(el) * dist, lift + Math.sin(el) * dist, isl.z + Math.sin(az) * Math.cos(el) * dist);
+  }
 }
 
 // ---------- Post ----------
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.28, 0.55, 0.92);
-composer.addPass(bloom);
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.28, 0.55, 0.92));
 composer.addPass(new OutputPass());
 
 addEventListener('resize', () => {
@@ -112,13 +130,13 @@ addEventListener('resize', () => {
   composer.setSize(innerWidth, innerHeight);
 });
 
-// ---------- UI ----------
+// ---------- Settings ----------
 const ui = {
   sound: document.getElementById('sound'),
   panel: document.getElementById('panel'),
   toggle: document.getElementById('settings-toggle'),
+  start: document.getElementById('start'),
 };
-const audio = new OceanAudio();
 ui.sound.addEventListener('click', async () => {
   const on = await audio.toggle();
   ui.sound.textContent = on ? 'Sound on' : 'Sound off';
@@ -128,51 +146,139 @@ ui.toggle.addEventListener('click', () => {
   const open = ui.panel.classList.toggle('open');
   ui.toggle.setAttribute('aria-expanded', String(open));
 });
+renderer.domElement.addEventListener('mousedown', () => ui.start.classList.add('gone'), { once: true });
+
+// ---------- Interactions ----------
+const STATION_KEYS = {
+  helm: [['A D', 'steer'], ['W S', 'throttle'], ['R', 'engine'], ['↑ ↓', 'mainsheet'], ['← →', 'jib sheet'], ['P', 'autopilot'], ['L', 'lights'], ['F', 'horn'], ['E', 'leave']],
+  halyards: [['W S', 'hoist / lower main'], ['A D', 'furl / unfurl jib'], ['R', 'reef'], ['E', 'leave']],
+  windlass: [['W', 'raise anchor'], ['S', 'let out chain'], ['E', 'leave']],
+};
+const tmpV = new THREE.Vector3();
+const PLATFORM_LOCAL = new THREE.Vector3(-6.05, LAYOUT.platform.y, 0);
+
+function findInteraction() {
+  if (player.mode === 'station') return null;
+  if (player.mode === 'swim') {
+    boat.toWorld(PLATFORM_LOCAL, tmpV);
+    if (Math.hypot(tmpV.x - player.pos.x, tmpV.z - player.pos.z) < 2.2) return { key: 'E', label: 'Climb aboard', act: climbAboard };
+    return null;
+  }
+  for (const [name, st] of Object.entries(STATIONS)) {
+    boat.toWorld(st.stand, tmpV);
+    if (tmpV.distanceTo(player.pos) < 1.1) return { key: 'E', label: st.label, act: () => player.enterStation(boat, name) };
+  }
+  return null;
+}
+
+function climbAboard() {
+  boat.toWorld(PLATFORM_LOCAL.clone().add(new THREE.Vector3(0.1, 0.02, 0)), tmpV);
+  player.place(tmpV, boat.body);
+  player.heading = Math.PI / 2 - boat.state.heading;
+}
+
+// Short, flat notices for things you can't see from where you're standing.
+const watch = { set: true, dragging: false, aground: false, deep: false };
+function boatNotices() {
+  const a = boat.state.anchor;
+  if (a.set && !watch.set) hud.say('Anchor down.');
+  if (!a.set && watch.set && a.rode > 0.5) hud.say('Anchor off the bottom.');
+  if (a.rode <= 0.01 && watch.rode > 0.01) hud.say('Anchor up.');
+  const deep = !a.set && a.rode >= BOAT.rodeMax - 0.01;
+  if (deep && !watch.deep) hud.say('Too deep to anchor.');
+  if (a.dragging && !watch.dragging) hud.say('Anchor dragging.');
+  if (boat.state.aground && !watch.aground) hud.say('Aground.');
+  watch.set = a.set;
+  watch.dragging = a.dragging;
+  watch.aground = boat.state.aground;
+  watch.deep = deep;
+  watch.rode = a.rode;
+}
 
 // ---------- Loop ----------
-const followTarget = new THREE.Vector3(buoyAt.x, 2.5, buoyAt.z);
-const delta = new THREE.Vector3();
-const buoyFollow = new THREE.Vector3();
 let last = performance.now();
+let acc = 0;
+const STEP = 1 / 60;
+let started = false;
 
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   const t = worldTime();
+  const swell = dev.swell ?? swellScaleAt(t);
 
   atmosphere.setTimeOfDay(dev.hours ?? hoursAt(t));
   atmosphere.uniforms.uTime.value = t % 3600;
   atmosphere.uniforms.uCloudCover.value = dev.clouds ?? cloudCoverAt(t);
   if (dev.fog !== null) atmosphere.fog.density = dev.fog;
-  ocean.setWaveScale(dev.swell ?? swellScaleAt(t));
+  ocean.setWaveScale(swell);
   ocean.update(t, camera);
-  flotsam.update(t, dt, ocean.waveScale, atmosphere.uniforms.uNight.value);
+  flotsam.update(t, dt, swell, atmosphere.uniforms.uNight.value);
   islands.update(t);
 
-  flotsam.buoy.lantern.light.getWorldPosition(ocean.uniforms.uLanternPos.value);
-  ocean.uniforms.uLanternColor.value
-    .setRGB(1.0, 0.55, 0.2)
-    .multiplyScalar(flotsam.buoy.lantern.light.intensity / 20);
-
-  if (followBuoy) {
-    // Ride the swell with the buoy, softened like sea legs.
-    const buoy = flotsam.buoy.object.position;
-    buoyFollow.set(buoy.x, buoy.y * 0.6 + 2.5, buoy.z);
-    followTarget.lerp(buoyFollow, 1 - Math.exp(-dt * 2));
-    delta.subVectors(followTarget, controls.target);
-    controls.target.add(delta);
-    camera.position.add(delta);
+  // Boat physics at a fixed rate.
+  windAt(t, env.wind);
+  if (dev.wind !== null) env.wind.speed = dev.wind;
+  acc += dt;
+  while (acc >= STEP) {
+    boat.step(STEP, env);
+    acc -= STEP;
   }
-  controls.update();
+  boat.update(dt, t, swell);
+  boat.body.setMatrix(boat.matrix, boat.prevMatrix);
+  if (!started) {
+    player.place(boat.toWorld(new THREE.Vector3(-2.7, LAYOUT.cockpit.sole + 0.02, 0.45)), boat.body);
+    player.heading = Math.PI / 2 - boat.state.heading;
+    // Start looking forward along the deck.
+    follow.yaw = Math.atan2(-Math.cos(boat.state.heading), -Math.sin(boat.state.heading)) + 0.5;
+    started = true;
+  }
 
-  // Never dip below the surface.
-  const water = heightAt(camera.position.x, camera.position.z, t, ocean.waveScale);
-  if (camera.position.y < water + 1.2) camera.position.y = water + 1.2;
+  // Player.
+  const interaction = findInteraction();
+  hud.setPrompt(interaction?.key, interaction?.label);
+  if (interaction && input.pressed('KeyE')) {
+    interaction.act();
+    input.hits.delete('KeyE');
+  }
+  player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis() });
+  for (const e of player.events) {
+    if (e === 'horn') audio.horn();
+    if (e === 'splash') audio.splash();
+  }
+  audio.setEngine(boat.state.engine, boat.state.throttle);
 
-  atmosphere.focusShadows(controls.target);
+  hud.setKeys(player.mode === 'station' ? STATION_KEYS[player.station] : null);
+  hud.setInstruments(player.station === 'helm' ? boat.state : null);
+  boatNotices();
+  hud.update(dt);
 
+  // Camera.
+  if (controls) {
+    controls.update();
+  } else {
+    const onBoat = player.platform === boat.body || player.mode === 'station';
+    const yawDelta = onBoat ? -(boat.body.yaw - boat.body.prevYaw) : 0;
+    const target = player.head.clone();
+    if (player.station === 'helm') target.y += 1.4;
+    if (player.mode === 'swim') target.y += 0.6;
+    follow.update(dt, input, target, { context: player.station === 'helm' ? 'helm' : 'foot', yawDelta, t, waveScale: swell, world });
+    const water = heightAt(camera.position.x, camera.position.z, t, swell);
+    if (camera.position.y < water + 0.35) camera.position.y = water + 0.35;
+  }
+
+  // Lantern glow on the water.
+  flotsam.buoy.lantern.light.getWorldPosition(ocean.uniforms.uLanternPos.value);
+  ocean.uniforms.uLanternColor.value.setRGB(1.0, 0.55, 0.2).multiplyScalar(flotsam.buoy.lantern.light.intensity / 20);
+
+  atmosphere.focusShadows(controls ? controls.target : player.pos);
   composer.render(dt);
+  input.endFrame();
   requestAnimationFrame(frame);
+}
+
+if (params.has('dev')) {
+  window.__game = { player, boat, world, follow, camera, input, hud, THREE };
 }
 
 syncClock().finally(() => {

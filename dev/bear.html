@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bear viewer</title>
+    <style>html,body{margin:0;height:100%;background:#d9e3e8}canvas{display:block}</style>
+  </head>
+  <body>
+    <script type="module">
+      import * as THREE from 'three';
+      import { Bear } from '../src/bear.js';
+      const params = new URLSearchParams(location.search);
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.setPixelRatio(devicePixelRatio);
+      renderer.shadowMap.enabled = true;
+      document.body.appendChild(renderer.domElement);
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color('#d9e3e8');
+      const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.1, 100);
+      const yaw = Number(params.get('yaw') ?? 0.35);
+      camera.position.set(Math.sin(yaw) * 4.2, 1.0, Math.cos(yaw) * 4.2);
+      camera.lookAt(0, 0.68, 0);
+      scene.add(new THREE.HemisphereLight('#ffffff', '#8a7a60', 1.6));
+      const sun = new THREE.DirectionalLight('#fff4e0', 2.2);
+      sun.position.set(2, 4, 3);
+      sun.castShadow = true;
+      scene.add(sun);
+      const ground = new THREE.Mesh(new THREE.CircleGeometry(3, 32), new THREE.MeshLambertMaterial({ color: '#e8d5a2' }));
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+      const looks = (params.get('look') ?? 'brown').split(',');
+      const bears = looks.map((l, i) => {
+        const b = new Bear(l);
+        b.root.position.x = (i - (looks.length - 1) / 2) * 1.1;
+        scene.add(b.root);
+        return b;
+      });
+      const mode = params.get('mode') ?? 'idle';
+      let last = performance.now();
+      function frame(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        for (const b of bears) b.update(dt, { mode, speed: 2, t: now / 1000, effort: 1 });
+        renderer.render(scene, camera);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>

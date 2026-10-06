@@ -95,3 +95,77 @@ html, body {
   20%, 70% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* --- In-game text: small, flat, out of the way --- */
+.start {
+  position: fixed;
+  left: 50%;
+  bottom: 9%;
+  transform: translateX(-50%);
+  font-size: 1rem;
+  color: var(--ink);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+.start.gone { opacity: 0; }
+
+.hud { position: fixed; inset: 0; pointer-events: none; font-size: 0.9rem; color: var(--ink); }
+.hud kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 1px 5px;
+  margin-right: 3px;
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: center;
+  color: #1f1c18;
+  background: #e9e1cf;
+  border-radius: 3px;
+}
+.hud-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+.hud-keys {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  background: #1f1c18;
+  border: 1px solid #3b352d;
+  border-radius: 4px;
+}
+.hud-keys:empty { display: none; }
+.hud-keys div { display: flex; gap: 8px; align-items: center; }
+.hud-keys span { display: inline-flex; min-width: 4.2em; }
+.hud-instruments {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+  padding: 5px 12px;
+  background: #1f1c18;
+  border: 1px solid #3b352d;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hud-instruments:empty { display: none; }
+.hud-notice {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.75);
+}
+.hud-notice.show { opacity: 1; }

@@ -18,6 +18,76 @@ export class OceanAudio {
     return this.running;
   }
 
+  /** Diesel thump that follows the throttle. */
+  setEngine(on, throttle) {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    if (!this.engine) {
+      const ctx = this.ctx;
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = 38;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 180;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 9;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 0.04;
+      lfo.connect(lfoGain).connect(gain.gain);
+      osc.connect(lp).connect(gain).connect(this.master);
+      osc.start();
+      lfo.start();
+      this.engine = { osc, gain, lfo };
+    }
+    const now = this.ctx.currentTime;
+    const a = Math.abs(throttle);
+    this.engine.gain.gain.setTargetAtTime(on ? 0.08 + 0.1 * a : 0, now, 0.25);
+    this.engine.osc.frequency.setTargetAtTime(38 + 30 * a, now, 0.4);
+    this.engine.lfo.frequency.setTargetAtTime(9 + 10 * a, now, 0.4);
+  }
+
+  horn() {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.18, now + 0.05);
+    g.gain.setValueAtTime(0.18, now + 1.1);
+    g.gain.linearRampToValueAtTime(0, now + 1.3);
+    g.connect(this.master);
+    for (const f of [233, 294]) {
+      const o = ctx.createOscillator();
+      o.type = 'square';
+      o.frequency.value = f;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 900;
+      o.connect(lp).connect(g);
+      o.start(now);
+      o.stop(now + 1.35);
+    }
+  }
+
+  splash() {
+    if (!this.ctx || this.ctx.state !== 'running' || !this.noise) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 900;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.5, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+    src.connect(bp).connect(g).connect(this.master);
+    src.start(now, Math.random());
+    src.stop(now + 0.8);
+  }
+
   #build() {
     const ctx = (this.ctx = new AudioContext());
     this.master = ctx.createGain();
@@ -35,6 +105,8 @@ export class OceanAudio {
         d[i] = last * 3.5;
       }
     }
+
+    this.noise = buf;
 
     // Wash layers: each a band-limited noise whose level and cutoff breathe.
     const layers = [
