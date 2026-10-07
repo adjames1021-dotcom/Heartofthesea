@@ -35,7 +35,7 @@ export const LAYOUT = {
 /** Crew stations, boat-local. `stand` is where the bear stands, facing +x. */
 export const STATIONS = {
   helm: { stand: new THREE.Vector3(-4.62, LAYOUT.cockpit.sole, 0), label: 'Take the helm', anim: 'helm' },
-  halyards: { stand: new THREE.Vector3(-1.62, LAYOUT.cockpit.sole, 0), label: 'Halyards', anim: 'haul' },
+  halyards: { stand: new THREE.Vector3(-1.62, LAYOUT.cockpit.sole, -0.85), label: 'Halyards', anim: 'haul' },
   windlass: { stand: new THREE.Vector3(4.35, deckAt(4.35), 0), label: 'Windlass', anim: 'crank' },
 };
 
@@ -440,6 +440,17 @@ export class Boat {
     this.wheel.add(new THREE.Mesh(mergeParts(wparts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
     this.root.add(this.wheel);
 
+    // The black anchor ball: hoisted on the forestay while she's at anchor,
+    // so anyone can see from afar that she's anchored.
+    const fsl = LAYOUT.forestay;
+    this.anchorBall = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 8), new THREE.MeshLambertMaterial({ color: '#141414' }));
+    this.anchorBall.castShadow = true;
+    this.anchorBallUp = fsl.tack.clone().lerp(fsl.head, 0.33).add(new THREE.Vector3(-0.15, 0, 0));
+    this.anchorBallDown = fsl.tack.clone().lerp(fsl.head, 0.04).add(new THREE.Vector3(-0.15, 0, 0));
+    this.anchorBall.position.copy(this.anchorBallDown);
+    this.anchorBall.visible = false;
+    this.root.add(this.anchorBall);
+
     // Masthead wind indicator and a pennant on the backstay.
     this.windex = new THREE.Group();
     this.windex.position.set(LAYOUT.mast.x, LAYOUT.mast.top + 0.12, 0);
@@ -460,21 +471,60 @@ export class Boat {
     this.root.add(this.pennant);
 
     // Navigation lights.
-    const lamp = (color, pos) => {
+    // Navigation lights, each in a small black housing where a real boat
+    // carries them: red and green on the bow flanks, white on the stern
+    // rail, a steaming light on the front of the mast, the anchor light on top.
+    const housingMat = new THREE.MeshLambertMaterial({ color: '#1c1e20' });
+    const lamp = (color, pos, housing = null) => {
       const mat = new THREE.MeshBasicMaterial({ color: '#333333' });
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), mat);
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), mat);
       m.position.copy(pos);
       this.root.add(m);
-      return { mat, on: new THREE.Color(color).multiplyScalar(6), off: new THREE.Color('#2f3336') };
+      if (housing) {
+        const h = new THREE.Mesh(new THREE.BoxGeometry(...housing.size), housingMat);
+        h.position.copy(pos).add(housing.offset);
+        this.root.add(h);
+      }
+      // Bright enough to bloom a little, not enough to glare.
+      return { mat, on: new THREE.Color(color).multiplyScalar(white(color) ? 1.6 : 2.6), off: new THREE.Color('#2f3336') };
     };
-    const py = deckAt(5.2) + 0.66;
+    const white = (c) => c === '#fff3d6';
+    const sx = 4.3;
+    const sy = deckAt(sx) - 0.12;
+    const sz = halfAt(sx) + 0.04;
+    const side = { size: [0.26, 0.16, 0.06], offset: new THREE.Vector3(-0.08, 0, 0) };
+    const sternX = -5.62;
     this.lamps = {
-      port: lamp('#ff2a20', new THREE.Vector3(5.2, py, -0.34)),
-      starboard: lamp('#22ff55', new THREE.Vector3(5.2, py, 0.34)),
-      stern: lamp('#fff3d6', new THREE.Vector3(-5.6, deckAt(-5.6) + 0.68, 0)),
-      steaming: lamp('#fff3d6', new THREE.Vector3(LAYOUT.mast.x + 0.13, 9.2, 0)),
-      anchor: lamp('#fff3d6', new THREE.Vector3(LAYOUT.mast.x, LAYOUT.mast.top + 0.05, 0)),
+      port: lamp('#ff2a20', new THREE.Vector3(sx, sy, -sz), { ...side, offset: new THREE.Vector3(-0.08, 0, 0.03) }),
+      starboard: lamp('#22ff55', new THREE.Vector3(sx, sy, sz), { ...side, offset: new THREE.Vector3(-0.08, 0, -0.03) }),
+      stern: lamp('#fff3d6', new THREE.Vector3(sternX, deckAt(sternX) + 0.72, 0), { size: [0.1, 0.12, 0.14], offset: new THREE.Vector3(0.06, 0, 0) }),
+      steaming: lamp('#fff3d6', new THREE.Vector3(LAYOUT.mast.x + 0.16, 9.2, 0), { size: [0.1, 0.14, 0.14], offset: new THREE.Vector3(-0.07, 0, 0) }),
+      anchor: lamp('#fff3d6', new THREE.Vector3(LAYOUT.mast.x, LAYOUT.mast.top + 0.22, 0), { size: [0.05, 0.2, 0.05], offset: new THREE.Vector3(0, -0.14, 0) }),
     };
+
+    // Telltales: wool ribbons on the shrouds and the stern rail that stream
+    // away from the wind, so you can see where it's coming from.
+    this.telltales = [];
+    const ribbon = (color, pos) => {
+      const pivot = new THREE.Group();
+      pivot.position.copy(pos);
+      const g = new THREE.PlaneGeometry(0.6, 0.09, 6, 1);
+      g.translate(0.3, 0, 0);
+      const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }));
+      pivot.add(mesh);
+      this.root.add(pivot);
+      this.telltales.push({ pivot, mesh, base: g.attributes.position.array.slice(), phase: Math.random() * 10 });
+    };
+    for (const sideZ of [-1, 1]) {
+      // On each upper shroud, about head height above the side deck.
+      const a = new THREE.Vector3(1.05, deckAt(1.05), sideZ * (halfAt(1.05) - 0.08));
+      const b2 = new THREE.Vector3(LAYOUT.mast.x - 0.05, 7.2, sideZ * 0.95);
+      for (const h of [1.7, 2.4]) {
+        const t = h / (b2.y - a.y);
+        ribbon(sideZ < 0 ? '#c8322a' : '#2f9a4a', a.clone().lerp(b2, t));
+      }
+    }
+    ribbon('#d8d0bd', new THREE.Vector3(-5.62, deckAt(-5.6) + 0.95, 0));
 
     // Anchor chain, from the roller down toward the water.
     this.chain = new THREE.Line(
@@ -541,9 +591,16 @@ export class Boat {
 
     this.wheel.rotation.x = b.rudder * 2.4;
     this.windex.rotation.y = -b.awa; // points into the apparent wind
+    this.#updateTelltales(t);
     this.#buildPennant(t);
     this.#updateLights();
     this.#buildChain();
+    // Up the forestay once the anchor holds; down and stowed otherwise.
+    const ball = this.anchorBall;
+    const want = b.anchor.set ? 1 : 0;
+    this.ballT = (this.ballT ?? 0) + Math.sign(want - (this.ballT ?? 0)) * Math.min(Math.abs(want - (this.ballT ?? 0)), dt * 0.8);
+    ball.visible = this.ballT > 0.02;
+    ball.position.lerpVectors(this.anchorBallDown, this.anchorBallUp, this.ballT);
   }
 
   #buildMain(t) {
@@ -633,6 +690,25 @@ export class Boat {
     tri.forEach((k, i) => p.setXYZ(i, ...pts[k]));
     p.needsUpdate = true;
     this.pennant.geometry.computeVertexNormals();
+  }
+
+  #updateTelltales(t) {
+    const b = this.state;
+    // Where the apparent wind blows to, in the boat's frame (x forward, z starboard).
+    const dx = -Math.cos(b.awa);
+    const dz = -Math.sin(b.awa);
+    const yaw = Math.atan2(-dz, dx);
+    const strength = Math.min(1, b.aws / 4);
+    for (const tt of this.telltales) {
+      tt.pivot.rotation.set(0, yaw, -(1 - strength) * 1.3, 'YXZ');
+      // Flutter: a ripple running down the ribbon, stronger in more wind.
+      const p = tt.mesh.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const x = tt.base[i * 3];
+        p.setZ(i, Math.sin(x * 14 - t * (8 + 10 * strength) + tt.phase) * 0.05 * (x / 0.6) * (0.4 + strength));
+      }
+      p.needsUpdate = true;
+    }
   }
 
   #updateLights() {

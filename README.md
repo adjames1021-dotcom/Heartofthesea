@@ -45,15 +45,29 @@ or a rope ladder to climb it. Jump for a hanging rope to swing on it (W/S
 pumps, Space lets go). Long falls knock you over for a moment; nothing hurts
 you.
 
-| Boat stations (E to take one, E to leave) | |
+| At the helm (E to take it, E to leave) | |
 | --- | --- |
-| Helm | A/D steer, W/S throttle, R engine, ↑↓ main sheet, ←→ jib sheet, P autopilot, L lights, F horn |
-| Halyards (at the mast) | W/S hoist/lower the main, A/D furl/unfurl the jib, R reef |
-| Windlass (at the bow) | W raise anchor, S let out chain |
+| A/D | steer |
+| W/S | sails up / down (throttle when the engine's on) |
+| G | anchor up / down (the windlass does the rest) |
+| R | engine on / off |
+| P / L / F | autopilot / lights / horn |
 
-To go ashore: sail in close, let the anchor down with about three times the
-depth in chain (the depth sounder is on the helm instruments), and swim. The
-swim platform at the stern is where you climb back aboard.
+H shows the controls and a plan of the boat; Tab shows the chart. The
+anchor's state is always shown top left while you're aboard, and a black
+ball goes up the forestay when it's holding. Telltales on the shrouds show
+where the wind's coming from.
+
+Sailing is arcade by default: the sails trim themselves and she's quick and
+forgiving. Settings → Sailing switches to realistic, where you trim the
+main and jib sheets yourself (↑↓ and ←→ at the helm). The halyard and
+windlass stations still work in both.
+
+The steps at the front of the cockpit (E) go below: a galley, a saloon and
+a forward cabin with a bed.
+
+To go ashore: sail in close, press G at the helm, and swim. The swim
+platform at the stern is where you climb back aboard.
 
 ## Treasure
 

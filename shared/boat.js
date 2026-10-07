@@ -30,6 +30,9 @@ export const BOAT = {
   mainSheetRange: [3 * DEG, 85 * DEG],
   jibSheetRange: [9 * DEG, 75 * DEG],
   rodeMax: 60,
+  // Arcade handling: sails trim themselves, she turns and speeds up quickly,
+  // barely heels, and makes way even close to the wind.
+  arcade: true,
   bow: { x: 5.55, y: 1.3 },
   // Points that touch the seabed first: keel, forefoot, stern quarters, bilges.
   contacts: [
@@ -72,7 +75,7 @@ export function createBoat({ x = 0, z = 0, heading = 0 } = {}) {
     jibOut: 0, jibSheet: 0.5,
     lights: false,
     autopilot: { on: false, heading },
-    anchor: { rode: 0, set: false, x: 0, z: 0, dragging: false, depth: 0 },
+    anchor: { rode: 0, set: false, x: 0, z: 0, dragging: false, depth: 0, cmd: null },
     // Held inputs from whoever is at a station, each −1, 0 or 1.
     input: { steer: 0, throttle: 0, mainSheet: 0, jibSheet: 0, hoist: 0, furl: 0, windlass: 0 },
     // Derived every step, for instruments and visuals.
@@ -99,16 +102,30 @@ function applyRates(b, dt) {
     const cmd = clamp(1.8 * err - 2.5 * b.r, -1, 1);
     b.rudder += clamp(cmd - b.rudder, -1.2 * dt, 1.2 * dt);
   } else {
-    b.rudder = clamp(b.rudder + i.steer * 0.8 * dt, -1, 1);
+    const rate = BOAT.arcade ? 3 : 0.8;
+    b.rudder = clamp(b.rudder + i.steer * rate * dt, -1, 1);
+    // Let go of the wheel and it centres itself.
+    if (BOAT.arcade && !i.steer) b.rudder -= clamp(b.rudder, -2.5 * dt, 2.5 * dt);
   }
   if (b.engine) b.throttle = clamp(b.throttle + i.throttle * 0.7 * dt, -1, 1);
   else b.throttle = 0;
   b.mainSheet = clamp(b.mainSheet + i.mainSheet * 0.25 * dt, 0, 1);
   b.jibSheet = clamp(b.jibSheet + i.jibSheet * 0.25 * dt, 0, 1);
-  b.mainHoist = clamp(b.mainHoist + (i.hoist > 0 ? 0.14 : 0.35) * i.hoist * dt, 0, 1);
-  b.jibOut = clamp(b.jibOut + i.furl * 0.2 * dt, 0, 1);
-  if (i.windlass > 0) b.anchor.rode = Math.max(0, b.anchor.rode - 0.7 * dt);
-  if (i.windlass < 0) b.anchor.rode = Math.min(BOAT.rodeMax, b.anchor.rode + 1.4 * dt);
+  const k = BOAT.arcade ? 4 : 1;
+  b.mainHoist = clamp(b.mainHoist + (i.hoist > 0 ? 0.14 : 0.35) * k * i.hoist * dt, 0, 1);
+  b.jibOut = clamp(b.jibOut + i.furl * 0.2 * k * dt, 0, 1);
+  // One-touch anchor (from the helm): runs the windlass until it's done.
+  const a = b.anchor;
+  let wl = i.windlass;
+  if (a.cmd === 'up') {
+    wl = 1;
+    if (a.rode <= 0) a.cmd = null;
+  } else if (a.cmd === 'down') {
+    wl = -1;
+    if ((a.set && a.rode >= Math.min(BOAT.rodeMax, a.depth * 3 + 2)) || a.rode >= BOAT.rodeMax) a.cmd = null;
+  }
+  if (wl > 0) a.rode = Math.max(0, a.rode - 0.7 * k * dt);
+  if (wl < 0) a.rode = Math.min(BOAT.rodeMax, a.rode + 1.4 * k * dt);
 }
 
 const _p = {};
@@ -161,7 +178,8 @@ export function stepBoat(b, dt, env) {
 
   // --- Mainsail ---
   const mainArea = BOAT.mainArea * b.mainHoist * BOAT.reefFactors[b.reef];
-  const mainMax = lerp(BOAT.mainSheetRange[0], BOAT.mainSheetRange[1], b.mainSheet);
+  const autoTrim = (range) => clamp(absAwa - 16 * DEG, range[0], range[1]);
+  const mainMax = BOAT.arcade ? autoTrim(BOAT.mainSheetRange) : lerp(BOAT.mainSheetRange[0], BOAT.mainSheetRange[1], b.mainSheet);
   const mainAng = Math.min(mainMax, absAwa);
   b.mainAngle = lee * mainAng;
   b.mainAoA = absAwa - mainAng;
@@ -174,7 +192,7 @@ export function stepBoat(b, dt, env) {
 
   // --- Genoa (blanketed by the main on a dead run) ---
   const jibArea = BOAT.jibArea * b.jibOut * lerp(1, 0.25, smoothstep(150 * DEG, 170 * DEG, absAwa));
-  const jibMax = lerp(BOAT.jibSheetRange[0], BOAT.jibSheetRange[1], b.jibSheet);
+  const jibMax = BOAT.arcade ? autoTrim(BOAT.jibSheetRange) : lerp(BOAT.jibSheetRange[0], BOAT.jibSheetRange[1], b.jibSheet);
   const jibAng = Math.min(jibMax, absAwa);
   b.jibAngle = lee * jibAng;
   b.jibAoA = absAwa - jibAng;
@@ -185,6 +203,13 @@ export function stepBoat(b, dt, env) {
   Fs += jibForce * (clJ * ls + cdJ * ds);
   b.jibLoad = jibArea > 0 ? clamp((clJ + 0.3 * cdJ) / 1.5, 0, 1) : 0;
 
+  if (BOAT.arcade) {
+    // Extra drive, and some even pointing high: forgiving, and quicker.
+    const sail = (mainArea + jibArea) / (BOAT.mainArea + BOAT.jibArea);
+    const twa = Math.abs(b.twa);
+    Ff = Math.max(Ff, 0) * 1.6 + sail * W.speed * W.speed * 28 * (0.5 + 0.5 * smoothstep(0.3, 1.4, twa));
+    Fs *= 0.6;
+  }
   const FsAero = Fs;
 
   // --- Engine ---
@@ -196,7 +221,9 @@ export function stepBoat(b, dt, env) {
   Fs -= 4800 * b.v * (au + 0.2) + 4000 * b.v * Math.abs(b.v);
 
   // --- Yaw ---
-  const uEff = b.u + (b.engine && b.throttle > 0 ? 1.6 * b.throttle : 0);
+  let uEff = b.u + (b.engine && b.throttle > 0 ? 1.6 * b.throttle : 0);
+  // Arcade: the rudder bites even at a crawl.
+  if (BOAT.arcade) uEff = Math.sign(uEff || 1) * Math.max(Math.abs(uEff), 2.2) * 1.1;
   let M = 3300 * b.rudder * BOAT.rudderMax * uEff * Math.abs(uEff);
   M -= b.r * (26000 * (au + 0.25) + 20000 * Math.abs(b.r));
   // Weather helm: heeled over, she wants to round up into the wind.
@@ -272,7 +299,7 @@ export function stepBoat(b, dt, env) {
   b.z += (b.u * fz + b.v * sz) * dt;
 
   // --- Heel ---
-  const heelMoment = FsAero * heelK * BOAT.ceHeight;
+  const heelMoment = FsAero * heelK * BOAT.ceHeight * (BOAT.arcade ? 0.5 : 1);
   const sh = Math.sin(b.heel);
   const righting = 42000 * sh * (1 + 0.6 * sh * sh);
   b.heelRate += ((heelMoment - righting - 18000 * b.heelRate) / BOAT.inertiaRoll) * dt;

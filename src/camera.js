@@ -11,7 +11,7 @@ export class FollowCamera {
     this.yaw = 0; // camera sits at target + (sin yaw, ·, cos yaw) * dist
     this.pitch = 0.32;
     this.dist = 5.5;
-    this.zoom = { foot: 5.5, helm: 11 };
+    this.zoom = { foot: 5.5, helm: 11, cabin: 2.8 };
     this.context = 'foot';
     this.target = new THREE.Vector3();
     this.smoothTarget = new THREE.Vector3();

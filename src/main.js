@@ -22,6 +22,8 @@ import { FollowCamera } from './camera.js';
 import { Hud } from './hud.js';
 import { Treasure, shovelModel } from './treasure.js';
 import { Puzzles } from './puzzles.js';
+import { Screens } from './screens.js';
+import { Interior } from './interior.js';
 import { WreckCourse } from './course.js';
 import { HatchPuzzle } from './hatch.js';
 import { StackClimb } from './stack.js';
@@ -104,6 +106,29 @@ const follow = new FollowCamera(camera);
 const hud = new Hud();
 const audio = new OceanAudio();
 const treasure = new Treasure({ scene, world, hud });
+const screens = new Screens();
+const interior = new Interior({ scene, world });
+document.getElementById('controls')?.addEventListener('click', () => screens.toggleControls(true));
+
+// Arcade (sails trim themselves, quick and forgiving) or realistic sailing.
+const sailingBtn = document.getElementById('sailing');
+function setSailing(mode) {
+  BOAT.arcade = mode !== 'realistic';
+  if (sailingBtn) sailingBtn.textContent = `Sailing: ${BOAT.arcade ? 'Arcade' : 'Realistic'}`;
+  try {
+    localStorage.setItem('hots.sailing', BOAT.arcade ? 'arcade' : 'realistic');
+  } catch {
+    // private mode: fine, it just won't be remembered
+  }
+}
+let savedSailing = 'arcade';
+try {
+  savedSailing = localStorage.getItem('hots.sailing') ?? 'arcade';
+} catch {
+  // ignore
+}
+setSailing(savedSailing);
+sailingBtn?.addEventListener('click', () => setSailing(BOAT.arcade ? 'realistic' : 'arcade'));
 const puzzles = new Puzzles({ scene, world });
 const course = new WreckCourse({ scene, world, wreck: islands.wreck });
 treasure.placeCourseChest('wreck', foreTopChest());
@@ -168,7 +193,8 @@ renderer.domElement.addEventListener('mousedown', () => ui.start.classList.add('
 
 // ---------- Interactions ----------
 const STATION_KEYS = {
-  helm: [['A D', 'steer'], ['W S', 'throttle'], ['R', 'engine'], ['↑ ↓', 'mainsheet'], ['← →', 'jib sheet'], ['P', 'autopilot'], ['L', 'lights'], ['F', 'horn'], ['E', 'leave']],
+  helm: [['A D', 'steer'], ['W S', 'sails up / down (throttle with engine on)'], ['G', 'anchor up / down'], ['R', 'engine'], ['P', 'autopilot'], ['L', 'lights'], ['F', 'horn'], ['E', 'leave']],
+  helmRealistic: [['A D', 'steer'], ['W S', 'sails up / down (throttle with engine on)'], ['↑ ↓', 'main sheet'], ['← →', 'jib sheet'], ['G', 'anchor up / down'], ['R', 'engine'], ['P', 'autopilot'], ['L', 'lights'], ['F', 'horn'], ['E', 'leave']],
   halyards: [['W S', 'hoist / lower main'], ['A D', 'furl / unfurl jib'], ['R', 'reef'], ['E', 'leave']],
   windlass: [['W', 'raise anchor'], ['S', 'let out chain'], ['E', 'leave']],
 };
@@ -188,8 +214,31 @@ function putDown() {
   player.carrying = null;
 }
 
+// The companionway: steps down into the cabin, in the front of the cockpit.
+const COMPANIONWAY = new THREE.Vector3(-1.35, LAYOUT.cockpit.sole, 0);
+
+function goBelow() {
+  interior.inside = true;
+  if (player.carrying) player.carrying = null;
+  player.place(interior.arrival, null);
+  player.heading = Math.PI / 2;
+  follow.yaw = player.heading + Math.PI;
+  follow.pitch = 0.25;
+}
+
+function goUp() {
+  interior.inside = false;
+  player.place(boat.toWorld(COMPANIONWAY.clone().add(new THREE.Vector3(-0.5, 0.02, 0))), boat.body);
+  player.heading = -Math.PI / 2 - boat.state.heading;
+}
+
 function findInteraction() {
   if (player.mode === 'station' || player.mode === 'dig' || player.flopT > 0 || player.clinging) return null;
+  if (interior.inside) return interior.nearLadder(player.pos) ? { key: 'E', label: 'Go up on deck', act: goUp } : null;
+  if (player.platform === boat.body && !player.carrying) {
+    boat.toWorld(COMPANIONWAY, tmpV);
+    if (Math.hypot(tmpV.x - player.pos.x, tmpV.z - player.pos.z) < 0.6) return { key: 'E', label: 'Go below', act: goBelow };
+  }
   if (player.carrying) return { key: 'E', label: 'Put down', act: putDown };
   const near = treasure.nearest(player.pos);
   if (near) {
@@ -311,6 +360,9 @@ function frame(now) {
     }
   }
   if (input.pressed('KeyM')) treasure.toggleMap();
+  if (input.pressed('KeyH')) screens.toggleControls();
+  if (input.pressed('Tab')) screens.toggleChart();
+  screens.update({ boat, player, wind: env.wind, aboard: interior.inside });
   if (player.station !== 'helm') {
     if (input.pressed('ArrowRight')) treasure.flip(1);
     if (input.pressed('ArrowLeft')) treasure.flip(-1);
@@ -324,8 +376,11 @@ function frame(now) {
   }
   audio.setEngine(boat.state.engine, boat.state.throttle);
 
-  hud.setKeys(player.mode === 'station' ? STATION_KEYS[player.station] : null);
+  hud.setKeys(player.mode === 'station' ? STATION_KEYS[player.station === 'helm' && !BOAT.arcade ? 'helmRealistic' : player.station] : null);
   hud.setInstruments(player.station === 'helm' ? boat.state : null);
+  interior.update(atmosphere.uniforms.uNight.value);
+  const nearBoat = interior.inside || player.platform === boat.body || player.mode === 'station' || Math.hypot(player.pos.x - boat.state.x, player.pos.z - boat.state.z) < 30;
+  hud.setAnchor(nearBoat ? boat.state : null);
   boatNotices();
   hud.update(dt);
 
@@ -338,7 +393,7 @@ function frame(now) {
     const target = player.head.clone();
     if (player.station === 'helm') target.y += 1.4;
     if (player.mode === 'swim') target.y += 0.6;
-    follow.update(dt, input, target, { context: player.station === 'helm' ? 'helm' : 'foot', yawDelta, t, waveScale: swell, world });
+    follow.update(dt, input, target, { context: player.station === 'helm' ? 'helm' : interior.inside ? 'cabin' : 'foot', yawDelta, t, waveScale: swell, world });
     const water = heightAt(camera.position.x, camera.position.z, t, swell);
     if (camera.position.y < water + 0.35) camera.position.y = water + 0.35;
   }

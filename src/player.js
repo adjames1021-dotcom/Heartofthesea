@@ -859,9 +859,20 @@ export class Player {
     this.turning = 0;
     if (this.station === 'helm') {
       i.steer = input.axis('KeyA', 'KeyD');
-      i.throttle = input.axis('KeyS', 'KeyW');
+      // W/S: throttle with the engine on, otherwise raise and lower all sail.
+      const ws = input.axis('KeyS', 'KeyW');
+      if (b.engine) i.throttle = ws;
+      else {
+        i.hoist = ws;
+        i.furl = ws;
+      }
       i.mainSheet = input.axis(['ArrowUp', 'KeyX'], ['ArrowDown', 'KeyZ']);
       i.jibSheet = input.axis(['ArrowRight', 'KeyV'], ['ArrowLeft', 'KeyC']);
+      if (input.pressed('KeyG')) {
+        const a = b.anchor;
+        a.cmd = a.cmd === 'down' ? 'up' : a.cmd === 'up' ? 'down' : a.rode > 0.5 ? 'up' : 'down';
+        this.emit(a.cmd === 'up' ? 'anchor-up' : 'anchor-down');
+      }
       if (input.pressed('KeyR')) {
         b.engine = !b.engine;
         this.emit(b.engine ? 'engine-on' : 'engine-off');

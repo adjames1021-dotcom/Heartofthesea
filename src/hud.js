@@ -18,6 +18,7 @@ export class Hud {
     this.keys = el('div', 'hud-keys', this.root);
     this.instruments = el('div', 'hud-instruments', this.root);
     this.notice = el('div', 'hud-notice', this.root);
+    this.anchor = el('div', 'hud-anchor', this.root);
     this.noticeT = 0;
     this.last = { prompt: null, keys: null, inst: null };
   }
@@ -63,6 +64,26 @@ export class Hud {
     if (html === this.last.inst) return;
     this.last.inst = html;
     this.instruments.innerHTML = html;
+  }
+
+  /** The anchor's state while you're aboard or near the boat (b = boat state), or null. */
+  setAnchor(b) {
+    let text = '';
+    let cls = '';
+    if (b) {
+      const a = b.anchor;
+      if (a.cmd === 'up' || (a.rode > 0.2 && b.input.windlass > 0)) [text, cls] = [`Raising anchor  ${a.rode.toFixed(0)} m`, 'moving'];
+      else if (a.cmd === 'down' || (b.input.windlass < 0)) [text, cls] = [a.set ? `Anchor down, letting out chain  ${a.rode.toFixed(0)} m` : `Lowering anchor  ${a.rode.toFixed(0)} m`, 'moving'];
+      else if (a.set && a.dragging) [text, cls] = ['Anchor down, dragging', 'warn'];
+      else if (a.set) [text, cls] = ['Anchor down', 'down'];
+      else if (a.rode > 0.2) [text, cls] = ['Anchor hanging, not holding', 'warn'];
+      else [text, cls] = ['Anchor up', 'up'];
+    }
+    const key = `${cls}|${text}`;
+    if (key === this.last.anchor) return;
+    this.last.anchor = key;
+    this.anchor.className = `hud-anchor ${cls}`;
+    this.anchor.textContent = text;
   }
 
   say(text, seconds = 2.6) {
