@@ -89,12 +89,10 @@ dig, and checks that you're really at a climb's chest before it counts. It
 keeps no state, so it costs nothing to run. Progress (maps held, chests found)
 is kept in the browser's localStorage under `hots.v1`.
 
-**Before deploying, set a real secret.** Without one the Worker falls back to
-a development secret that's in this repository:
-
-```bash
-npx wrangler secret put TREASURE_SECRET
-```
+Maps are signed with `TREASURE_SECRET`. `npm run deploy` creates a random
+one on the first deploy and never replaces it, because a new secret would
+void every map players are holding. Without it the Worker falls back to a
+development secret that's in this repository.
 
 ## Develop
 
@@ -129,10 +127,17 @@ To start over, clear `hots.v1` from localStorage.
 ## Deploy to Cloudflare
 
 ```bash
-npx wrangler login
-npx wrangler secret put TREASURE_SECRET
-npm run deploy    # vite build + wrangler deploy
+npx wrangler login              # once, opens your browser
+npm run deploy                  # test, build, upload, set TREASURE_SECRET if missing
+npm run deploy -- --dry-run     # the same, without uploading anything
 ```
+
+The site goes up at `https://heart-of-the-sea.<your-subdomain>.workers.dev`.
+
+To deploy without a browser login (CI, or a cloud session), set
+`CLOUDFLARE_API_TOKEN` to a token made from Cloudflare's "Edit Cloudflare
+Workers" template, and `CLOUDFLARE_ACCOUNT_ID` to your account ID, then run
+`npm run deploy`.
 
 `wrangler.jsonc` serves `dist/` with Workers Static Assets. Only `/api/*`
 requests run the Worker script, so static files are served from Cloudflare's
