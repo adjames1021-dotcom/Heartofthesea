@@ -741,7 +741,7 @@ export function gannetCourse() {
     [F + 0.0, 7.4],
     [F - 0.045, 9.4],
     [F + 0.0, 11.4],
-    [F + 0.045, 12.9],
+    [F + 0.045, 13.4],
   ].map(([a, top]) => ({ a, top, r: t1.r, c: c1 }));
   const rope = { a: F + 1.2, r: t2.r, c: c2, bottom: t1.y1, top: t2.y1 };
   const nestA = F - 0.14;
