@@ -3,6 +3,7 @@
 // Static files (the game client in ./dist) are served directly by Workers
 // Static Assets. Only /api/* reaches this script.
 
+import { DurableObject } from 'cloudflare:workers';
 import { issueMap, dig, claim } from './treasure.js';
 
 const json = (data, init = {}) =>
@@ -11,9 +12,32 @@ const json = (data, init = {}) =>
     headers: { 'cache-control': 'no-store', ...init.headers },
   });
 
-// Set a real one with `npx wrangler secret put TREASURE_SECRET`. Without it,
-// treasure still works but anyone who reads this file can find it.
-const DEV_SECRET = 'heart-of-the-sea-dev-secret';
+// The key maps are signed with. Nobody has to set it: the first request makes
+// a random one and the Keeper stores it for good. (A TREASURE_SECRET variable,
+// if someone sets one, takes priority.)
+export class Keeper extends DurableObject {
+  async secret() {
+    let s = await this.ctx.storage.get('secret');
+    if (!s) {
+      s = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, '0')).join('');
+      await this.ctx.storage.put('secret', s);
+    }
+    return s;
+  }
+}
+
+let cached = null;
+async function treasureSecret(env) {
+  if (env.TREASURE_SECRET) return env.TREASURE_SECRET;
+  if (!cached) {
+    const keeper = env.KEEPER.get(env.KEEPER.idFromName('treasure'));
+    cached = keeper.secret().catch((e) => {
+      cached = null;
+      throw e;
+    });
+  }
+  return cached;
+}
 
 async function body(request) {
   if (request.method !== 'POST') return null;
@@ -29,7 +53,6 @@ async function body(request) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const secret = env.TREASURE_SECRET || DEV_SECRET;
 
     switch (url.pathname) {
       // Authoritative clock: clients derive waves, time of day and weather from it.
@@ -41,6 +64,7 @@ export default {
 
       // A fresh treasure map. Body: { not: [islandId, ...] }
       case '/api/maps': {
+        const secret = await treasureSecret(env);
         const b = await body(request);
         if (!b) return json({ error: 'POST a JSON body' }, { status: 400 });
         const not = Array.isArray(b.not) ? b.not.filter((s) => typeof s === 'string').slice(0, 8) : [];
@@ -49,6 +73,7 @@ export default {
 
       // Somebody dug a hole. Body: { x, z, maps: [mapId, ...] }
       case '/api/dig': {
+        const secret = await treasureSecret(env);
         const b = await body(request);
         if (!b) return json({ error: 'POST a JSON body' }, { status: 400 });
         const maps = Array.isArray(b.maps) ? b.maps.filter((s) => typeof s === 'string') : [];

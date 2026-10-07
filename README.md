@@ -89,11 +89,8 @@ dig, and checks that you're really at a climb's chest before it counts. It
 keeps no state, so it costs nothing to run. Progress (maps held, chests found)
 is kept in the browser's localStorage under `hots.v1`.
 
-Maps are signed with `TREASURE_SECRET`. `npm run deploy` creates a random
-one on the first deploy and never replaces it, because a new secret would
-void every map players are holding. Without it the Worker falls back to a
-development secret that's in this repository.
-
+Maps are signed with a random key the Worker makes for itself the first time
+it runs and keeps in a Durable Object (`Keeper`), so there's nothing to set up.
 ## Develop
 
 ```bash
@@ -128,7 +125,7 @@ To start over, clear `hots.v1` from localStorage.
 
 ```bash
 npx wrangler login              # once, opens your browser
-npm run deploy                  # test, build, upload, set TREASURE_SECRET if missing
+npm run deploy                  # test, build, upload
 npm run deploy -- --dry-run     # the same, without uploading anything
 ```
 
