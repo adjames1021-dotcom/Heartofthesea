@@ -578,7 +578,7 @@ export class Player {
       this.mode = 'climb';
       this.grounded = false;
       this.vel.set(0, 0, 0);
-      this.climb = { net, s, t: Math.max(0, t), side };
+      this.climb = { net, s: net.rope ? net.w / 2 : s, t: Math.max(0, t), side };
       this.platform = null;
       this.fallStart = null;
       this.emit('grab');
@@ -595,7 +595,7 @@ export class Player {
     _b.crossVectors(_a, UP).normalize(); // screen right
     const rs = Math.sign(_b.dot(net.r)) || 1;
     const up = input.axis('KeyS', 'KeyW');
-    const across = input.axis('KeyA', 'KeyD');
+    const across = net.rope ? 0 : input.axis('KeyA', 'KeyD');
     c.t += up * 0.95 * dt;
     c.s = Math.min(net.w - 0.25, Math.max(0.25, c.s + across * rs * 0.7 * dt));
     this.speed = Math.abs(up) + Math.abs(across);

@@ -80,11 +80,14 @@ export class StackClimb {
     }
     const h = R.top - R.bottom;
     world.climbables.push({
-      o: foot.clone().addScaledVector(tangent, -0.35).addScaledVector(n, 0.05),
+      // A single rope: you can catch it from half a metre either side, and
+      // you climb it hand over hand up its line.
+      o: foot.clone().addScaledVector(tangent, -0.75).addScaledVector(n, 0.05),
       r: tangent,
       u: V(0, 1, 0),
       n,
-      w: 0.7,
+      w: 1.5,
+      rope: true,
       h,
       exit: W(g.on(R.c, R.r - 0.9, R.a + 0.06), R.top + 0.1),
     });
