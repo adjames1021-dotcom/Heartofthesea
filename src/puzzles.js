@@ -440,6 +440,17 @@ export class Puzzles {
     this.world.addStatic({ type: 'cyl', x: bp.x, z: bp.z, r: b.size * 0.85, y0: bg - 1, y1: bg + b.size * 1.2 });
   }
 
+  /** Nail a plank with words cut in it somewhere (a world matrix), readable with E. */
+  addPlank(lines, seed, matrix) {
+    const plank = plankModel(plankCanvas(lines, { seed }), 1.05, 0.3);
+    plank.matrixAutoUpdate = false;
+    plank.matrix.copy(matrix);
+    this.group.add(plank);
+    const pos = new THREE.Vector3().setFromMatrixPosition(matrix);
+    this.readables.push({ pos, lines, seed });
+    return plank;
+  }
+
   /** Something to read within reach? */
   nearest(p, r = 1.7) {
     let best = null;

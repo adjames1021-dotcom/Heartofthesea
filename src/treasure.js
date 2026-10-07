@@ -87,6 +87,36 @@ function crabModel() {
   return g;
 }
 
+/** A cask: bellied staves and two iron hoops. Stands on end. */
+function barrelModel() {
+  const g = new THREE.Group();
+  const pts = [];
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8;
+    pts.push(new THREE.Vector2(0.24 + 0.06 * Math.sin(t * Math.PI), t * 0.78));
+  }
+  const body = new THREE.LatheGeometry(pts, 12);
+  const parts = [paint(body, '#6f5640')];
+  for (const y of [0.16, 0.62]) {
+    const hoop = new THREE.CylinderGeometry(0.285, 0.285, 0.05, 12, 1, true);
+    hoop.translate(0, y, 0);
+    parts.push(paint(hoop, '#3a3530'));
+  }
+  const lid = new THREE.CircleGeometry(0.24, 12);
+  lid.rotateX(-Math.PI / 2);
+  lid.translate(0, 0.78, 0);
+  parts.push(paint(lid, '#5d4836'));
+  // Stave seams.
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    parts.push(paint(segment(new THREE.Vector3(Math.cos(a) * 0.25, 0.02, Math.sin(a) * 0.25), new THREE.Vector3(Math.cos(a) * 0.25, 0.76, Math.sin(a) * 0.25), 0.012, 0.012, 3), '#4a3a2c'));
+  }
+  const m = new THREE.Mesh(mergeParts(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  m.castShadow = true;
+  g.add(m);
+  return g;
+}
+
 // A dug hole: dark damp sand in the pit, the spoil heaped to one side in the
 // island's own colour.
 function holeModel(ground) {
@@ -153,7 +183,7 @@ export class Loose {
   }
 
   update(dt, world, t, waveScale) {
-    if (this.held) return;
+    if (this.held || this.pinned) return;
     if (this.rise) {
       // Being worked up out of the hole.
       const r = this.rise;
@@ -389,6 +419,18 @@ export class Treasure {
     }
   }
 
+  /** A cask lying about, to be carried somewhere. */
+  spawnBarrel(x, y, z, yaw = 0) {
+    const obj = barrelModel();
+    this.scene.add(obj);
+    const b = new Loose(obj, { half: 0.32, draft: 0.3, kind: 'barrel' });
+    b.pos.set(x, y, z);
+    b.yaw = yaw;
+    obj.position.copy(b.pos);
+    this.loose.push(b);
+    return b;
+  }
+
   spawnCrab(x, y, z) {
     const obj = crabModel();
     obj.position.set(x, y, z);
@@ -405,7 +447,7 @@ export class Treasure {
     let best = null;
     let bd = r;
     for (const c of this.loose) {
-      if (c.held) continue;
+      if (c.held || c.stuck) continue;
       const d = Math.hypot(c.pos.x - p.x, c.pos.z - p.z);
       if (d < bd && Math.abs(c.pos.y - p.y) < 1.6) {
         bd = d;

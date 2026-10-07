@@ -83,3 +83,21 @@ export function foreTopChest() {
   const f = WRECK.foremast;
   return wreckPoint('bow', f.x + 0.55, f.foreTop + 0.11, -0.45);
 }
+
+// ---------------------------------------------------------------------------
+// The after hatch on the stern half, pinned shut by the fallen main yard, and
+// the cargo net over the port side that the yard's tackle runs down to.
+// ---------------------------------------------------------------------------
+
+export const HATCH = {
+  // Where along the port side the net hangs (section-local x), and how many
+  // barrels it takes in it to lift the yard off the hatch.
+  netX: -4.4,
+  needed: 3,
+};
+
+/** Where the chest sits in the hatch well, in world coordinates. */
+export function hatchChest() {
+  const h = WRECK.hatch;
+  return wreckPoint('stern', h.x, deckHeight(stationU(h.x)) + 0.02, 0);
+}

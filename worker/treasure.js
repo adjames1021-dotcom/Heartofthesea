@@ -7,7 +7,7 @@
 
 import { ISLAND_BY_ID, toWorld, dirToWorld, pellsBar, horseshoeCove } from '../shared/world.js';
 import { sunDirection } from '../shared/environment.js';
-import { foreTopChest } from '../shared/wreck.js';
+import { foreTopChest, hatchChest } from '../shared/wreck.js';
 
 const DIG_RADIUS = 2.2; // metres from the true spot that still finds the chest
 const PACE = 0.75;
@@ -237,6 +237,7 @@ export async function dig(secret, { x, z, maps = [] }) {
 // Chests that sit at the top of a climb rather than in a hole.
 export const COURSES = {
   wreck: () => foreTopChest(),
+  'molly-ann': () => hatchChest(),
 };
 
 /** Is the player really up there with the chest? */
