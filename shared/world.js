@@ -86,7 +86,10 @@ function stackIsland() {
       const rock = 3.4 * sstep(0, 2.6, d) + (fbm(lx * 0.12, lz * 0.12, 23, 2) - 0.5) * 1.6 * sstep(2, 6, d);
       let h = lerp(rock, beach(d, 1.8, 12), lee);
       const rs = Math.hypot(lx - SPIRE.x, lz - SPIRE.z);
-      h = Math.max(h, 5 * sstep(17, 11.5, rs));
+      // The rock plinth round the spire, except on the beach side, where sand
+      // has drifted up against the foot of the climb.
+      const face = sstep(0.72, 0.95, -(lx - SPIRE.x) / Math.max(rs, 1e-3));
+      h = Math.max(h, 5 * sstep(17, 11.5, rs) * (1 - 0.75 * face));
       return h;
     },
   };
@@ -712,6 +715,46 @@ export function horseshoeCove() {
     // Boulders on the shelf high enough to sit out a big sea on.
     refuges: [0.13, 0.27, 0.41].map((k) => ({ a: shelf.a0 + k, r: rc + w - 2.3 })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Gannet Stack: footholds up the first drum of the spire on the beach side,
+// a frayed rope up the second, and the old nest on top of it.
+// Angles are around each drum's own centre, island-local.
+// ---------------------------------------------------------------------------
+
+let gannet = null;
+
+export function gannetCourse() {
+  if (gannet) return gannet;
+  const isl = ISLAND_BY_ID.stack;
+  const s = isl.features.spire;
+  const [t1, t2] = s.tiers;
+  const F = Math.PI; // the beach side
+  const c1 = { x: s.x + t1.ox, z: s.z + t1.oz };
+  const c2 = { x: s.x + t2.ox, z: s.z + t2.oz };
+  const on = (c, r, a) => ({ x: c.x + Math.cos(a) * r, z: c.z + Math.sin(a) * r });
+  // Staggered a little, each overlapping the one below by more than a metre.
+  const ledges = [
+    [F + 0.0, 3.4],
+    [F + 0.045, 5.4],
+    [F + 0.0, 7.4],
+    [F - 0.045, 9.4],
+    [F + 0.0, 11.4],
+    [F + 0.045, 12.9],
+  ].map(([a, top]) => ({ a, top, r: t1.r, c: c1 }));
+  const rope = { a: F + 1.2, r: t2.r, c: c2, bottom: t1.y1, top: t2.y1 };
+  const nestA = F - 0.14;
+  const nestL = on(c2, t2.r - 1.1, nestA);
+  const nest = { a: nestA, ...toWorld(isl, nestL.x, nestL.z), y: t2.y1 };
+  gannet = { isl, ledges, rope, nest, on };
+  return gannet;
+}
+
+/** Where the chest sits in the old nest, in world coordinates. */
+export function gannetNest() {
+  const n = gannetCourse().nest;
+  return { x: n.x, y: n.y + 0.14, z: n.z };
 }
 
 // ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@
 // spot it points at is derived from the same secret. When multiplayer lands a
 // Durable Object can keep track of who has dug up what.
 
-import { ISLAND_BY_ID, toWorld, dirToWorld, pellsBar, horseshoeCove } from '../shared/world.js';
+import { ISLAND_BY_ID, toWorld, dirToWorld, pellsBar, horseshoeCove, gannetNest } from '../shared/world.js';
 import { sunDirection } from '../shared/environment.js';
 import { foreTopChest, hatchChest } from '../shared/wreck.js';
 
@@ -177,7 +177,7 @@ async function hmac(secret, msg) {
 const hex = (bytes, n) => [...bytes.slice(0, n)].map((b) => b.toString(16).padStart(2, '0')).join('');
 const u32 = (b, o = 0) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
 
-async function verifyMap(secret, id) {
+export async function verifyMap(secret, id) {
   if (typeof id !== 'string' || !/^[0-9a-f]{16}\.[0-9a-f]{16}$/.test(id)) return null;
   const [nonce, sig] = id.split('.');
   const want = hex(await hmac(secret, `map:${nonce}`), 8);
@@ -238,6 +238,7 @@ export async function dig(secret, { x, z, maps = [] }) {
 export const COURSES = {
   wreck: () => foreTopChest(),
   'molly-ann': () => hatchChest(),
+  gannet: () => gannetNest(),
 };
 
 /** Is the player really up there with the chest? */

@@ -6,7 +6,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 import { heightAt, setWaveDamping } from '../shared/waves.js';
-import { dampingAt, groundAt, ISLAND_BY_ID, toWorld } from '../shared/world.js';
+import { dampingAt, groundAt, ISLAND_BY_ID, toWorld, gannetNest } from '../shared/world.js';
 import { hoursAt, swellScaleAt, cloudCoverAt, windAt } from '../shared/environment.js';
 import { BOAT } from '../shared/boat.js';
 import { Atmosphere } from './atmosphere.js';
@@ -24,6 +24,7 @@ import { Treasure, shovelModel } from './treasure.js';
 import { Puzzles } from './puzzles.js';
 import { WreckCourse } from './course.js';
 import { HatchPuzzle } from './hatch.js';
+import { StackClimb } from './stack.js';
 import { foreTopChest } from '../shared/wreck.js';
 import { OceanAudio } from './audio.js';
 import { syncClock, worldTime } from './clock.js';
@@ -107,6 +108,8 @@ const puzzles = new Puzzles({ scene, world });
 const course = new WreckCourse({ scene, world, wreck: islands.wreck });
 treasure.placeCourseChest('wreck', foreTopChest());
 const hatch = new HatchPuzzle({ scene, world, wreck: islands.wreck, treasure, puzzles });
+const stack = new StackClimb({ scene, world });
+treasure.placeCourseChest('gannet', gannetNest());
 
 // ---------- Dev camera (screenshots) ----------
 let controls = null;
@@ -286,6 +289,7 @@ function frame(now) {
 
   course.update(t, dt, swell);
   hatch.update(dt);
+  stack.update(t);
 
   // Player.
   const interaction = findInteraction();
@@ -350,7 +354,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, islands, scene, bloom, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, THREE };
 }
 
 syncClock().finally(() => {

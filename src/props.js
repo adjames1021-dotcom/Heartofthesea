@@ -227,8 +227,8 @@ export function rockColumn(tiers, seed, colorA = '#a7a196', colorB = '#928c82', 
   const _b = new THREE.Vector3();
   tiers.forEach((t, i) => {
     const h = t.y1 - t.y0;
-    const g = new THREE.CylinderGeometry(t.r * (t.taper ?? 0.94), t.r * 1.04, h, sides, Math.max(2, Math.round(h / 3.5)), false);
-    jitter(g, Math.min(1.1, t.r * 0.14), seed + i * 13, 0.5);
+    const g = new THREE.CylinderGeometry(t.r * (t.taper ?? 0.94), t.r * (t.base ?? 1.04), h, sides, Math.max(2, Math.round(h / 3.5)), false);
+    jitter(g, t.jitter ?? Math.min(1.1, t.r * 0.14), seed + i * 13, 0.5);
     g.translate(t.ox ?? 0, t.y0 + h / 2, t.oz ?? 0);
     const flat = g.toNonIndexed();
     // Strata: alternate bands of slightly different rock.

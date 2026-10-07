@@ -92,7 +92,12 @@ export function deepenShadows(material) {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uShadowFill;')
       .replace('#include <lights_fragment_begin>', 'float sunShadow = 1.0;\n' + begin)
-      .replace('#include <lights_fragment_maps>', 'irradiance *= mix( uShadowFill, 1.0, sunShadow );\n#include <lights_fragment_maps>');
+      // Only ground facing the sky loses fill in shadow; cliffs and trunks keep it.
+      .replace(
+        '#include <lights_fragment_maps>',
+        'float upness = clamp( dot( geometryNormal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ), 0.0, 1.0 );\n' +
+          'irradiance *= mix( mix( 1.0, uShadowFill, upness * upness ), 1.0, sunShadow );\n#include <lights_fragment_maps>',
+      );
   };
   return material;
 }

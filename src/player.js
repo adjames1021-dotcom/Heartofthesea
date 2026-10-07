@@ -390,33 +390,41 @@ export class Player {
   // ---------------------------------------------------------------------
 
   /**
-   * A flat top just in front, between waist and well above the head, with
-   * room to stand on it and an edge we can get our paws over.
+   * An edge to catch: a flat top between `lo` and `hi`, with a real drop in
+   * front of it and room above it. Scans along (fx, fz) from just behind us
+   * to arm's length ahead, so a ledge right overhead counts too.
    */
   #findLedge(fx, fz, lo = this.pos.y + REACH_LO, hi = this.pos.y + REACH_HI) {
     const skip = (c) => c.noGrab;
-    for (const r of [0.35, 0.55, 0.75, 0.95, 1.1]) {
-      const x = this.pos.x + fx * r;
-      const z = this.pos.z + fz * r;
-      const hit = this.world.probeDown(x, z, hi, hi - lo, { skip });
-      if (!hit || hit.normal.y < 0.75) continue;
-      // Room up there for a bear.
-      _c.set(x, hit.y + 0.75, z);
-      if (this.world.blocked(_c, 0.28)) continue;
-      // Walk back toward us until the top drops away: that's the edge.
-      const has = (d) => {
-        const h = this.world.probeDown(this.pos.x + fx * d, this.pos.z + fz * d, hit.y + 0.2, 0.45, { skip });
-        return !!h && h.y > hit.y - 0.25;
-      };
-      let inner = r;
-      let outer = Math.max(0, r - 0.65);
-      if (has(outer)) continue; // it runs right under us: a slope, not a ledge
-      for (let i = 0; i < 6; i++) {
-        const mid = (inner + outer) / 2;
-        if (has(mid)) inner = mid;
-        else outer = mid;
+    const px = this.pos.x;
+    const pz = this.pos.z;
+    const top = (s) => this.world.probeDown(px + fx * s, pz + fz * s, hi, hi - lo, { skip });
+    let prevS = -0.8;
+    if (top(prevS)) return null; // under something wide, or on a ramp
+    for (let s = -0.65; s <= 1.15; s += 0.15) {
+      const h = top(s);
+      if (!h || h.normal.y < 0.75) {
+        prevS = s;
+        continue;
       }
-      return { y: hit.y, x: this.pos.x + fx * inner, z: this.pos.z + fz * inner, fx, fz, collider: hit.collider };
+      // The lip is between the last miss and this hit.
+      let a = prevS;
+      let b = s;
+      for (let i = 0; i < 6; i++) {
+        const m = (a + b) / 2;
+        const hm = this.world.probeDown(px + fx * m, pz + fz * m, h.y + 0.2, 0.45, { skip });
+        if (hm && hm.y > h.y - 0.25) b = m;
+        else a = m;
+      }
+      // A real drop in front of it, not just a slope or a step.
+      const before = this.world.probeDown(px + fx * (b - 0.2), pz + fz * (b - 0.2), h.y + 0.2, 0.75, { skip });
+      // Room above it for paws and a head.
+      _c.set(px + fx * (b + 0.2), h.y + 0.7, pz + fz * (b + 0.2));
+      if ((before && before.y > h.y - 0.6) || this.world.blocked(_c, 0.16)) {
+        prevS = s;
+        continue;
+      }
+      return { y: h.y, x: px + fx * b, z: pz + fz * b, fx, fz, collider: h.collider };
     }
     return null;
   }

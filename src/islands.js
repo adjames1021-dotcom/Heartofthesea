@@ -108,21 +108,23 @@ export class Islands {
     }
   }
 
-  #column(isl, lx, lz, tiers, seed, colors, opts) {
-    const geo = rockColumn(tiers, seed, ...(colors ?? []), 11, opts);
+  #column(isl, lx, lz, tiers, seed, colors, opts = {}) {
+    const geo = rockColumn(tiers, seed, ...(colors ?? []), opts.sides ?? 11, opts);
     geo.rotateY(yawOf(isl.rot));
     const w = toWorld(isl, lx, lz);
     geo.translate(w.x, 0, w.z);
     for (const t of tiers) {
       const o = dirToWorld(isl, t.ox ?? 0, t.oz ?? 0);
-      this.colliders.push({ type: 'cyl', x: w.x + o.x, z: w.z + o.z, r: t.r * 0.97, y0: t.y0, y1: t.y1 });
+      this.colliders.push({ type: 'cyl', x: w.x + o.x, z: w.z + o.z, r: t.r * (opts.fit ?? 0.97), y0: t.y0, y1: t.y1 });
     }
     return geo;
   }
 
   #spire(isl, parts) {
     const s = isl.features.spire;
-    parts.push(this.#column(isl, s.x, s.z, s.tiers, 7001, ['#867d71', '#70695f'], { guano: true }));
+    // It gets climbed, so keep the rock close to its collision drums.
+    const tiers = s.tiers.map((t) => ({ ...t, taper: 0.97, base: 1.02, jitter: 0.75 }));
+    parts.push(this.#column(isl, s.x, s.z, tiers, 7001, ['#867d71', '#70695f'], { guano: true, fit: 0.995 }));
     const w = toWorld(isl, s.x, s.z);
     this.landmarks.spire = { x: w.x, y: 57, z: w.z, island: isl.id };
   }
