@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { ISLAND_BY_ID, toWorld, dirToWorld, groundAt, pellsBar } from '../shared/world.js';
+import { ISLAND_BY_ID, toWorld, dirToWorld, groundAt, pellsBar, horseshoeCove } from '../shared/world.js';
 import { mulberry32 } from '../shared/noise.js';
-import { paint, mergeParts, segment } from './props.js';
+import { paint, mergeParts, segment, rock } from './props.js';
 
 // The things people left behind that point at a puzzle: a note cut into a
 // plank, a skeleton that died pointing. Nothing glows or floats; you find
@@ -157,6 +157,72 @@ export function plankCanvas(lines, { w = 1024, h = 300, seed = 7 } = {}) {
   return c;
 }
 
+/** A flat grey stone with words scratched into it. */
+export function slabCanvas(lines, { w = 900, h = 420, seed = 9 } = {}) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d');
+  const rand = mulberry32(seed);
+  ctx.fillStyle = '#8d8a83';
+  ctx.fillRect(0, 0, w, h);
+  // Lichen and wet patches, then the speckle of the grain.
+  for (let i = 0; i < 18; i++) {
+    ctx.fillStyle = rand() < 0.5 ? `rgba(70, 72, 66, ${0.15 + rand() * 0.15})` : `rgba(170, 160, 120, ${0.12 + rand() * 0.12})`;
+    ctx.beginPath();
+    ctx.ellipse(rand() * w, rand() * h, 20 + rand() * 80, 12 + rand() * 50, rand() * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (let i = 0; i < 4000; i++) {
+    ctx.fillStyle = rand() < 0.5 ? 'rgba(40, 40, 38, 0.18)' : 'rgba(230, 228, 220, 0.16)';
+    ctx.fillRect(rand() * w, rand() * h, 2, 2);
+  }
+  const longest = Math.max(...lines.map((l) => l.length));
+  const size = Math.min(52, (w - 110) / (longest * 0.92), (h - 60) / (lines.length * 1.55));
+  const top = (h - lines.length * size * 1.5) / 2 + size * 0.15;
+  lines.forEach((l, i) => scratchLine(ctx, l, 50 + (rand() - 0.5) * 12, top + i * size * 1.5, size, rand));
+  return c;
+}
+
+function slabModel(canvas, wid = 1.1, hgt = 0.8) {
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const side = new THREE.MeshLambertMaterial({ color: '#77746d' });
+  const face = new THREE.MeshLambertMaterial({ map: tex });
+  const m = new THREE.Mesh(new THREE.BoxGeometry(wid, hgt, 0.12), [side, side, side, side, face, side]);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
+/** A ship's lantern that's been dropped: frame bent, glass gone, long cold. */
+function brokenLantern() {
+  const parts = [];
+  const IRON_D = '#3a3632';
+  const add = (g, c) => parts.push(paint(g, c));
+  const base = new THREE.CylinderGeometry(0.11, 0.12, 0.05, 8);
+  add(base, IRON_D);
+  const cap = new THREE.ConeGeometry(0.12, 0.1, 8);
+  cap.translate(0.02, 0.32, 0);
+  add(cap, IRON_D);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    const bend = i === 1 ? 0.06 : 0;
+    add(segment(new THREE.Vector3(Math.cos(a) * 0.1, 0, Math.sin(a) * 0.1), new THREE.Vector3(Math.cos(a) * 0.1 + bend, 0.27, Math.sin(a) * 0.1), 0.01, 0.01, 3), IRON_D);
+  }
+  const ring = new THREE.TorusGeometry(0.05, 0.008, 4, 10);
+  ring.translate(0.02, 0.4, 0);
+  add(ring, IRON_D);
+  // A last shard of glass in the frame.
+  const shard = new THREE.BoxGeometry(0.004, 0.12, 0.06);
+  shard.translate(0.09, 0.08, 0.02);
+  add(shard, '#9fb3ad');
+  const m = new THREE.Mesh(mergeParts(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  m.castShadow = true;
+  return m;
+}
+
 function plankModel(canvas, len = 1.25, wid = 0.34) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -256,6 +322,7 @@ function skeletonModel() {
 // ---------------------------------------------------------------------------
 
 const PELLS_NOTE = ['TIP OF THE ROCKS SHADOW', 'WHERE IT TOUCHES THE WEED', 'AFTERNOON. NOT MORNING'];
+const HORSESHOE_NOTE = ['COVE AT THE END OF THIS LEDGE', 'GO BETWEEN THE SEAS', 'BIG ONES COME IN THREES', 'DIG SEA SIDE OF THE FALLEN ROCK'];
 
 export class Puzzles {
   constructor({ scene, world }) {
@@ -271,6 +338,7 @@ export class Puzzles {
     this.view.setAttribute('aria-hidden', 'true');
     document.body.appendChild(this.view);
     this.#pellsBar();
+    this.#horseshoe();
   }
 
   /** Place a model on the ground at island-local (lx, lz), facing island-local direction (fx, fz). */
@@ -313,6 +381,65 @@ export class Puzzles {
     this.readables.push({ pos: holder.position.clone(), lines: PELLS_NOTE, seed: 1721 });
   }
 
+  #horseshoe() {
+    const isl = ISLAND_BY_ID.horseshoe;
+    const { shelf, rc, w } = isl.features;
+    const outer = rc + w;
+    const cove = horseshoeCove();
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    const local = (a, r) => ({ x: Math.cos(a) * r, z: Math.sin(a) * r });
+
+    // Boulders along the shelf, tall enough to sit out a sea on.
+    cove.refuges.forEach((ref, i) => {
+      const p = toWorld(isl, local(ref.a, ref.r).x, local(ref.a, ref.r).z);
+      const g = groundAt(p.x, p.z);
+      const low = rock(1.35, 6100 + i, '#5f5c55', 0.95);
+      low.translate(p.x, g + 0.7, p.z);
+      const high = rock(1.05, 6200 + i, '#6c6860', 0.75);
+      high.translate(p.x + 0.15, g + 1.55, p.z - 0.1);
+      // Weed and barnacle line where the sea keeps it wet.
+      const weed = rock(1.42, 6300 + i, '#3f4a33', 0.35);
+      weed.translate(p.x, g + 0.2, p.z);
+      const m = new THREE.Mesh(mergeParts([low, high, weed]), mat);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      this.group.add(m);
+      this.world.addStatic({ type: 'cyl', x: p.x, z: p.z, r: 1.05, y0: g - 1, y1: g + 2.25 });
+    });
+
+    // Where the ledge starts: a scratched stone against the cliff, and a
+    // broken lantern someone dropped.
+    const a0 = shelf.a0 - 0.012;
+    const slab = slabModel(slabCanvas(HORSESHOE_NOTE, { seed: 3302 }));
+    slab.position.y = 0.38;
+    slab.rotation.x = -0.25;
+    const holder = new THREE.Group();
+    holder.add(slab);
+    const at = local(a0, outer - shelf.width - 0.9);
+    this.#place(holder, isl, at.x, at.z, Math.cos(a0), Math.sin(a0), 0);
+    this.readables.push({ pos: holder.position.clone(), lines: HORSESHOE_NOTE, seed: 3302, kind: 'slab' });
+    const lantern = brokenLantern();
+    const lp = local(a0 + 0.008, outer - shelf.width - 0.3);
+    this.#place(lantern, isl, lp.x, lp.z, 1, 0, 0.02);
+    lantern.rotation.set(0, 0.6, Math.PI / 2 - 0.15);
+    lantern.position.y += 0.1;
+
+    // The rock that came down off the cliff into the cove.
+    const b = cove.boulder;
+    const bl = local(b.a, b.r);
+    const bp = toWorld(isl, bl.x, bl.z);
+    const bg = groundAt(bp.x, bp.z);
+    const big = rock(b.size, 6400, '#77726a', 0.85);
+    big.translate(bp.x, bg + b.size * 0.55, bp.z);
+    const chip = rock(0.8, 6401, '#6d6860', 0.7);
+    chip.translate(bp.x + 1.6, bg + 0.3, bp.z - 1.2);
+    const fallen = new THREE.Mesh(mergeParts([big, chip]), mat);
+    fallen.castShadow = true;
+    fallen.receiveShadow = true;
+    this.group.add(fallen);
+    this.world.addStatic({ type: 'cyl', x: bp.x, z: bp.z, r: b.size * 0.85, y0: bg - 1, y1: bg + b.size * 1.2 });
+  }
+
   /** Something to read within reach? */
   nearest(p, r = 1.7) {
     let best = null;
@@ -334,7 +461,7 @@ export class Puzzles {
     }
     this.reading = n;
     this.view.innerHTML = '';
-    this.view.appendChild(plankCanvas(n.lines, { w: 900, h: 280, seed: n.seed }));
+    this.view.appendChild(n.kind === 'slab' ? slabCanvas(n.lines, { seed: n.seed }) : plankCanvas(n.lines, { w: 900, h: 280, seed: n.seed }));
     this.view.classList.add('open');
   }
 

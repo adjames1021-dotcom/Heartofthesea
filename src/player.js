@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { heightAt } from '../shared/waves.js';
+import { surfAt } from '../shared/world.js';
 import { Bear } from './bear.js';
 import { STATIONS } from './boat.js';
 
@@ -299,6 +300,17 @@ export class Player {
 
     // Into deep water? Floats that get dragged under wash you off sooner.
     const depth = heightAt(this.pos.x, this.pos.z, ctx.t, ctx.waveScale) - this.pos.y;
+    // Caught on the Horseshoe's shelf by a sea: it takes you off into the water.
+    const surf = depth > 0.45 && !this.platform ? surfAt(this.pos.x, this.pos.z) : null;
+    if (surf) {
+      this.mode = 'swim';
+      this.grounded = false;
+      this.vel.set(surf.x * 3.5, 0, surf.z * 3.5);
+      this.washT = 1.4;
+      this.fallStart = null;
+      this.emit('splash');
+      return;
+    }
     const awash = !!this.platform?.awash;
     const onDeck = this.grounded && this.platform && !awash;
     if (depth > (awash ? 0.6 : FLOAT_DEPTH + 0.05) && !onDeck) {
@@ -320,8 +332,14 @@ export class Player {
     const wish = this.#wish(input, ctx);
     const speed = this.carrying ? SPEED.carrySwim : SPEED.swim;
     const k = 1 - Math.exp(-dt * 4);
-    this.vel.x += (wish.x * speed - this.vel.x) * k;
-    this.vel.z += (wish.z * speed - this.vel.z) * k;
+    // Just swept off a ledge: the sea has you for a moment.
+    this.washT = Math.max(0, (this.washT ?? 0) - dt);
+    if (this.washT <= 0) {
+      this.vel.x += (wish.x * speed - this.vel.x) * k;
+      this.vel.z += (wish.z * speed - this.vel.z) * k;
+    }
+    // In the surf off the shelf there's no climbing out: swim round.
+    const surf = surfAt(this.pos.x, this.pos.z);
     this.#face(wish.x, wish.z, dt, 6);
     const targetY = water - FLOAT_DEPTH;
     this.pos.y += (targetY - this.pos.y) * (1 - Math.exp(-dt * 6));
@@ -339,7 +357,9 @@ export class Player {
     this.pos.z = mid.z;
     // Shore shelving up under us: stand and wade.
     const ground = this.world.probeDown(this.pos.x, this.pos.z, this.pos.y + 1.2, 3);
-    if (ground && ground.y > targetY + 0.05 && ground.normal.y > 0.55 && !ground.collider?.body && !ground.collider?.noClimb) {
+    if (surf) {
+      // (no standing up or hauling out here)
+    } else if (ground && ground.y > targetY + 0.05 && ground.normal.y > 0.55 && !ground.collider?.body && !ground.collider?.noClimb) {
       this.pos.y = Math.max(this.pos.y, ground.y);
       this.mode = 'ground';
       this.grounded = true;

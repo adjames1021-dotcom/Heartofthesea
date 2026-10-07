@@ -5,7 +5,7 @@
 // spot it points at is derived from the same secret. When multiplayer lands a
 // Durable Object can keep track of who has dug up what.
 
-import { ISLAND_BY_ID, toWorld, dirToWorld, pellsBar } from '../shared/world.js';
+import { ISLAND_BY_ID, toWorld, dirToWorld, pellsBar, horseshoeCove } from '../shared/world.js';
 import { sunDirection } from '../shared/environment.js';
 import { foreTopChest } from '../shared/wreck.js';
 
@@ -155,6 +155,7 @@ export function spotWorld(spot) {
 // Pell's Bar: dig where the rock's late shadow crosses the weed line.
 export const PUZZLES = {
   'pells-bar': () => pellsBar().spot,
+  horseshoe: () => horseshoeCove().spot,
 };
 
 // ---------------------------------------------------------------------------

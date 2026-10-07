@@ -193,12 +193,8 @@ export class Islands {
     const outer = f.rc + f.w;
     const atAngle = (a, r) => ({ x: Math.cos(a) * r, z: Math.sin(a) * r });
     const rand = mulberry32(5150);
-    // Two low, flat-topped boulders on the shelf: somewhere to stand while a set rolls through.
-    for (const t of [0.36, 0.7]) {
-      const a = f.shelf.a0 + (f.shelf.a1 - f.shelf.a0) * t;
-      const p = atAngle(a, outer - 1.9);
-      parts.push(this.#column(isl, p.x, p.z, [{ r: 1.35, y0: f.shelf.top - 0.6, y1: f.shelf.top + 1.0, taper: 0.9 }], 5200 + t * 100));
-    }
+    // (The boulders on the shelf itself, to sit out a sea on, are part of the
+    // puzzle: src/puzzles.js.)
     // A wall of big boulders just off the shelf: the sea gets in, swimmers don't.
     for (let a = f.shelf.a0 + 0.01; a < f.cove.a1 + 0.005; a += 0.031) {
       const p = atAngle(a + (rand() - 0.5) * 0.008, outer + 3.3 + rand() * 0.5);

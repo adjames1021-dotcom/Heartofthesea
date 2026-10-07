@@ -102,6 +102,8 @@ function arcDistance(lx, lz, rc, gap) {
   return Math.hypot(lx - ex, lz - ez);
 }
 
+const HORSESHOE_SURGE = 0.9;
+
 function horseshoeIsland() {
   const RC = 92;
   const W = 24;
@@ -162,6 +164,13 @@ function horseshoeIsland() {
         h = lerp(h, Math.max(carved, 0.2), hard);
       }
       return h;
+    },
+    /** The swell runs straight up the shelf to the cliff foot (not into the cove). */
+    surge(lx, lz) {
+      const r = Math.hypot(lx, lz);
+      const as = Math.atan2(lz, lx);
+      const along = sstep(SHELF.a0 - 0.05, SHELF.a0 + 0.01, as) * sstep(COVE.a0 + 0.01, COVE.a0 - 0.03, as);
+      return HORSESHOE_SURGE * along * sstep(OUTER - SHELF.width - 2.5, OUTER - SHELF.width + 0.5, r);
     },
     shelter(lx, lz) {
       const r = Math.hypot(lx, lz);
@@ -439,6 +448,7 @@ export function worldBake() {
   const cell = (2 * BAKE_HALF) / n;
   const height = new Float32Array(n * n).fill(SEA_FLOOR);
   const shelter = new Float32Array(n * n).fill(1);
+  const surge = new Float32Array(n * n);
   for (const isl of ISLANDS) {
     const i0 = clamp(Math.floor((isl.x - isl.bound + BAKE_HALF) / cell), 0, n - 1);
     const i1 = clamp(Math.ceil((isl.x + isl.bound + BAKE_HALF) / cell), 0, n - 1);
@@ -457,12 +467,15 @@ export function worldBake() {
         const h = isl.height(tmpL.x, tmpL.z);
         if (h > height[k]) height[k] = h;
         if (isl.shelter) shelter[k] = Math.min(shelter[k], isl.shelter(tmpL.x, tmpL.z));
+        if (isl.surge) surge[k] = Math.max(surge[k], isl.surge(tmpL.x, tmpL.z));
       }
     }
   }
   const damp = new Float32Array(n * n);
   for (let k = 0; k < n * n; k++) {
-    damp[k] = shelter[k] * (0.2 + 0.8 * sstep(0.3, 6.0, -height[k]));
+    // Waves die away over shallows, except where an island lets the swell run
+    // straight up onto the rock (surge).
+    damp[k] = shelter[k] * Math.max(0.2 + 0.8 * sstep(0.3, 6.0, -height[k]), surge[k]);
   }
   bake = { n, cell, half: BAKE_HALF, height, damp };
   return bake;
@@ -665,6 +678,40 @@ export function pellsBar() {
   const spot = local ? toWorld(isl, local.x, local.z) : null;
   pells = { line, hour, local, spot };
   return pells;
+}
+
+// ---------------------------------------------------------------------------
+// The Horseshoe's outer shelf: the swell runs over it, and anyone caught on it
+// by a big one goes into the sea. Returns the seaward direction (world), or
+// null if (x, z) isn't on the shelf.
+// ---------------------------------------------------------------------------
+
+export function surfAt(x, z) {
+  const isl = ISLAND_BY_ID.horseshoe;
+  const { shelf, cove, rc, w } = isl.features;
+  const dx = x - isl.x;
+  const dz = z - isl.z;
+  if (dx * dx + dz * dz > (rc + w + 8) ** 2) return null;
+  toLocal(isl, x, z, tmpL);
+  const r = Math.hypot(tmpL.x, tmpL.z);
+  const as = Math.atan2(tmpL.z, tmpL.x);
+  if (as < shelf.a0 - 0.03 || as > cove.a0 || r < rc + w - shelf.width - 0.6) return null;
+  return dirToWorld(isl, tmpL.x / r, tmpL.z / r);
+}
+
+/** Where the Horseshoe's cove chest is buried: on the sea side of the fallen rock. */
+export function horseshoeCove() {
+  const isl = ISLAND_BY_ID.horseshoe;
+  const { cove, shelf, rc, w } = isl.features;
+  const a = (cove.a0 + cove.a1) / 2;
+  const back = rc + w - cove.depth;
+  return {
+    // A lump of the cliff that came down into the cove.
+    boulder: { a: a - 0.01, r: back + 2.6, size: 2.1 },
+    spot: toWorld(isl, Math.cos(a - 0.008) * (back + 6.2), Math.sin(a - 0.008) * (back + 6.2)),
+    // Boulders on the shelf high enough to sit out a big sea on.
+    refuges: [0.13, 0.27, 0.41].map((k) => ({ a: shelf.a0 + k, r: rc + w - 2.3 })),
+  };
 }
 
 // ---------------------------------------------------------------------------

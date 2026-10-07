@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ISLANDS, islandGrid, worldBake, groundAt, islandNear } from '../shared/world.js';
+import { ISLANDS, islandGrid, worldBake, groundAt, islandNear, surfAt } from '../shared/world.js';
 import { hash2, fbm } from '../shared/noise.js';
 import { deepenShadows } from './atmosphere.js';
 
@@ -33,8 +33,12 @@ const PALETTES = {
 
 const SAND_TOP = { saddle: 2.7, horseshoe: 2.3, bar: 3, reef: 3, stack: 2.0, sow: 1.7, burnt: 2.3 };
 
+const SURF_ROCK = [C('#5f5c55'), C('#6b675f'), C('#545a4c')];
+
 function classify(isl, pal, h, ny, x, z, out) {
   const sandTop = SAND_TOP[isl.id] ?? 2.4;
+  // The Horseshoe's sea-washed shelf: dark wet rock, weed in the hollows.
+  if (isl.id === 'horseshoe' && h > 0.3 && h < 2 && surfAt(x, z)) return out.copy(SURF_ROCK[Math.floor(fbm(x * 0.3, z * 0.3, 37, 2) * 3) % 3]);
   if (h < -0.4) return out.copy(pal.seabed);
   // Reef flats are rough coral rock; only the cay is sand.
   if (isl.id === 'reef' && h < 0.9) return out.copy(fbm(x * 0.15, z * 0.15, 3, 2) > 0.5 ? pal.rock : pal.rock2);
