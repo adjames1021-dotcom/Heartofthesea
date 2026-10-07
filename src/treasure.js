@@ -322,6 +322,7 @@ export class Treasure {
       this.state.given = true;
       this.save();
       this.#refreshMap();
+      this.hud.say('You have a treasure map. Press M to look at it.', 7);
     } catch {
       // No server (e.g. plain vite): no maps this session.
     }
@@ -529,7 +530,7 @@ export class Treasure {
       return;
     }
     if (!this.state.maps.length) {
-      this.hud.say('No maps.');
+      this.hud.say("No maps. There's one on the chart table below decks.", 4);
       return;
     }
     await document.fonts?.load?.('26px "Reenie Beanie"').catch(() => {});

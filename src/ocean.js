@@ -162,6 +162,8 @@ void main() {
   vec3 R = reflect(-V, N);
   R.y = abs(R.y);
   vec3 refl = skyColor(R, false);
+  // The bright haze around the sun shouldn't turn the whole sea white.
+  refl *= 1.0 - 0.4 * pow(max(dot(R, uLightDir), 0.0), 4.0) * (1.0 - uNight);
 
   // --- Water body: deep colour, brighter where the swell rises ---
   float h01 = clamp(vHeight / uMaxHeight * 0.5 + 0.5, 0.0, 1.0);
@@ -194,15 +196,16 @@ void main() {
   vec3 scatter = uScatter * sss * (uLightColor * 0.42 + ambient * 0.2);
 
   float fresnel = 0.02 + 0.98 * pow(1.0 - NdV, 5.0);
-  fresnel = min(fresnel, 0.8) * (1.0 - 0.4 * shallow);
+  fresnel = min(fresnel, 0.55) * (1.0 - 0.4 * shallow);
   vec3 col = mix(body + scatter, refl, fresnel);
 
-  // --- Sun glitter: punchy, slightly stylised ---
+  // --- Sun glitter: sparkly but not blinding (much fainter for the moon) ---
   vec3 H = normalize(L + V);
   float spec = pow(max(dot(N, H), 0.0), 900.0);
-  spec = smoothstep(0.08, 0.5, spec) * 1.4 + spec * 0.6;
-  vec3 broad = uLightColor * pow(max(dot(N, H), 0.0), 60.0) * 0.08;
-  col += uLightColor * spec * 6.0 + broad;
+  spec = smoothstep(0.1, 0.55, spec) * 0.8 + spec * 0.4;
+  float glint = mix(1.8, 0.6, uNight);
+  vec3 broad = uLightColor * pow(max(dot(N, H), 0.0), 60.0) * 0.035;
+  col += uLightColor * spec * glint + broad;
 
   // --- Foam: soft, bubbly patches that bloom on crests + marbled veins ---
   float foamFade = 1.0 - smoothstep(60.0, 420.0, dist);

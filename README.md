@@ -15,7 +15,7 @@ shared clock (`GET /api/time`, 24-minute days).
 
 | Island | What it is |
 | --- | --- |
-| Saddle Island | The big two-hilled island in the middle. You start at anchor in its bay. |
+| Saddle Island | The big two-hilled island in the middle, wooded on its lower slopes. You start at anchor in its bay. |
 | Gannet Stack | A tall rock spire on a pebble island, white with seabirds. |
 | The Horseshoe | A crescent with a lagoon and a sheer outer cliff. |
 | Pell's Bar | A long sandbar with one standing rock at its west end. |
@@ -33,11 +33,13 @@ Click to start. Mouse to look, wheel to zoom.
 
 | On foot | |
 | --- | --- |
-| W A S D | walk (Shift to run) |
+| W A S D | walk (Shift to run; Shift swims faster too) |
 | Space | jump; let go of a rope; kick off a net |
 | E | pick up / put down, read, take a station, climb aboard |
 | F | dig |
+| Q | fish: cast, then Q again when the float goes under |
 | M | hold up your maps (← → to go through them) |
+| L | the boat's lights, from anywhere aboard |
 
 Walking into a waist-high edge pulls you up onto it. Jump at a ledge and you
 catch it: W climbs up, S drops, A/D shimmies along it. Walk or swim into a net
@@ -53,10 +55,16 @@ you.
 | R | engine on / off |
 | P / L / F | autopilot / lights / horn |
 
+At the helm a card at the top shows the wind (the dial: your boat in the
+middle, the red mark is where the wind comes from, the shaded arc is too
+close to sail), speed, heading and depth.
+
 H shows the controls and a plan of the boat; Tab shows the chart. The
 anchor's state is always shown top left while you're aboard, and a black
 ball goes up the forestay when it's holding. Telltales on the shrouds show
-where the wind's coming from.
+where the wind's coming from. The lights come on by themselves at dusk:
+navigation lights under way, the anchor light at anchor, and a floodlight
+on the mast and a lamp over the companionway so you can see the deck.
 
 Sailing is arcade by default: the sails trim themselves and she's quick and
 forgiving. Settings → Sailing switches to realistic, where you trim the
@@ -64,14 +72,20 @@ main and jib sheets yourself (↑↓ and ←→ at the helm). The halyard and
 windlass stations still work in both.
 
 The steps at the front of the cockpit (E) go below: a galley, a saloon and
-a forward cabin with a bed.
+a forward cabin with a bed. There's always a spare treasure map on the
+chart table if you've run out, and you can cook what you catch on the stove.
+
+Fishing works from the deck, a beach or a rock: face the water and press Q.
+What bites depends on where you are (reef fish on the reef, flatfish over
+sand, mackerel and pollock in open water, squid at night). Tab shows what
+you've caught.
 
 To go ashore: sail in close, press G at the helm, and swim. The swim
 platform at the stern is where you climb back aboard.
 
 ## Treasure
 
-- You start with one map. A map is a drawing of an island's real coastline
+- You start with one map (press M to look at it). A map is a drawing of an island's real coastline
   and landmarks, an X put down by hand (so it's a little off), and a note.
 - Dig (F) where you think it is. A wrong hole is empty, or has a crab in it.
   The right one gives up a chest.
@@ -168,7 +182,9 @@ src/player.js          the bear's controller: walk, swim, jump, ledges, nets, ro
 src/bear.js            the bear's model and animation
 src/boat.js            the sloop's model, stations, lights and colliders
 src/collision.js       collision world: statics, moving bodies, ground probes
-src/islands.js         island props; src/terrain.js island meshes
+src/islands.js         island props; src/terrain.js island meshes; src/vegetation.js grass and trees
+src/fishing.js         rod, float, bites and the catch log
+src/interior.js        the cabin below; src/screens.js the controls and chart screens
 src/treasure.js        maps, digging, chests, crabs, casks; src/mapview.js draws maps
 src/puzzles.js         notes and set pieces (Pell's Bar, the Horseshoe)
 src/hatch.js           the Molly Ann's hatch, yard, net and casks

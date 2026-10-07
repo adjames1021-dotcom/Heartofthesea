@@ -14,7 +14,7 @@ import { STATIONS } from './boat.js';
 const GRAV = 22;
 const JUMP_V = 7.2;
 const R = 0.32;
-const SPEED = { walk: 3.0, run: 5.2, wade: 1.8, swim: 1.8, carry: 2.0, carrySwim: 0.9 };
+const SPEED = { walk: 3.0, run: 5.2, wade: 1.8, swim: 2.6, swimFast: 3.8, carry: 2.0, carrySwim: 1.1 };
 const FLOAT_DEPTH = 0.95; // feet this far under the surface and you float
 const COYOTE = 0.14;
 const BUFFER = 0.14;
@@ -122,7 +122,9 @@ export class Player {
     this.bear.root.position.copy(this.pos);
     // Swimming: the model lies forward from its feet, so lift it to keep
     // head and shoulders out of the water.
-    if (this.mode === 'swim') this.bear.root.position.y += 0.62;
+    // (Eased, so going in and out of the water doesn't pop.)
+    this.swimLift = (this.swimLift ?? 0) + ((this.mode === 'swim' ? 1 : 0) - (this.swimLift ?? 0)) * (1 - Math.exp(-dt * 8));
+    this.bear.root.position.y += 0.62 * this.swimLift;
     if (this.mode === 'rope' && this.rope) {
       // Hang along the rope.
       _a.copy(this.rope.p).normalize().negate();
@@ -141,7 +143,7 @@ export class Player {
       this.bear.root.rotation.set(0, this.heading, 0);
     }
     this.bear.update(dt, {
-      mode: this.animMode,
+      mode: this.animOverride ?? this.animMode,
       speed: this.speed,
       t: ctx.t,
       effort: this.effort,
@@ -313,12 +315,19 @@ export class Player {
     }
     const awash = !!this.platform?.awash;
     const onDeck = this.grounded && this.platform && !awash;
-    if (depth > (awash ? 0.6 : FLOAT_DEPTH + 0.05) && !onDeck) {
+    // Wading out, start swimming only once it's properly deep for a moment,
+    // so passing waves don't flip you back and forth. Falling or jumping in
+    // (or being washed off a float) is immediate.
+    const deepEnough = depth > (awash ? 0.6 : 1.15);
+    this.deepT = deepEnough && !onDeck ? (this.deepT ?? 0) + dt : 0;
+    const plunge = !this.grounded && depth > 0.9;
+    if (!onDeck && (plunge || awash ? deepEnough || plunge : this.deepT > 0.25 || depth > 1.7)) {
       if (this.vel.y < -6) this.emit('splash');
       this.mode = 'swim';
       this.vel.y = 0;
       this.#leavePlatform();
       this.fallStart = null;
+      this.shallowT = 0;
     }
 
     this.speed = Math.hypot(this.vel.x, this.vel.z);
@@ -327,11 +336,20 @@ export class Player {
     if (this.mode !== 'swim') this.mode = this.grounded ? 'ground' : 'air';
   }
 
+  /** Water level here, averaged over a bear-sized patch so small ripples don't jolt you. */
+  #waterAt(ctx) {
+    const { x, z } = this.pos;
+    let h = 0;
+    for (const [dx, dz] of [[0, 0], [0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6]]) h += heightAt(x + dx, z + dz, ctx.t, ctx.waveScale);
+    return h / 5;
+  }
+
   #swim(dt, input, ctx) {
-    const water = heightAt(this.pos.x, this.pos.z, ctx.t, ctx.waveScale);
+    const water = this.#waterAt(ctx);
     const wish = this.#wish(input, ctx);
-    const speed = this.carrying ? SPEED.carrySwim : SPEED.swim;
-    const k = 1 - Math.exp(-dt * 4);
+    const fast = input.held('ShiftLeft', 'ShiftRight');
+    const speed = this.carrying ? SPEED.carrySwim : fast ? SPEED.swimFast : SPEED.swim;
+    const k = 1 - Math.exp(-dt * 3.5);
     // Just swept off a ledge: the sea has you for a moment.
     this.washT = Math.max(0, (this.washT ?? 0) - dt);
     if (this.washT <= 0) {
@@ -340,9 +358,9 @@ export class Player {
     }
     // In the surf off the shelf there's no climbing out: swim round.
     const surf = surfAt(this.pos.x, this.pos.z);
-    this.#face(wish.x, wish.z, dt, 6);
+    this.#face(wish.x, wish.z, dt, 8);
     const targetY = water - FLOAT_DEPTH;
-    this.pos.y += (targetY - this.pos.y) * (1 - Math.exp(-dt * 6));
+    this.pos.y += (targetY - this.pos.y) * (1 - Math.exp(-dt * 5));
     this.vel.y = 0;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
@@ -359,12 +377,18 @@ export class Player {
     const ground = this.world.probeDown(this.pos.x, this.pos.z, this.pos.y + 1.2, 3);
     if (surf) {
       // (no standing up or hauling out here)
-    } else if (ground && ground.y > targetY + 0.05 && ground.normal.y > 0.55 && !ground.collider?.body && !ground.collider?.noClimb) {
-      this.pos.y = Math.max(this.pos.y, ground.y);
-      this.mode = 'ground';
-      this.grounded = true;
-      this.#setPlatform(ground.collider);
+    } else if (ground && ground.y > water - 0.8 && ground.normal.y > 0.55 && !ground.collider?.body && !ground.collider?.noClimb) {
+      // Shallow enough to stand: do it once it's stayed shallow a moment.
+      this.shallowT = (this.shallowT ?? 0) + dt;
+      if (this.shallowT > 0.3 || ground.y > water - 0.45) {
+        this.pos.y = Math.max(this.pos.y, ground.y);
+        this.mode = 'ground';
+        this.grounded = true;
+        this.deepT = 0;
+        this.#setPlatform(ground.collider);
+      }
     } else if (wish.len > 0.2) {
+      this.shallowT = 0;
       // Haul out onto a ledge or the swim platform, if it's low enough.
       for (const reach of [0.25, 0.55, 0.85]) {
         const lx = this.pos.x + wish.x * reach;
@@ -381,6 +405,7 @@ export class Player {
         }
       }
     }
+    if (this.mode === 'swim' && !(ground && ground.y > water - 0.8)) this.shallowT = 0;
     this.speed = Math.hypot(this.vel.x, this.vel.z);
     this.animMode = 'swim';
   }
@@ -878,10 +903,6 @@ export class Player {
         this.emit(b.engine ? 'engine-on' : 'engine-off');
       }
       if (input.pressed('KeyF')) this.emit('horn');
-      if (input.pressed('KeyL')) {
-        b.lights = !b.lights;
-        this.emit('lights');
-      }
       if (input.pressed('KeyP')) {
         b.autopilot.on = !b.autopilot.on;
         b.autopilot.heading = b.heading;

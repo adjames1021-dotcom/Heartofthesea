@@ -71,7 +71,7 @@ export class OceanAudio {
     }
   }
 
-  splash() {
+  splash(gain = 0.5, freq = 900, len = 0.7) {
     if (!this.ctx || this.ctx.state !== 'running' || !this.noise) return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
@@ -79,13 +79,13 @@ export class OceanAudio {
     src.buffer = this.noise;
     const bp = ctx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.value = 900;
+    bp.frequency.value = freq;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0.5, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+    g.gain.setValueAtTime(gain, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + len);
     src.connect(bp).connect(g).connect(this.master);
     src.start(now, Math.random());
-    src.stop(now + 0.8);
+    src.stop(now + len + 0.1);
   }
 
   #build() {

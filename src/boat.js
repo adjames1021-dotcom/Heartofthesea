@@ -500,7 +500,18 @@ export class Boat {
       stern: lamp('#fff3d6', new THREE.Vector3(sternX, deckAt(sternX) + 0.72, 0), { size: [0.1, 0.12, 0.14], offset: new THREE.Vector3(0.06, 0, 0) }),
       steaming: lamp('#fff3d6', new THREE.Vector3(LAYOUT.mast.x + 0.16, 9.2, 0), { size: [0.1, 0.14, 0.14], offset: new THREE.Vector3(-0.07, 0, 0) }),
       anchor: lamp('#fff3d6', new THREE.Vector3(LAYOUT.mast.x, LAYOUT.mast.top + 0.22, 0), { size: [0.05, 0.2, 0.05], offset: new THREE.Vector3(0, -0.14, 0) }),
+      // Working lights so you can see the deck: a floodlight on the front of
+      // the mast under the spreaders, and a lamp over the companionway.
+      deck: lamp('#ffe6b8', new THREE.Vector3(LAYOUT.mast.x + 0.17, 6.85, 0), { size: [0.12, 0.1, 0.2], offset: new THREE.Vector3(-0.05, 0.05, 0) }),
+      cockpit: lamp('#ffd9a0', new THREE.Vector3(LAYOUT.cabin.x0 - 0.06, deckAt(LAYOUT.cabin.x0) + LAYOUT.cabin.h + 0.02, 0), { size: [0.1, 0.06, 0.22], offset: new THREE.Vector3(0.02, 0.05, 0) }),
     };
+    // The real light they throw. Kept in the scene and dimmed rather than
+    // removed, so switching them doesn't make every material recompile.
+    this.deckLight = new THREE.PointLight('#ffe2b0', 0, 13, 1.4);
+    this.deckLight.position.set(LAYOUT.mast.x + 0.4, 6.6, 0);
+    this.cockpitLight = new THREE.PointLight('#ffcf8a', 0, 7, 1.5);
+    this.cockpitLight.position.set(LAYOUT.cabin.x0 - 0.4, deckAt(LAYOUT.cabin.x0) + LAYOUT.cabin.h - 0.05, 0);
+    this.root.add(this.deckLight, this.cockpitLight);
 
     // Telltales: wool ribbons on the shrouds and the stern rail that stream
     // away from the wind, so you can see where it's coming from.
@@ -722,6 +733,10 @@ export class Boat {
     set(L.stern, on && !anchored);
     set(L.steaming, on && !anchored && b.engine);
     set(L.anchor, on && anchored);
+    set(L.deck, on);
+    set(L.cockpit, on);
+    this.deckLight.intensity = on ? 5 : 0;
+    this.cockpitLight.intensity = on ? 3 : 0;
   }
 
   #buildChain() {

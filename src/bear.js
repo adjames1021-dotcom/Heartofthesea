@@ -118,11 +118,12 @@ export class Bear {
     // --- Arms ---
     this.arms = [-1, 1].map((side) => {
       const shoulder = new THREE.Group();
-      shoulder.position.set(side * 0.28, 0.64, 0.03);
+      // Short and stubby, set on the outside of the body so they read from the front.
+      shoulder.position.set(side * 0.29, 0.62, 0.05);
       this.hips.add(shoulder);
-      part(shoulder, capsule(0.085, 0.16), this.mat.fur, V(side * 0.03, -0.12, 0.02), V(1, 1, 1), { ink: 0.016 });
-      part(shoulder, SPHERE_LO, this.mat.fur, V(side * 0.04, -0.24, 0.04), V(0.095, 0.09, 0.095), { ink: 0.014 });
-      shoulder.rotation.z = side * 0.25;
+      part(shoulder, capsule(0.092, 0.17), this.mat.fur, V(side * 0.035, -0.13, 0.015), V(1, 1, 1), { ink: 0.016 });
+      part(shoulder, SPHERE_LO, this.mat.fur, V(side * 0.045, -0.26, 0.035), V(0.1, 0.095, 0.1), { ink: 0.014 });
+      shoulder.rotation.z = -side * 0.4;
       return shoulder;
     });
 
@@ -192,6 +193,17 @@ export class Bear {
     this.pose = this.#emptyPose();
   }
 
+  /** A fishing rod in the right paw, angled up and out. */
+  setRod(visible, model = null) {
+    if (!this.rod && model) {
+      this.rod = model;
+      this.rod.position.set(0.04, -0.26, 0.05);
+      this.rod.rotation.x = -0.9;
+      this.arms[1].add(this.rod);
+    }
+    if (this.rod) this.rod.visible = visible;
+  }
+
   setShovel(visible, model = null) {
     if (!this.shovel && model) {
       this.shovel = model;
@@ -205,7 +217,7 @@ export class Bear {
   #emptyPose() {
     return {
       bob: 0, lean: 0, roll: 0, headX: 0, headZ: 0, headY: 0,
-      armX: [0, 0], armZ: [0.25, -0.25], legX: [0, 0],
+      armX: [0, 0], armZ: [-0.4, 0.4], legX: [0, 0], // arms hang a little away from the body
     };
   }
 
@@ -238,17 +250,20 @@ export class Bear {
       }
       case 'air':
         target.armX = [-2.2, -2.2];
-        target.armZ = [0.7, -0.7];
+        target.armZ = [-0.55, 0.55];
         target.legX = [0.5, -0.2];
         break;
       case 'swim': {
-        this.phase += dt * 5;
+        // Treading water when still; a steady paddle, quicker with speed.
+        const go = Math.min(1, speed / 2.6);
+        this.phase += dt * (2.5 + 4 * go);
         const sw = Math.sin(this.phase);
-        target.lean = 0.95;
-        target.headX = -0.8;
-        target.armX = [-1.6 + sw * 1.1, -1.6 - sw * 1.1];
-        target.armZ = [0.5, -0.5];
-        target.legX = [0.6 + sw * 0.5, 0.6 - sw * 0.5];
+        target.lean = 0.35 + 0.6 * go;
+        target.headX = -0.25 - 0.55 * go;
+        target.armX = [-1.0 - 0.6 * go + sw * (0.4 + 0.7 * go), -1.0 - 0.6 * go - sw * (0.4 + 0.7 * go)];
+        target.armZ = [0.5 + 0.3 * (1 - go), -0.5 - 0.3 * (1 - go)];
+        target.legX = [0.3 + 0.3 * go + sw * 0.4, 0.3 + 0.3 * go - sw * 0.4];
+        target.bob = Math.sin(t * 2.2) * 0.03 * (1 - go);
         break;
       }
       case 'helm':
@@ -284,6 +299,22 @@ export class Bear {
         target.armX = [-1.0 + sw * 0.6, -1.0 + sw * 0.6];
         target.armZ = [0.05, -0.05];
         target.headX = 0.35;
+        break;
+      }
+      case 'fish':
+        // Rod held out, the other paw on the reel.
+        target.armX = [-1.0, -1.25];
+        target.armZ = [0.0, -0.15];
+        target.headX = 0.12;
+        target.bob = Math.sin(t * 1.6) * 0.008;
+        break;
+      case 'cast': {
+        // Back over the shoulder, then whip it forward.
+        const k2 = s.effort ?? 0; // 0 → 1 through the cast
+        const swing = k2 < 0.45 ? -2.9 * (k2 / 0.45) : -2.9 + 1.9 * ((k2 - 0.45) / 0.55);
+        target.armX = [-1.0, swing];
+        target.armZ = [0.0, -0.1];
+        target.lean = -0.08 + 0.18 * k2;
         break;
       }
       case 'carry':

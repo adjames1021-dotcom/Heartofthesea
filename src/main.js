@@ -24,6 +24,7 @@ import { Treasure, shovelModel } from './treasure.js';
 import { Puzzles } from './puzzles.js';
 import { Screens } from './screens.js';
 import { Interior } from './interior.js';
+import { Fishing } from './fishing.js';
 import { WreckCourse } from './course.js';
 import { HatchPuzzle } from './hatch.js';
 import { StackClimb } from './stack.js';
@@ -105,6 +106,7 @@ const input = new Input(renderer.domElement);
 const follow = new FollowCamera(camera);
 const hud = new Hud();
 const audio = new OceanAudio();
+const fishing = new Fishing({ scene, hud, player, audio });
 const treasure = new Treasure({ scene, world, hud });
 const screens = new Screens();
 const interior = new Interior({ scene, world });
@@ -193,12 +195,13 @@ renderer.domElement.addEventListener('mousedown', () => ui.start.classList.add('
 
 // ---------- Interactions ----------
 const STATION_KEYS = {
-  helm: [['A D', 'steer'], ['W S', 'sails up / down (throttle with engine on)'], ['G', 'anchor up / down'], ['R', 'engine'], ['P', 'autopilot'], ['L', 'lights'], ['F', 'horn'], ['E', 'leave']],
-  helmRealistic: [['A D', 'steer'], ['W S', 'sails up / down (throttle with engine on)'], ['↑ ↓', 'main sheet'], ['← →', 'jib sheet'], ['G', 'anchor up / down'], ['R', 'engine'], ['P', 'autopilot'], ['L', 'lights'], ['F', 'horn'], ['E', 'leave']],
+  helm: [['A D', 'steer'], ['W S', 'sails up / down'], ['G', 'anchor up / down'], ['R', 'engine (then W S is throttle)'], ['P', 'autopilot'], ['L', 'lights'], ['F', 'horn'], ['E', 'leave']],
+  helmRealistic: [['A D', 'steer'], ['W S', 'sails up / down'], ['↑ ↓', 'main sheet'], ['← →', 'jib sheet'], ['G', 'anchor up / down'], ['R', 'engine (then W S is throttle)'], ['P', 'autopilot'], ['L', 'lights'], ['F', 'horn'], ['E', 'leave']],
   halyards: [['W S', 'hoist / lower main'], ['A D', 'furl / unfurl jib'], ['R', 'reef'], ['E', 'leave']],
   windlass: [['W', 'raise anchor'], ['S', 'let out chain'], ['E', 'leave']],
 };
 const tmpV = new THREE.Vector3();
+let wasNight = null;
 const PLATFORM_LOCAL = new THREE.Vector3(-6.05, LAYOUT.platform.y, 0);
 
 function putDown() {
@@ -232,9 +235,38 @@ function goUp() {
   player.heading = -Math.PI / 2 - boat.state.heading;
 }
 
+/** Is (x, z) over the boat? (So a cast clears her.) */
+const boatInv = new THREE.Matrix4();
+function onBoat(p) {
+  boatInv.copy(boat.matrix).invert();
+  const l = tmpV.set(p.x, boat.matrix.elements[13], p.z).applyMatrix4(boatInv);
+  return Math.abs(l.x) < 6.3 && Math.abs(l.z) < 2.5;
+}
+
 function findInteraction() {
   if (player.mode === 'station' || player.mode === 'dig' || player.flopT > 0 || player.clinging) return null;
-  if (interior.inside) return interior.nearLadder(player.pos) ? { key: 'E', label: 'Go up on deck', act: goUp } : null;
+  if (interior.inside) {
+    if (interior.nearLadder(player.pos)) return { key: 'E', label: 'Go up on deck', act: goUp };
+    if (interior.nearStove(player.pos) && fishing.kept > 0) {
+      return { key: 'E', label: 'Cook a fish', act: () => fishing.cookOne() && hud.say('Fried it in butter. Smells good.', 3) };
+    }
+    if (interior.nearChartTable(player.pos)) {
+      // A spare treasure map is always here if you've run out.
+      if (!treasure.state.maps.length) {
+        return {
+          key: 'E',
+          label: 'Take a map',
+          act: () =>
+            treasure
+              .newMap([])
+              .then(() => hud.say('Took a map. Press M to look at it.', 4))
+              .catch(() => hud.say('No maps here right now.')),
+        };
+      }
+      return { key: 'E', label: 'Look at your maps', act: () => treasure.toggleMap() };
+    }
+    return null;
+  }
   if (player.platform === boat.body && !player.carrying) {
     boat.toWorld(COMPANIONWAY, tmpV);
     if (Math.hypot(tmpV.x - player.pos.x, tmpV.z - player.pos.z) < 0.6) return { key: 'E', label: 'Go below', act: goBelow };
@@ -361,13 +393,29 @@ function frame(now) {
   }
   if (input.pressed('KeyM')) treasure.toggleMap();
   if (input.pressed('KeyH')) screens.toggleControls();
+  // Lights: L anywhere aboard. They come on by themselves at dusk and go off at dawn.
+  const nightNow = atmosphere.uniforms.uNight.value > 0.5;
+  if (nightNow !== wasNight) {
+    boat.state.lights = nightNow;
+    wasNight = nightNow;
+    document.body.classList.toggle('night', nightNow);
+  }
+  if (input.pressed('KeyL') && (interior.inside || player.platform === boat.body || player.mode === 'station')) {
+    boat.state.lights = !boat.state.lights;
+    hud.say(boat.state.lights ? 'Lights on.' : 'Lights off.', 2);
+  }
+  if (input.pressed('KeyQ')) {
+    const ready = !interior.inside && player.mode === 'ground' && player.grounded && !player.carrying;
+    fishing.press({ t, waveScale: swell, night: atmosphere.uniforms.uNight.value > 0.5, canFish: ready, onBoat });
+  }
   if (input.pressed('Tab')) screens.toggleChart();
-  screens.update({ boat, player, wind: env.wind, aboard: interior.inside });
+  screens.update({ boat, player, wind: env.wind, aboard: interior.inside, catchLog: fishing.summary() });
   if (player.station !== 'helm') {
     if (input.pressed('ArrowRight')) treasure.flip(1);
     if (input.pressed('ArrowLeft')) treasure.flip(-1);
   }
   player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis() });
+  fishing.update(dt, { t, waveScale: swell, night: atmosphere.uniforms.uNight.value > 0.5, camYaw: follow.yaw });
   treasure.update(dt, { t, waveScale: swell, boatBody: boat.body, player });
   puzzles.update(player);
   for (const e of player.events) {
@@ -392,7 +440,7 @@ function frame(now) {
     const yawDelta = onBoat ? -(boat.body.yaw - boat.body.prevYaw) : 0;
     const target = player.head.clone();
     if (player.station === 'helm') target.y += 1.4;
-    if (player.mode === 'swim') target.y += 0.6;
+    target.y += 0.6 * (player.swimLift ?? 0);
     follow.update(dt, input, target, { context: player.station === 'helm' ? 'helm' : interior.inside ? 'cabin' : 'foot', yawDelta, t, waveScale: swell, world });
     const water = heightAt(camera.position.x, camera.position.z, t, swell);
     if (camera.position.y < water + 0.35) camera.position.y = water + 0.35;
@@ -409,7 +457,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, THREE };
 }
 
 syncClock().finally(() => {

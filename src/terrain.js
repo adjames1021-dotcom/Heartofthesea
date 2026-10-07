@@ -10,8 +10,8 @@ const C = (hex) => new THREE.Color(hex);
 
 const PALETTES = {
   base: {
-    sand: C('#e8d5a2'), wet: C('#cdb27c'), grass: C('#7fa552'), grass2: C('#6c9445'),
-    dirt: C('#a5835a'), rock: C('#a19b90'), rock2: C('#8a847b'), seabed: C('#cdb98d'),
+    sand: C('#ead8a6'), wet: C('#cdb27c'), grass: C('#7cae4e'), grass2: C('#5f9442'), grassLight: C('#9cc35e'),
+    dirt: C('#a88a60'), rock: C('#a19b90'), rock2: C('#8a847b'), seabed: C('#cdb98d'),
   },
   stack: {
     sand: C('#a89f8c'), wet: C('#8a8273'), grass: C('#8b8a62'), grass2: C('#7a7a55'),
@@ -30,26 +30,72 @@ const PALETTES = {
     dirt: C('#b39a74'), rock: C('#a69a86'), rock2: C('#8e8372'), seabed: C('#d6c79c'),
   },
 };
+for (const p of Object.values(PALETTES)) {
+  p.grassLight ??= p.grass.clone().multiplyScalar(1.12);
+  p.dry = p.grass.clone().lerp(p.sand, 0.5);
+}
 
 const SAND_TOP = { saddle: 2.7, horseshoe: 2.3, bar: 3, reef: 3, stack: 2.0, sow: 1.7, burnt: 2.3 };
 
 const SURF_ROCK = [C('#5f5c55'), C('#6b675f'), C('#545a4c')];
+const smooth = (a, b, x) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/** What the ground is at a spot: grass, dune, scrub, sand, wet, dirt, rock, coral, surf or seabed. */
+export function surfaceKind(isl, h, ny, x, z) {
+  const sandTop = SAND_TOP[isl.id] ?? 2.4;
+  if (isl.id === 'horseshoe' && h > 0.3 && h < 2 && surfAt(x, z)) return 'surf';
+  if (h < -0.4) return 'seabed';
+  // Reef flats are rough coral rock; only the cay is sand.
+  if (isl.id === 'reef' && h < 0.9) return 'coral';
+  if (h < 0.6) return ny > 0.75 ? 'wet' : 'rock';
+  // Bare rock only on real cliffs; steep hillsides elsewhere are scrub.
+  const bareIsle = isl.id === 'stack' || isl.id === 'sow' || isl.id === 'burnt';
+  if (ny < (bareIsle ? 0.64 : 0.52)) return 'rock';
+  if (h < sandTop) return ny > 0.82 ? 'sand' : 'dirt';
+  if (ny < 0.72) return bareIsle ? 'dirt' : 'scrub';
+  const patch = fbm(x * 0.025, z * 0.025, 13, 3);
+  const bare = isl.id === 'burnt' ? 0.46 : isl.id === 'saddle' ? 0.17 : 0.26;
+  if (patch < bare || (ny < 0.8 && patch < bare + 0.1)) return 'dirt';
+  if (h < sandTop + 1.4) return 'dune';
+  return 'grass';
+}
 
 function classify(isl, pal, h, ny, x, z, out) {
-  const sandTop = SAND_TOP[isl.id] ?? 2.4;
-  // The Horseshoe's sea-washed shelf: dark wet rock, weed in the hollows.
-  if (isl.id === 'horseshoe' && h > 0.3 && h < 2 && surfAt(x, z)) return out.copy(SURF_ROCK[Math.floor(fbm(x * 0.3, z * 0.3, 37, 2) * 3) % 3]);
-  if (h < -0.4) return out.copy(pal.seabed);
-  // Reef flats are rough coral rock; only the cay is sand.
-  if (isl.id === 'reef' && h < 0.9) return out.copy(fbm(x * 0.15, z * 0.15, 3, 2) > 0.5 ? pal.rock : pal.rock2);
-  if (h < 0.6) return out.copy(ny > 0.75 ? pal.wet : pal.rock2);
-  if (ny < 0.64) return out.copy(fbm(x * 0.08, z * 0.08, 7, 2) > 0.5 ? pal.rock : pal.rock2);
-  if (h < sandTop) return out.copy(ny > 0.82 ? pal.sand : pal.dirt);
-  if (ny < 0.72) return out.copy(pal.dirt);
-  const patch = fbm(x * 0.025, z * 0.025, 13, 3);
-  const charred = isl.id === 'burnt' ? 0.46 : 0.3;
-  if (patch < charred || (ny < 0.8 && patch < charred + 0.12)) return out.copy(pal.dirt);
-  return out.copy(patch > 0.55 ? pal.grass : pal.grass2);
+  const kind = surfaceKind(isl, h, ny, x, z);
+  const n = fbm(x * 0.06, z * 0.06, 91, 3);
+  switch (kind) {
+    case 'surf':
+      return out.copy(SURF_ROCK[Math.floor(fbm(x * 0.3, z * 0.3, 37, 2) * 3) % 3]);
+    case 'seabed':
+      return out.copy(pal.seabed);
+    case 'coral':
+      return out.copy(fbm(x * 0.15, z * 0.15, 3, 2) > 0.5 ? pal.rock : pal.rock2);
+    case 'wet':
+      return out.copy(pal.wet);
+    case 'rock': {
+      out.copy(pal.rock).lerp(pal.rock2, fbm(x * 0.08, z * 0.08, 7, 2));
+      // A little moss where it isn't too steep (not on the bare islands).
+      if (ny > 0.5 && isl.id !== 'burnt' && isl.id !== 'stack' && isl.id !== 'sow') out.lerp(pal.grass2, 0.3 * smooth(0.5, 0.64, ny) * n);
+      return out;
+    }
+    case 'sand':
+      return out.copy(pal.sand).lerp(pal.wet, 0.25 * smooth(1.4, 0.6, h));
+    case 'dirt':
+      return out.copy(pal.dirt).lerp(pal.grass2, 0.25 * n);
+    case 'scrub':
+      // Heath on the steep slopes: dark greens with a little earth and stone.
+      return out.copy(pal.grass2).lerp(pal.dirt, 0.25 + 0.2 * n).lerp(pal.rock2, 0.25 * smooth(0.64, 0.52, ny));
+    case 'dune':
+      return out.copy(pal.sand).lerp(pal.dry, smooth(SAND_TOP[isl.id] ?? 2.4, (SAND_TOP[isl.id] ?? 2.4) + 1.4, h) * (0.6 + 0.4 * n));
+    default: {
+      // Grass: soft blends of three greens, drying out up high and on slopes.
+      out.copy(pal.grass2).lerp(pal.grass, smooth(0.25, 0.6, n)).lerp(pal.grassLight, smooth(0.6, 0.85, n));
+      return out.lerp(pal.dry, Math.min(0.45, 0.35 * smooth(25, 60, h) + 0.6 * smooth(0.86, 0.74, ny)));
+    }
+  }
 }
 
 function paletteFor(isl) {
@@ -72,46 +118,40 @@ function buildIslandMesh(isl, material) {
   const pos = [];
   const col = [];
   const c = new THREE.Color();
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-  const d = new THREE.Vector3();
-  const n = new THREE.Vector3();
-  const e1 = new THREE.Vector3();
-  const e2 = new THREE.Vector3();
 
-  const tri = (ax, ay, az, bx, by, bz, cx, cy, cz, ci, cj) => {
-    if (ay < -5 && by < -5 && cy < -5) return;
-    a.set(ax, ay, az);
-    b.set(bx, by, bz);
-    d.set(cx, cy, cz);
-    e1.subVectors(b, a);
-    e2.subVectors(d, a);
-    n.crossVectors(e1, e2).normalize();
-    const mx = (ax + bx + cx) / 3;
-    const my = (ay + by + cy) / 3;
-    const mz = (az + bz + cz) / 3;
-    classify(isl, pal, my, n.y, mx, mz, c);
+  // Paint each grid point once (using the smoothed slope there) and let the
+  // colours blend across each facet, so edges between grass, sand and rock
+  // run soft instead of in a saw-tooth along the triangles.
+  const vcol = new Float32Array(nx * nz * 3);
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      const hx = (h[j * nx + Math.min(nx - 1, i + 1)] - h[j * nx + Math.max(0, i - 1)]) / (2 * cell);
+      const hz = (h[Math.min(nz - 1, j + 1) * nx + i] - h[Math.max(0, j - 1) * nx + i]) / (2 * cell);
+      const ny = 1 / Math.hypot(hx, 1, hz);
+      classify(isl, pal, h[k], ny, minX + i * cell, minZ + j * cell, c);
+      vcol[3 * k] = c.r;
+      vcol[3 * k + 1] = c.g;
+      vcol[3 * k + 2] = c.b;
+    }
+  }
+
+  const tri = (ka, kb, kc, ci, cj) => {
+    if (h[ka] < -5 && h[kb] < -5 && h[kc] < -5) return;
     // Hand-painted wobble so big flat areas don't look like one colour.
-    const v = 0.93 + 0.12 * hash2(ci * 2 + (cy > by ? 1 : 0), cj, 77);
-    c.multiplyScalar(v);
-    pos.push(ax, ay, az, bx, by, bz, cx, cy, cz);
-    for (let k = 0; k < 3; k++) col.push(c.r, c.g, c.b);
+    const v = 0.95 + 0.08 * hash2(ci * 2 + (h[kc] > h[kb] ? 1 : 0), cj, 77);
+    for (const k of [ka, kb, kc]) {
+      pos.push(minX + (k % nx) * cell, h[k], minZ + Math.floor(k / nx) * cell);
+      col.push(vcol[3 * k] * v, vcol[3 * k + 1] * v, vcol[3 * k + 2] * v);
+    }
   };
 
   for (let j = 0; j < nz - 1; j++) {
     for (let i = 0; i < nx - 1; i++) {
       const k = j * nx + i;
-      const x0 = minX + i * cell;
-      const x1 = x0 + cell;
-      const z0 = minZ + j * cell;
-      const z1 = z0 + cell;
-      const h00 = h[k];
-      const h10 = h[k + 1];
-      const h01 = h[k + nx];
-      const h11 = h[k + nx + 1];
       // Same split as groundAt(): (00, 11, 10) and (00, 01, 11), counter-clockwise from above.
-      tri(x0, h00, z0, x1, h11, z1, x1, h10, z0, i, j);
-      tri(x0, h00, z0, x0, h01, z1, x1, h11, z1, i, j);
+      tri(k, k + nx + 1, k + 1, i, j);
+      tri(k, k + nx, k + nx + 1, i, j);
     }
   }
 

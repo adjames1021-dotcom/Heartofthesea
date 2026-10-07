@@ -10,7 +10,9 @@ const ROWS = {
     ['Space', 'jump'],
     ['E', 'use, pick up, put down, read'],
     ['F', 'dig'],
+    ['Q', 'fish: cast, then Q again when the float dips'],
     ['M', 'treasure maps (← → to flip)'],
+    ['L', 'boat lights, from anywhere aboard'],
     ['E', 'at the steps in the cockpit: go below'],
     ['Tab', 'chart'],
     ['H', 'this screen'],
@@ -22,7 +24,6 @@ const ROWS = {
     ['R', 'engine on / off (then W S is throttle)'],
     ['↑ ↓ ← →', 'trim the sails (realistic mode only)'],
     ['P', 'autopilot'],
-    ['L', 'lights'],
     ['F', 'horn'],
     ['E', 'leave the helm'],
   ],
@@ -74,6 +75,7 @@ export class Screens {
             .join('')}
         </div>
         <p class="sub">To go ashore: get close to an island, press <kbd>G</kbd> at the helm to drop the anchor, and swim.</p>
+        <p class="sub">Treasure: you start with a map (<kbd>M</kbd>). Dig with <kbd>F</kbd> near the X, carry the chest back and put it down on the boat; there's usually another map inside. Out of maps? There's one on the chart table below decks.</p>
         <p class="close">Press <kbd>H</kbd> to close</p>
       </div>`;
     document.body.appendChild(this.controls);
@@ -162,7 +164,7 @@ export class Screens {
   }
 
   /** Redraw the chart with the boat, the bear and the wind. */
-  update({ boat, player, wind, aboard = false }) {
+  update({ boat, player, wind, aboard = false, catchLog = [] }) {
     if (!this.chart.classList.contains('open')) return;
     if (!this.base) this.#drawBase();
     const ctx = this.canvas.getContext('2d');
@@ -213,5 +215,11 @@ export class Screens {
     ctx.textAlign = 'center';
     ctx.fillText(`wind ${Math.round(wind.speed * 1.944)} kn`, 70, 122);
     ctx.fillText('Tab to close', this.canvas.width / 2, this.canvas.height - 22);
+    // What you've caught.
+    if (catchLog.length) {
+      ctx.textAlign = 'left';
+      ctx.fillText('Catch', 30, this.canvas.height - 40 - catchLog.length * 22);
+      catchLog.forEach((line, i) => ctx.fillText(line, 30, this.canvas.height - 40 - (catchLog.length - 1 - i) * 22));
+    }
   }
 }

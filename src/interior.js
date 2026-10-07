@@ -103,6 +103,7 @@ export class Interior {
     box(-5.4, 0.86, B - 0.5, 1.4, 0.04, 0.92, TEAK_LIGHT, false);
     box(-5.4, 0.89, B - 0.5, 0.8, 0.005, 0.55, '#e8dcb8', false); // a chart
     box(-4.4, 0.25, B - 0.6, 0.45, 0.5, 0.45, NAVY); // stool
+    this.chartTable = V(-5.4, 0, B - 1.3);
 
     // ---- Saloon, amidships ----
     box(0, 0.36, 0, 2.2, 0.06, 0.9, TEAK_LIGHT, false); // table top
@@ -188,6 +189,18 @@ export class Interior {
   nearLadder(p) {
     const l = this.arrival;
     return Math.hypot(p.x - l.x, p.z - l.z) < 1.3 && Math.abs(p.y - l.y) < 1.5;
+  }
+
+  /** Standing at the galley stove? */
+  nearStove(p) {
+    const c = V(-4.1, 0, -B + 1.0).add(ORIGIN);
+    return Math.hypot(p.x - c.x, p.z - c.z) < 1.0;
+  }
+
+  /** Standing at the chart table? */
+  nearChartTable(p) {
+    const c = this.chartTable.clone().add(ORIGIN);
+    return Math.hypot(p.x - c.x, p.z - c.z) < 1.1;
   }
 
   /** Daylight in the portholes follows the sky. night: 0 day … 1 night. */
