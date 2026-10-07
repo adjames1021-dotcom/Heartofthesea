@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { heightAt } from '../shared/waves.js';
-import { diggableAt, groundAt } from '../shared/world.js';
+import { diggableAt, groundAt, islandNear } from '../shared/world.js';
+import { mulberry32 } from '../shared/noise.js';
 import { paint, mergeParts, segment } from './props.js';
 import { drawMap } from './mapview.js';
 import { groundColorAt } from './terrain.js';
@@ -149,6 +150,62 @@ function holeModel(ground) {
   return g;
 }
 
+// Turned earth over a buried chest: a low, uneven patch a shade darker than
+// the ground round it, with a few clods. Easy to walk past if you're not looking.
+function turnedEarth(x, z) {
+  const rand = mulberry32((Math.round(x * 100) * 73856093) ^ (Math.round(z * 100) * 19349663));
+  const base = groundColorAt(x, z);
+  const dark = base.clone().multiplyScalar(0.74).lerp(new THREE.Color('#6b5236'), 0.18);
+  const rings = [0, 0.38, 0.78, 1.1];
+  const seg = 14;
+  const pos = [];
+  const col = [];
+  const c = new THREE.Color();
+  for (let r = 0; r < rings.length; r++) {
+    const n = r === 0 ? 1 : seg;
+    for (let i = 0; i < n; i++) {
+      const a = (i / seg) * Math.PI * 2 + r * 0.4;
+      const rr = rings[r] * (r === rings.length - 1 ? 0.9 + rand() * 0.25 : 0.85 + rand() * 0.3);
+      const px = x + Math.cos(a) * rr;
+      const pz = z + Math.sin(a) * rr;
+      const lift = [0.07, 0.055, 0.03, 0.006][r] + (r < 3 ? (rand() - 0.5) * 0.04 : 0);
+      pos.push(px, groundAt(px, pz) + lift, pz);
+      c.copy(dark).lerp(base, [0, 0.15, 0.5, 1][r] + (r < 3 ? rand() * 0.15 : 0));
+      col.push(c.r, c.g, c.b);
+    }
+  }
+  const idx = [];
+  const at = (r, i) => (r === 0 ? 0 : 1 + (r - 1) * seg + (i % seg));
+  for (let i = 0; i < seg; i++) idx.push(0, at(1, i + 1), at(1, i));
+  for (let r = 1; r < rings.length - 1; r++) {
+    for (let i = 0; i < seg; i++) {
+      idx.push(at(r, i), at(r, i + 1), at(r + 1, i + 1));
+      idx.push(at(r, i), at(r + 1, i + 1), at(r + 1, i));
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const g = new THREE.Group();
+  const patch = new THREE.Mesh(geo, mat);
+  patch.receiveShadow = true;
+  g.add(patch);
+  const clodMat = new THREE.MeshLambertMaterial({ color: dark, flatShading: true });
+  for (let i = 0; i < 4; i++) {
+    const a = rand() * Math.PI * 2;
+    const r = 0.3 + rand() * 0.8;
+    const clod = new THREE.Mesh(new THREE.IcosahedronGeometry(0.035 + rand() * 0.035, 0), clodMat);
+    clod.position.set(x + Math.cos(a) * r, 0, z + Math.sin(a) * r);
+    clod.position.y = groundAt(clod.position.x, clod.position.z) + 0.02;
+    clod.scale.y = 0.6;
+    g.add(clod);
+  }
+  return g;
+}
+
 export function shovelModel() {
   const parts = [
     paint(segment(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -0.85, 0), 0.02, 0.02, 5), '#8a6a45'),
@@ -279,6 +336,7 @@ export class Treasure {
     this.loose = [];
     this.crabs = [];
     this.holes = [];
+    this.patches = new Map(); // turned earth over chests you've come close to
     this.pending = false;
     this.mapEl = null;
     this.mapIndex = 0;
@@ -364,6 +422,12 @@ export class Treasure {
         this.spawnChest(x, y, z, { from: res.puzzle });
       }
       this.save();
+      for (const [key, p] of this.patches) {
+        if (Math.hypot(p.userData.x - x, p.userData.z - z) < 3) {
+          this.scene.remove(p);
+          this.patches.delete(key);
+        }
+      }
       this.hud.say('Chest found.');
     } else if (res.result === 'crab') {
       this.spawnCrab(x, y, z);
@@ -458,7 +522,45 @@ export class Treasure {
     return best;
   }
 
+  /**
+   * Walking about an island you've a map for (or one with a puzzle), ask now
+   * and then whether a chest is close. The server only says when it is.
+   */
+  #watchGround(dt, player) {
+    this.nearT = (this.nearT ?? 0) - dt;
+    if (!player || this.nearT > 0 || this.nearBusy || player.platform) return;
+    const p = player.pos;
+    if (this.nearAt && Math.hypot(p.x - this.nearAt.x, p.z - this.nearAt.z) < 4) return;
+    const isl = islandNear(p.x, p.z, 15);
+    if (!isl || groundAt(p.x, p.z) < -1.2) return;
+    const puzzle = { bar: 'pells-bar', horseshoe: 'horseshoe' }[isl.id];
+    const wanted = this.state.maps.some((m) => m.island === isl.id) || (puzzle && !this.state.puzzles.includes(puzzle));
+    if (!wanted) return;
+    this.nearT = 1.5;
+    this.nearAt = { x: p.x, z: p.z };
+    this.nearBusy = true;
+    this.#post('/api/near', { x: p.x, z: p.z, maps: this.state.maps.map((m) => m.id) })
+      .then((res) => (res.spots ?? []).forEach((s) => this.#markGround(s)))
+      .catch(() => {})
+      .finally(() => {
+        this.nearBusy = false;
+      });
+  }
+
+  #markGround(s) {
+    if (!Number.isFinite(s.x) || !Number.isFinite(s.z)) return;
+    if (s.puzzle && this.state.puzzles.includes(s.puzzle)) return;
+    const key = `${s.x},${s.z}`;
+    if (this.patches.has(key)) return;
+    const m = turnedEarth(s.x, s.z);
+    m.userData.x = s.x;
+    m.userData.z = s.z;
+    this.scene.add(m);
+    this.patches.set(key, m);
+  }
+
   update(dt, { t, waveScale, boatBody, player }) {
+    this.#watchGround(dt, player);
     for (const c of this.loose) {
       if (c.held && player) {
         // Held out in front of the bear's tummy.

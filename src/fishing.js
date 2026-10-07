@@ -232,6 +232,7 @@ export class Fishing {
       }
       this.state = 'cast';
       this.t = 0;
+      this.shoal = !!ctx.shoalNear?.(this.target);
       P.bear.setRod(true);
       P.vel.set(0, 0, 0);
     } else if (this.state === 'bite') {
@@ -293,7 +294,7 @@ export class Fishing {
         if (k >= 1) {
           this.state = 'wait';
           this.t = 0;
-          this.biteAt = 3 + Math.random() * 9;
+          this.biteAt = this.shoal ? 1.5 + Math.random() * 3 : 3 + Math.random() * 9; // quicker over a shoal
           this.audio?.splash(0.2, 1600, 0.3);
         }
       }

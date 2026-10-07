@@ -71,6 +71,32 @@ export class OceanAudio {
     }
   }
 
+  /** A herring gull: two or three falling, slightly nasal calls. */
+  gull() {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    const ctx = this.ctx;
+    const n = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < n; i++) {
+      const now = ctx.currentTime + i * 0.32;
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      const f = 1500 + Math.random() * 250;
+      o.frequency.setValueAtTime(f, now);
+      o.frequency.exponentialRampToValueAtTime(f * 0.62, now + 0.24);
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 1900;
+      bp.Q.value = 3;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.045, now + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+      o.connect(bp).connect(g).connect(this.master);
+      o.start(now);
+      o.stop(now + 0.3);
+    }
+  }
+
   splash(gain = 0.5, freq = 900, len = 0.7) {
     if (!this.ctx || this.ctx.state !== 'running' || !this.noise) return;
     const ctx = this.ctx;

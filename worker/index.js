@@ -4,7 +4,7 @@
 // Static Assets. Only /api/* reaches this script.
 
 import { DurableObject } from 'cloudflare:workers';
-import { issueMap, dig, claim } from './treasure.js';
+import { issueMap, dig, near, claim } from './treasure.js';
 
 const json = (data, init = {}) =>
   Response.json(data, {
@@ -78,6 +78,15 @@ export default {
         if (!b) return json({ error: 'POST a JSON body' }, { status: 400 });
         const maps = Array.isArray(b.maps) ? b.maps.filter((s) => typeof s === 'string') : [];
         return json(await dig(secret, { x: Number(b.x), z: Number(b.z), maps }));
+      }
+
+      // Is a buried chest close by? Body: { x, z, maps: [mapId, ...] }
+      case '/api/near': {
+        const secret = await treasureSecret(env);
+        const b = await body(request);
+        if (!b) return json({ error: 'POST a JSON body' }, { status: 400 });
+        const maps = Array.isArray(b.maps) ? b.maps.filter((s) => typeof s === 'string') : [];
+        return json(await near(secret, { x: Number(b.x), z: Number(b.z), maps }));
       }
 
       // Somebody picked up the chest at the top of a climb. Body: { course, x, y, z }

@@ -203,6 +203,31 @@ export class Interior {
     return Math.hypot(p.x - c.x, p.z - c.z) < 1.1;
   }
 
+  /**
+   * What you've found on the islands, kept aboard: small things on the saloon
+   * table, the logbook and spyglass on the chart table, the bell by the
+   * steps, the name board on the saloon wall. make(id) builds each one.
+   */
+  showFinds(found, make) {
+    const SLOTS = {
+      bottle: [-0.8, 0.39, 0.12, 0.3], float: [-0.4, 0.39, -0.18, 0], lead: [-0.05, 0.39, 0.2, 0.8],
+      cowrie: [0.3, 0.39, -0.12, 0.4], seaglass: [0.5, 0.39, 0.12, 0], scallop: [0.7, 0.39, -0.15, 2.4], pipe: [0.9, 0.39, 0.15, 1],
+      log: [-5.7, 0.89, B - 0.32, 0.2], spyglass: [-5.2, 0.89, B - 0.25, -0.3],
+      bell: [-L + 0.2, 1.95, 0.85, Math.PI / 2], nameboard: [0, 1.32, -B + 0.04, 0],
+    };
+    this.kept ??= new Map();
+    for (const id of found) {
+      if (this.kept.has(id) || !SLOTS[id]) continue;
+      const o = make(id);
+      if (!o) continue;
+      const [x, y, z, yaw] = SLOTS[id];
+      o.position.set(x, y, z);
+      if (id !== 'nameboard') o.rotation.y = yaw;
+      this.group.add(o);
+      this.kept.set(id, o);
+    }
+  }
+
   /** Daylight in the portholes follows the sky. night: 0 day … 1 night. */
   update(night) {
     this.portMat.color.setRGB(0.75 - 0.65 * night, 0.88 - 0.72 * night, 0.93 - 0.68 * night);

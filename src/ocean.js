@@ -110,6 +110,7 @@ uniform vec3 uScatter;
 uniform float uFogDensity;
 uniform float uMaxHeight;
 uniform vec3 uLanternPos;
+uniform vec4 uShoals[8];   // x, z, heading, radius (radius 0: none)
 uniform vec3 uLanternColor;
 uniform vec3 uLagoon;
 uniform vec3 uSandbed;
@@ -185,6 +186,38 @@ void main() {
     vec2 cw = worley(p * 0.9 + vec2(uTime * 0.08, uTime * 0.05) + warp * 1.8);
     float caustic = pow(1.0 - smoothstep(0.0, 0.14, cw.y - cw.x), 4.0) * smoothstep(0.35, 0.65, warp.x);
     body += uLightColor * caustic * shallow * 0.03 * (1.0 - smoothstep(30.0, 120.0, dist));
+  }
+
+  // --- Shoals: small dark fish milling just under the surface ---
+  if (dist < 150.0) {
+    float fishA = 0.0;
+    float flash = 0.0;
+    for (int s = 0; s < 8; s++) {
+      vec4 sh = uShoals[s];
+      if (sh.w <= 0.0) continue;
+      vec2 d = p - sh.xy;
+      if (dot(d, d) > sh.w * sh.w * 1.8) continue;
+      for (int i = 0; i < 14; i++) {
+        float fi = float(i) + float(s) * 17.0;
+        vec2 h = vec2(fract(sin(fi * 12.9898) * 43758.5453), fract(sin(fi * 78.233 + 4.1) * 43758.5453)) * 2.0 - 1.0;
+        float ang = uTime * (0.22 + 0.12 * h.x) + h.y * 3.0;
+        vec2 off = h * sh.w * 0.72 + vec2(cos(ang), sin(ang)) * sh.w * 0.22;
+        float dir = sh.z + 0.35 * sin(uTime * 0.7 + fi);
+        vec2 fwd = vec2(cos(dir), sin(dir));
+        vec2 q = d - off;
+        vec2 lq = vec2(dot(q, fwd), dot(q, vec2(-fwd.y, fwd.x)));
+        float len = 0.26 + 0.12 * fract(fi * 0.618);
+        lq.y += sin(lq.x * 11.0 - uTime * 14.0 + fi) * 0.03 * smoothstep(0.0, -len, lq.x);
+        float e = (lq.x * lq.x) / (len * len) + (lq.y * lq.y) / (len * len * 0.07);
+        float tail = step(-len * 1.4, lq.x) * step(lq.x, -len * 0.8) * step(abs(lq.y), (-lq.x - len * 0.8) * 0.8);
+        float f = max(1.0 - smoothstep(0.7, 1.0, e), tail);
+        fishA = max(fishA, f);
+        flash = max(flash, f * step(0.992, sin(uTime * 1.3 + fi * 3.1)));
+      }
+    }
+    float see = (1.0 - smoothstep(70.0, 150.0, dist)) * (0.45 + 0.55 * shallow);
+    body = mix(body, body * vec3(0.38, 0.46, 0.5), fishA * 0.8 * see);
+    body += vec3(0.55, 0.6, 0.62) * flash * 0.45 * see;
   }
 
   // --- Subsurface scatter: the glowing jade crests when looking at the sun ---
@@ -279,6 +312,7 @@ export class Ocean {
       uSandbed: { value: atmosphere.state.sandbed },
       uWorld: { value: world.texture },
       uWorldRect: { value: world.rect },
+      uShoals: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, 0, 0, 0)) },
     };
     this.maxHeightUnit = maxHeight;
 

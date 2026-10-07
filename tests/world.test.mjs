@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ISLANDS, ISLAND_BY_ID, toWorld, diggableAt, groundAt, pellsBar, horseshoeCove, surfAt, gannetNest } from '../shared/world.js';
 import { foreTopChest, hatchChest } from '../shared/wreck.js';
-import { SPOTS, spotWorld, PUZZLES, COURSES, issueMap, verifyMap, dig, claim } from '../worker/treasure.js';
+import { SPOTS, spotWorld, PUZZLES, COURSES, issueMap, verifyMap, dig, near, claim } from '../worker/treasure.js';
 
 const SECRET = 'test-secret';
 
@@ -57,6 +57,22 @@ test('a map leads to its chest, and only its own', async () => {
   const forged = map.id.slice(0, 17) + '0'.repeat(16);
   assert.notEqual((await dig(SECRET, { x: p.x, z: p.z, maps: [forged] })).result, 'chest');
   assert.equal(await verifyMap('other-secret', map.id), null);
+});
+
+test('the disturbed ground only shows up close', async () => {
+  const map = await issueMap(SECRET);
+  const p = spotWorld((await verifyMap(SECRET, map.id)).spot);
+  const close = await near(SECRET, { x: p.x + 5, z: p.z + 3, maps: [map.id] });
+  assert.equal(close.spots.length, 1);
+  assert.ok(Math.hypot(close.spots[0].x - p.x, close.spots[0].z - p.z) < 0.02);
+  assert.equal((await near(SECRET, { x: p.x + 20, z: p.z, maps: [map.id] })).spots.length, 0);
+  assert.equal((await near(SECRET, { x: p.x, z: p.z, maps: [] })).spots.length, 0, 'no map, no hint');
+  const forged = map.id.slice(0, 17) + '0'.repeat(16);
+  assert.equal((await near(SECRET, { x: p.x, z: p.z, maps: [forged] })).spots.length, 0);
+  // The puzzles only give themselves away right on top of the spot.
+  const bar = PUZZLES['pells-bar']();
+  assert.equal((await near(SECRET, { x: bar.x + 6, z: bar.z, maps: [] })).spots.length, 0);
+  assert.equal((await near(SECRET, { x: bar.x + 2, z: bar.z, maps: [] })).spots[0].puzzle, 'pells-bar');
 });
 
 test('the drawn X is near the spot but not on it', async () => {

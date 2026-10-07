@@ -23,6 +23,13 @@ shared clock (`GET /api/time`, 24-minute days).
 | Sow and Piglets | A round rock with a string of smaller ones off it. |
 | Burnt Island | Scorched hills, dead palms and black stumps. |
 
+There's life about: gulls wheel over the islands and keep the boat company
+(and sit on the water until you get too close), gannets fold up and plunge
+into the sea off the Stack, dolphins come to ride the bow when you sail
+past them, turtles surface in the lagoons, seals haul out on the rocks of
+Sow and Piglets (and slip into the sea if you walk up to them), and shoals
+of small fish mill about in the shallows. Fish bite quicker over a shoal.
+
 Water lightens and goes turquoise over the shallows, waves die away near
 shore (except where the rock takes the full swell), and the boat slows and
 grounds instead of sailing through land.
@@ -75,6 +82,12 @@ The steps at the front of the cockpit (E) go below: a galley, a saloon and
 a forward cabin with a bed. There's always a spare treasure map on the
 chart table if you've run out, and you can cook what you catch on the stove.
 
+There are eleven things to find on the islands, some in plain sight, some
+not: a fisherman's hut, a cairn on the summit, a burnt-out cottage, an
+upturned dinghy, an old anchor, and small things washed up on the beaches.
+E picks them up or reads them. Tab lists what you've found, and it's kept
+aboard: on the saloon table, the chart table and the saloon wall.
+
 Fishing works from the deck, a beach or a rock: face the water and press Q.
 What bites depends on where you are (reef fish on the reef, flatfish over
 sand, mackerel and pollock in open water, squid at night). Tab shows what
@@ -89,6 +102,10 @@ platform at the stern is where you climb back aboard.
   and landmarks, an X put down by hand (so it's a little off), and a note.
 - Dig (F) where you think it is. A wrong hole is empty, or has a crab in it.
   The right one gives up a chest.
+- Look at the ground as you get close: over a buried chest the earth has
+  been turned, a slightly darker, lumpy patch with a few clods. You only
+  notice it within a few paces (for the puzzle chests, only right on top of
+  it), and the server only tells the game where once you're that close.
 - Carry the chest back and put it down on the boat. It opens, and there's
   usually a map inside.
 - Some treasure isn't on any map:
@@ -184,13 +201,15 @@ src/boat.js            the sloop's model, stations, lights and colliders
 src/collision.js       collision world: statics, moving bodies, ground probes
 src/islands.js         island props; src/terrain.js island meshes; src/vegetation.js grass and trees
 src/fishing.js         rod, float, bites and the catch log
+src/wildlife.js        birds, dolphins, turtles, seals, shoals (the shoals are drawn in src/ocean.js)
+src/finds.js           the hut, cairn, ruin, dinghy, anchor and the things to find
 src/interior.js        the cabin below; src/screens.js the controls and chart screens
 src/treasure.js        maps, digging, chests, crabs, casks; src/mapview.js draws maps
 src/puzzles.js         notes and set pieces (Pell's Bar, the Horseshoe)
 src/hatch.js           the Molly Ann's hatch, yard, net and casks
 src/course.js          the wreck climb; src/stack.js the Gannet Stack climb
 src/ocean.js           ocean mesh and water shader; src/atmosphere.js sky and light
-worker/index.js        Worker routes: /api/time, /api/maps, /api/dig, /api/claim
+worker/index.js        Worker routes: /api/time, /api/maps, /api/dig, /api/near, /api/claim
 worker/treasure.js     treasure spots, map signing, dig and claim decisions
 tests/                 node tests for the world and the treasure rules
 ```

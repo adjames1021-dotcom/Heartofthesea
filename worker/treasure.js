@@ -234,6 +234,31 @@ export async function dig(secret, { x, z, maps = [] }) {
   return { result: c[0] < 64 ? 'crab' : 'nothing' };
 }
 
+// Close up, the ground over a buried chest looks a little different: turned
+// earth, settled unevenly. Only tell the client where once the player is
+// standing near enough to notice. The puzzles' spots show only right up close
+// so working them out still matters.
+const NEAR = 9;
+const NEAR_PUZZLE = 3.5;
+
+/** Spots of buried chests (for maps held, and the puzzles) close to (x, z). */
+export async function near(secret, { x, z, maps = [] }) {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return { spots: [] };
+  const spots = [];
+  const r2 = (n) => Math.round(n * 100) / 100;
+  for (const id of maps.slice(0, 20)) {
+    const m = await verifyMap(secret, id);
+    if (!m) continue;
+    const p = spotWorld(m.spot);
+    if (Math.hypot(p.x - x, p.z - z) <= NEAR) spots.push({ x: r2(p.x), z: r2(p.z), map: id });
+  }
+  for (const [name, at] of Object.entries(PUZZLES)) {
+    const p = at();
+    if (p && Math.hypot(p.x - x, p.z - z) <= NEAR_PUZZLE) spots.push({ x: r2(p.x), z: r2(p.z), puzzle: name });
+  }
+  return { spots };
+}
+
 // Chests that sit at the top of a climb rather than in a hole.
 export const COURSES = {
   wreck: () => foreTopChest(),

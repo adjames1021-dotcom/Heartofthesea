@@ -164,7 +164,7 @@ export class Screens {
   }
 
   /** Redraw the chart with the boat, the bear and the wind. */
-  update({ boat, player, wind, aboard = false, catchLog = [] }) {
+  update({ boat, player, wind, aboard = false, catchLog = [], finds = null }) {
     if (!this.chart.classList.contains('open')) return;
     if (!this.base) this.#drawBase();
     const ctx = this.canvas.getContext('2d');
@@ -215,6 +215,14 @@ export class Screens {
     ctx.textAlign = 'center';
     ctx.fillText(`wind ${Math.round(wind.speed * 1.944)} kn`, 70, 122);
     ctx.fillText('Tab to close', this.canvas.width / 2, this.canvas.height - 22);
+    // What you've found on the islands.
+    if (finds) {
+      const lines = finds.names.slice(-6);
+      const right = this.canvas.width - 30;
+      ctx.textAlign = 'right';
+      ctx.fillText(`Found ${finds.count} of ${finds.total}`, right, this.canvas.height - 40 - lines.length * 22);
+      lines.forEach((line, i) => ctx.fillText(line, right, this.canvas.height - 40 - (lines.length - 1 - i) * 22));
+    }
     // What you've caught.
     if (catchLog.length) {
       ctx.textAlign = 'left';

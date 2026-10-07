@@ -4,6 +4,7 @@ import { mulberry32, fbm } from '../shared/noise.js';
 import { surfaceKind } from './terrain.js';
 import { palm, mergeParts, paint, segment } from './props.js';
 import { deepenShadows } from './atmosphere.js';
+import { clearings } from './finds.js';
 
 // Grass, flowers, bushes and trees, scattered from a fixed seed so everyone
 // sees the same islands. Grass and flowers grow everywhere they can. Bushes,
@@ -99,6 +100,9 @@ export function buildVegetation({ colliders }) {
     return new THREE.Matrix4().compose(pos.set(x, y, z), q, s.set(sx, sy, sx));
   };
   const geo = { tuft: tuftGeometry(), flower: flowerGeometry(), bush: bushGeometry(), canopy: canopyGeometry() };
+  // Leave the huts, ruins and cairns some room.
+  const clear = clearings();
+  const cleared = (x, z) => clear.some((c) => (x - c.x) ** 2 + (z - c.z) ** 2 < c.r * c.r);
   const trunkGeo = paint(segment(V(0, 0, 0), V(0, 3.4, 0), 0.26, 0.17, 6), '#ffffff');
 
   for (const isl of ISLANDS) {
@@ -118,7 +122,7 @@ export function buildVegetation({ colliders }) {
       const x = isl.x + Math.cos(a) * r;
       const z = isl.z + Math.sin(a) * r;
       const h = groundAt(x, z, n);
-      if (h < 0.7) continue;
+      if (h < 0.7 || cleared(x, z)) continue;
       const kind = surfaceKind(isl, h, n.y, x, z);
       const clump = fbm(x * 0.05, z * 0.05, 211, 2);
       const r1 = rand();

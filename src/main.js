@@ -25,6 +25,8 @@ import { Puzzles } from './puzzles.js';
 import { Screens } from './screens.js';
 import { Interior } from './interior.js';
 import { Fishing } from './fishing.js';
+import { Wildlife } from './wildlife.js';
+import { Finds, keepsake } from './finds.js';
 import { WreckCourse } from './course.js';
 import { HatchPuzzle } from './hatch.js';
 import { StackClimb } from './stack.js';
@@ -105,11 +107,14 @@ player.bear.setShovel(false, shovelModel());
 const input = new Input(renderer.domElement);
 const follow = new FollowCamera(camera);
 const hud = new Hud();
+const finds = new Finds({ scene, world, hud });
 const audio = new OceanAudio();
 const fishing = new Fishing({ scene, hud, player, audio });
+const wildlife = new Wildlife({ scene, audio });
 const treasure = new Treasure({ scene, world, hud });
 const screens = new Screens();
 const interior = new Interior({ scene, world });
+interior.showFinds(finds.found, keepsake);
 document.getElementById('controls')?.addEventListener('click', () => screens.toggleControls(true));
 
 // Arcade (sails trim themselves, quick and forgiving) or realistic sailing.
@@ -286,6 +291,17 @@ function findInteraction() {
       },
     };
   }
+  const find = player.mode === 'swim' ? null : finds.near(player.pos);
+  if (find) {
+    return {
+      key: 'E',
+      label: find.place.label,
+      act: () => {
+        finds.take(find);
+        interior.showFinds(finds.found, keepsake);
+      },
+    };
+  }
   const note = player.mode === 'swim' ? null : puzzles.nearest(player.pos);
   if (note) return { key: 'E', label: puzzles.reading === note ? 'Look away' : 'Read', act: () => puzzles.read(note) };
   if (player.mode === 'swim') {
@@ -349,6 +365,8 @@ function frame(now) {
   ocean.update(t, camera);
   flotsam.update(t, dt, swell, atmosphere.uniforms.uNight.value);
   islands.update(t);
+  wildlife.update(dt, { t, waveScale: swell, camera, player, boat });
+  wildlife.writeShoals(ocean.uniforms.uShoals.value);
 
   // Boat physics at a fixed rate.
   windAt(t, env.wind);
@@ -406,10 +424,10 @@ function frame(now) {
   }
   if (input.pressed('KeyQ')) {
     const ready = !interior.inside && player.mode === 'ground' && player.grounded && !player.carrying;
-    fishing.press({ t, waveScale: swell, night: atmosphere.uniforms.uNight.value > 0.5, canFish: ready, onBoat });
+    fishing.press({ t, waveScale: swell, night: atmosphere.uniforms.uNight.value > 0.5, canFish: ready, onBoat, shoalNear: (p) => wildlife.shoalNear(p.x, p.z) });
   }
   if (input.pressed('Tab')) screens.toggleChart();
-  screens.update({ boat, player, wind: env.wind, aboard: interior.inside, catchLog: fishing.summary() });
+  screens.update({ boat, player, wind: env.wind, aboard: interior.inside, catchLog: fishing.summary(), finds: finds.summary() });
   if (player.station !== 'helm') {
     if (input.pressed('ArrowRight')) treasure.flip(1);
     if (input.pressed('ArrowLeft')) treasure.flip(-1);
@@ -457,7 +475,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, finds, ocean, controls, THREE };
 }
 
 syncClock().finally(() => {
