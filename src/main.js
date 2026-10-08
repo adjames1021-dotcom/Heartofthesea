@@ -10,6 +10,7 @@ import { dampingAt, groundAt, ISLAND_BY_ID, toWorld, gannetNest } from '../share
 import { hoursAt, swellScaleAt, cloudCoverAt, windAt, stormAt, nextStormIn, forceStorm } from '../shared/environment.js';
 import { Storm } from './storm.js';
 import { VERSION, BUILD } from './version.js';
+import { Progress } from './progress.js';
 import { BOAT } from '../shared/boat.js';
 import { Atmosphere } from './atmosphere.js';
 import { Ocean } from './ocean.js';
@@ -39,6 +40,11 @@ import { syncClock, worldTime } from './clock.js';
 import './style.css';
 
 const params = new URLSearchParams(location.search);
+
+// Your saved progress is on the server. Start fetching it now; the world
+// below gets built while it's on its way.
+const progress = new Progress();
+const progressReady = progress.connect();
 const num = (k) => (params.has(k) ? Number(params.get(k)) : null);
 
 // Developer overrides for screenshots and testing only. Normal play takes
@@ -119,18 +125,20 @@ player.bear.setShovel(false, shovelModel());
 const input = new Input(renderer.domElement);
 const follow = new FollowCamera(camera);
 const hud = new Hud();
-const finds = new Finds({ scene, world, hud });
+const finds = new Finds({ scene, world, hud, progress });
 const audio = new OceanAudio();
-const fishing = new Fishing({ scene, hud, player, audio });
+const fishing = new Fishing({ scene, hud, player, audio, progress });
 const wildlife = new Wildlife({ scene, audio });
 const islandLife = new IslandLife({ scene });
 const stormFx = new Storm({ scene, audio });
 if (dev.storm !== null) forceStorm(dev.storm);
 const weather = { warned: false, wild: false };
-const treasure = new Treasure({ scene, world, hud });
+await progressReady;
+const treasure = new Treasure({ scene, world, hud, progress });
 const screens = new Screens();
 const interior = new Interior({ scene, world });
 interior.showFinds(finds.found, keepsake);
+progress.onChange(() => interior.showFinds(finds.found, keepsake));
 document.getElementById('controls')?.addEventListener('click', () => screens.toggleControls(true));
 
 // Arcade (sails trim themselves, quick and forgiving) or realistic sailing.
@@ -221,6 +229,14 @@ renderer.domElement.addEventListener('mousedown', () => {
 ui.version.textContent = `Version ${VERSION} · build ${BUILD.hash}${BUILD.date ? ` · ${BUILD.date}` : ''}`;
 console.info(`Heart of the Sea ${VERSION} (${BUILD.hash} ${BUILD.date})`);
 document.getElementById('settings-version').textContent = `Version ${VERSION} (${BUILD.hash})`;
+// Your save code, to carry on somewhere else; and a box to use another one.
+document.getElementById('save-code').textContent = progress.online ? progress.code : 'not saving (offline)';
+document.getElementById('load-code').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('code-input');
+  if (await progress.useCode(input.value)) location.reload();
+  else hud.say("That code didn't work.", 3);
+});
 
 // ---------- Interactions ----------
 const STATION_KEYS = {
@@ -287,7 +303,7 @@ function findInteraction() {
           label: 'Take a map',
           act: () =>
             treasure
-              .newMap([])
+              .spareMap()
               .then(() => hud.say('Took a map. Press M to look at it.', 4))
               .catch(() => hud.say('No maps here right now.')),
         };
@@ -366,6 +382,7 @@ function bowSpray(dt, t, swell, storm) {
 
 // A word before a storm, and when it's over.
 function stormNotices(t, storm) {
+  if (dev.storm !== null) return;
   const soon = nextStormIn(t);
   if (soon > 0 && soon < 50 && !weather.warned) {
     weather.warned = true;
@@ -463,6 +480,9 @@ function frame(now) {
     // Start looking forward along the deck.
     follow.yaw = Math.atan2(-Math.cos(boat.state.heading), -Math.sin(boat.state.heading)) + 0.5;
     started = true;
+    // Your first map; and chests dug up last time but not got home are
+    // waiting in the cockpit (now the boat is where it should be).
+    treasure.start(() => boat.toWorld(new THREE.Vector3(-2.6 - Math.random() * 1.2, LAYOUT.cockpit.sole + 0.1, (Math.random() - 0.5) * 0.8)));
   }
 
   course.update(t, dt, swell);
@@ -554,11 +574,10 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, finds, ocean, controls, stormFx, atmosphere, env, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {
-  treasure.start();
   document.body.classList.add('ready');
   requestAnimationFrame((n) => {
     last = n;

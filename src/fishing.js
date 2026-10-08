@@ -2,13 +2,13 @@ import * as THREE from 'three';
 import { heightAt } from '../shared/waves.js';
 import { groundAt, islandNear } from '../shared/world.js';
 import { paint, mergeParts, segment } from './props.js';
+import { countOf } from '../shared/items.js';
 
 // Fishing. Q casts from wherever you're standing (a beach, a rock, the deck),
 // the float rides the swell, and when it dips you've a moment to press Q and
 // strike. What bites depends on where you are: open water, sand, rock, reef,
 // and the time of day.
 
-const STORE = 'hots.fish';
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // Where each fish lives. kg: [min, max]. Colours: back, belly, fins.
@@ -132,14 +132,14 @@ function fishModel(f, kg) {
 }
 
 export class Fishing {
-  constructor({ scene, hud, player, audio }) {
+  constructor({ scene, hud, player, audio, progress }) {
     this.scene = scene;
     this.hud = hud;
     this.player = player;
     this.audio = audio;
     this.state = 'idle'; // idle | cast | wait | bite | reel | show
     this.t = 0;
-    this.log = this.#load();
+    this.progress = progress;
 
     this.rod = rodModel();
     player.bear.setRod(false, this.rod);
@@ -167,44 +167,27 @@ export class Fishing {
     this.shown = null;
   }
 
-  #load() {
-    try {
-      const s = JSON.parse(localStorage.getItem(STORE) ?? 'null');
-      if (s && s.counts) return s;
-    } catch {
-      // ignore
-    }
-    return { counts: {}, biggest: null, kept: 0 };
-  }
-
-  #save() {
-    try {
-      localStorage.setItem(STORE, JSON.stringify(this.log));
-    } catch {
-      // ignore
-    }
-  }
-
   get active() {
     return this.state !== 'idle';
   }
 
-  /** Fish caught so far that are still in the cool box (for cooking). */
+  /** Fish you've got that are still uncooked. */
   get kept() {
-    return this.log.kept;
+    return (this.progress.state?.items ?? []).filter((i) => FISH[i.kind] && !FISH[i.kind].junk).length;
   }
 
   cookOne() {
-    if (this.log.kept <= 0) return false;
-    this.log.kept--;
-    this.#save();
+    if (this.kept <= 0) return false;
+    this.progress.act('cookOne').catch(() => {});
     return true;
   }
 
-  /** Lines for the catch log on the chart. */
+  /** Lines for the catch log on the chart, as you'd jot them down. */
   summary() {
-    const rows = Object.entries(this.log.counts).map(([k, n]) => `${FISH[k]?.name ?? k} ×${n}`);
-    if (this.log.biggest) rows.push(`biggest: ${this.log.biggest.name}, ${this.log.biggest.kg.toFixed(1)} kg`);
+    const c = this.progress.state?.catches;
+    if (!c) return [];
+    const rows = Object.entries(c.counts).map(([k, n]) => countOf(k, n));
+    if (c.biggest) rows.push(`biggest a ${FISH[c.biggest.kind]?.name ?? c.biggest.kind}, ${c.biggest.kg.toFixed(1)} kg`);
     return rows;
   }
 
@@ -368,13 +351,11 @@ export class Fishing {
     m.rotation.set(0, Math.PI / 2, 0.25);
     this.player.bear.root.add(m);
     this.shown = m;
+    // The server keeps it (and checks it's a fish of a sensible size).
+    this.progress?.act('catch', { kind: key, kg }).catch(() => {});
     if (f.junk) {
       this.hud.say('An old boot.', 3);
     } else {
-      this.log.counts[key] = (this.log.counts[key] ?? 0) + 1;
-      this.log.kept++;
-      if (!this.log.biggest || kg > this.log.biggest.kg) this.log.biggest = { name: f.name, kg };
-      this.#save();
       const article = /^[aeiou]/.test(f.name) ? 'An' : 'A';
       this.hud.say(`${article} ${f.name}. ${kg.toFixed(1)} kg.`, 3);
     }

@@ -5,6 +5,9 @@
 
 import { DurableObject } from 'cloudflare:workers';
 import { issueMap, dig, near, claim } from './treasure.js';
+import { Player } from './player.js';
+
+export { Player };
 
 const json = (data, init = {}) =>
   Response.json(data, {
@@ -37,6 +40,36 @@ async function treasureSecret(env) {
     });
   }
   return cached;
+}
+
+// ---------------------------------------------------------------------------
+// Players. A player is a save code (16 letters and digits, shown as four
+// groups of four). Their locker is found by a hash of the code with the
+// server's secret, so the code itself is never stored anywhere and the
+// public id (for visit links) can't be turned back into it.
+// ---------------------------------------------------------------------------
+
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function newCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const c = [...bytes].map((b) => CODE_CHARS[b % 32]).join('');
+  return c.match(/.{4}/g).join('-');
+}
+
+/** 'abcd efgh-jklm…' → 'ABCD-EFGH-JKLM-NPQR', or null if it isn't a code. */
+export function normalCode(code) {
+  if (typeof code !== 'string') return null;
+  const c = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (c.length !== 16 || [...c].some((ch) => !CODE_CHARS.includes(ch))) return null;
+  return c.match(/.{4}/g).join('-');
+}
+
+const enc = new TextEncoder();
+async function playerId(secret, code) {
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(`player:${code}`)));
+  return [...sig.slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function body(request) {
@@ -96,11 +129,36 @@ export default {
         return json(claim({ course: String(b.course), x: Number(b.x), y: Number(b.y), z: Number(b.z) }));
       }
 
+      // A new player: here's your save code.
+      case '/api/player/new': {
+        const secret = await treasureSecret(env);
+        const code = newCode();
+        return json({ code, id: await playerId(secret, code) });
+      }
+
+      // Do something as a player. Body: { code, action: { type, ... } }
+      case '/api/player': {
+        const secret = await treasureSecret(env);
+        const b = await body(request);
+        const code = normalCode(b?.code);
+        if (!code || !b.action || typeof b.action !== 'object') return json({ error: 'POST { code, action }' }, { status: 400 });
+        const id = await playerId(secret, code);
+        const stub = env.PLAYER.get(env.PLAYER.idFromName(id));
+        return json({ id, ...(await stub.act(b.action, secret)) });
+      }
+
       // Placeholder for the future multiplayer socket, e.g.:
       //   const id = env.OCEAN.idFromName('main');
       //   return env.OCEAN.get(id).fetch(request);
       case '/api/ws':
         return json({ error: 'multiplayer not available yet' }, { status: 501 });
+    }
+
+    // Someone else's cabin, to look round: /api/cabin/<public id>
+    const visit = url.pathname.match(/^\/api\/cabin\/([0-9a-f]{16})$/);
+    if (visit) {
+      const stub = env.PLAYER.get(env.PLAYER.idFromName(visit[1]));
+      return json(await stub.cabin());
     }
 
     if (url.pathname.startsWith('/api/')) {

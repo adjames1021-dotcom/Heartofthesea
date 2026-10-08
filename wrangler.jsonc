@@ -10,7 +10,16 @@
     // Only /api/* hits the Worker script; everything else is served straight from the asset cache.
     "run_worker_first": ["/api/*"]
   },
-  // Holds the treasure-map signing key, made automatically on first use.
-  "durable_objects": { "bindings": [{ "name": "KEEPER", "class_name": "Keeper" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Keeper"] }]
+  // KEEPER holds the treasure-map signing key, made automatically on first
+  // use. Each player's saved progress lives in their own PLAYER object.
+  "durable_objects": {
+    "bindings": [
+      { "name": "KEEPER", "class_name": "Keeper" },
+      { "name": "PLAYER", "class_name": "Player" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Keeper"] },
+    { "tag": "v2", "new_sqlite_classes": ["Player"] }
+  ]
 }

@@ -223,11 +223,11 @@ export class Screens {
     ctx.fillText(`wind ${Math.round(wind.speed * 1.944)} kn`, 70, 122);
     ctx.fillText('Tab to close', this.canvas.width / 2, this.canvas.height - 22);
     // What you've found on the islands.
-    if (finds) {
+    if (finds?.names.length) {
       const lines = finds.names.slice(-6);
       const right = this.canvas.width - 30;
       ctx.textAlign = 'right';
-      ctx.fillText(`Found ${finds.count} of ${finds.total}`, right, this.canvas.height - 40 - lines.length * 22);
+      ctx.fillText('Found', right, this.canvas.height - 40 - lines.length * 22);
       lines.forEach((line, i) => ctx.fillText(line, right, this.canvas.height - 40 - (lines.length - 1 - i) * 22));
     }
     // What you've caught.

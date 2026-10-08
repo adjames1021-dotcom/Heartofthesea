@@ -7,10 +7,9 @@ import { drawMap } from './mapview.js';
 import { groundColorAt } from './terrain.js';
 
 // Treasure on the client: maps you carry, digging, holes, chests and crabs.
-// Where treasure is and whether a hole has it is the server's call; this
-// side only draws and carries things.
-
-const STORE = 'hots.v1';
+// Where treasure is and whether a hole has it is the server's call, and the
+// server keeps what you hold (src/progress.js); this side only draws and
+// carries things.
 
 // ---------------------------------------------------------------------------
 // Models
@@ -327,12 +326,19 @@ const _noTilt = new THREE.Quaternion();
 // ---------------------------------------------------------------------------
 
 export class Treasure {
-  constructor({ scene, world, hud, api = '' }) {
+  constructor({ scene, world, hud, progress }) {
     this.scene = scene;
     this.world = world;
     this.hud = hud;
-    this.api = api;
-    this.state = this.#load();
+    this.progress = progress;
+    // What the server says you hold.
+    this.state = { maps: [], puzzles: [] };
+    progress.onChange((s) => {
+      const had = this.state.maps.length;
+      this.state = { maps: s.maps ?? [], puzzles: s.solved ?? [] };
+      if (this.state.maps.length > had) this.mapIndex = this.state.maps.length - 1;
+      this.#refreshMap();
+    });
     this.loose = [];
     this.crabs = [];
     this.holes = [];
@@ -343,56 +349,27 @@ export class Treasure {
     this.#buildMapView();
   }
 
-  #load() {
-    try {
-      const s = JSON.parse(localStorage.getItem(STORE) ?? 'null');
-      if (s && Array.isArray(s.maps)) return s;
-    } catch {
-      // ignore
+  /** You start with one map. Chests you'd dug up but not got home are waiting on deck. */
+  async start(onDeck) {
+    const P = this.progress;
+    if (!P.online) return;
+    if (!P.state.given) {
+      const r = await P.act('firstMap').catch(() => null);
+      if (r?.ok) this.hud.say('You have a treasure map. Press M to look at it.', 7);
     }
-    return { maps: [], given: false, puzzles: [], delivered: 0 };
-  }
-
-  save() {
-    try {
-      localStorage.setItem(STORE, JSON.stringify(this.state));
-    } catch {
-      // private mode etc.
+    for (const [id, c] of Object.entries(P.state.chests ?? {})) {
+      if (c.delivered) continue;
+      const at = onDeck();
+      const chest = this.spawnChest(at.x, at.y + 0.3, at.z, { from: c.from, rise: false });
+      chest.chestId = id;
     }
   }
 
-  async #post(path, body) {
-    const res = await fetch(`${this.api}${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`${path} ${res.status}`);
-    return res.json();
-  }
-
-  /** You start with one map. */
-  async start() {
-    if (this.state.given || this.state.maps.length) return;
-    try {
-      const map = await this.#post('/api/maps', {});
-      this.state.maps.push(map);
-      this.state.given = true;
-      this.save();
-      this.#refreshMap();
-      this.hud.say('You have a treasure map. Press M to look at it.', 7);
-    } catch {
-      // No server (e.g. plain vite): no maps this session.
-    }
-  }
-
-  async newMap(not = []) {
-    const map = await this.#post('/api/maps', { not });
-    this.state.maps.push(map);
-    this.save();
-    this.mapIndex = this.state.maps.length - 1;
-    this.#refreshMap();
-    return map;
+  /** The spare map on the chart table. */
+  async spareMap() {
+    const r = await this.progress.act('spareMap');
+    if (!r.ok) throw new Error(r.why);
+    return r.map;
   }
 
   canDig(x, z) {
@@ -405,23 +382,15 @@ export class Treasure {
     this.#hole(x, y, z);
     let res;
     try {
-      res = await this.#post('/api/dig', { x, z, maps: this.state.maps.map((m) => m.id) });
+      res = await this.progress.act('dig', { x, z });
     } catch {
       return { result: 'nothing' };
     }
+    if (!res.ok) return { result: 'nothing' };
     if (res.result === 'chest') {
-      if (res.map) {
-        const m = this.state.maps.find((mm) => mm.id === res.map);
-        this.state.maps = this.state.maps.filter((mm) => mm.id !== res.map);
-        this.mapIndex = 0;
-        this.#refreshMap();
-        this.spawnChest(x, y, z, { from: m?.island });
-      } else if (res.puzzle) {
-        if (this.state.puzzles.includes(res.puzzle)) return { result: 'nothing' };
-        this.state.puzzles.push(res.puzzle);
-        this.spawnChest(x, y, z, { from: res.puzzle });
-      }
-      this.save();
+      this.mapIndex = 0;
+      const c = this.spawnChest(x, y, z, { from: res.from });
+      c.chestId = res.chest;
       for (const [key, p] of this.patches) {
         if (Math.hypot(p.userData.x - x, p.userData.z - z) < 3) {
           this.scene.remove(p);
@@ -474,11 +443,9 @@ export class Treasure {
     if (c.claimed) return;
     c.claimed = true;
     try {
-      const res = await this.#post('/api/claim', { course: c.course, x: c.pos.x, y: c.pos.y, z: c.pos.z });
-      if (res.result === 'chest' && !this.state.puzzles.includes(c.course)) {
-        this.state.puzzles.push(c.course);
-        this.save();
-      }
+      const res = await this.progress.act('claim', { course: c.course, x: c.pos.x, y: c.pos.y, z: c.pos.z });
+      if (res.result === 'chest') c.chestId = res.chest;
+      else c.claimed = false;
     } catch {
       c.claimed = false;
     }
@@ -539,7 +506,8 @@ export class Treasure {
     this.nearT = 1.5;
     this.nearAt = { x: p.x, z: p.z };
     this.nearBusy = true;
-    this.#post('/api/near', { x: p.x, z: p.z, maps: this.state.maps.map((m) => m.id) })
+    this.progress
+      .act('near', { x: p.x, z: p.z })
       .then((res) => (res.spots ?? []).forEach((s) => this.#markGround(s)))
       .catch(() => {})
       .finally(() => {
@@ -600,11 +568,13 @@ export class Treasure {
   async #deliver(c) {
     c.delivered = true;
     c.opening = 0;
-    this.state.delivered++;
-    this.save();
+    if (!c.chestId) {
+      this.hud.say('Empty.');
+      return;
+    }
     try {
-      await this.newMap(c.from ? [c.from] : []);
-      this.hud.say("There's a map inside.");
+      const r = await this.progress.act('deliver', { chest: c.chestId });
+      this.hud.say(r.ok && r.map ? "There's a map inside." : 'Empty.');
     } catch {
       this.hud.say('Empty.');
     }

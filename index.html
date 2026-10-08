@@ -24,6 +24,14 @@
         <button id="sound" type="button" aria-pressed="false">Sound off</button>
         <button id="controls" type="button">Controls (H)</button>
         <button id="sailing" type="button">Sailing: Arcade</button>
+        <div class="save">
+          <span class="save-label">Your save code</span>
+          <span id="save-code" class="save-code">offline</span>
+        </div>
+        <form id="load-code" class="load-code">
+          <input id="code-input" type="text" placeholder="Another save code" spellcheck="false" autocomplete="off" maxlength="19" />
+          <button type="submit">Load</button>
+        </form>
         <div id="settings-version" class="ver"></div>
       </div>
       <button id="settings-toggle" class="toggle" type="button" aria-expanded="false" aria-controls="panel">Settings</button>

@@ -7,9 +7,8 @@ import { deepenShadows } from './atmosphere.js';
 // Things to come across on the islands: a fisherman's hut, a cairn on the
 // summit, a burnt-out cottage, an upturned dinghy, the Molly Ann's anchor,
 // and small things washed up on the beaches. Each has something to pick up
-// or read; what you've found is kept in localStorage and listed on the chart.
-
-const STORE = 'hots.finds';
+// or read; what you've found is kept on the server (src/progress.js) and
+// listed on the chart.
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const mat = deepenShadows(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
 
@@ -401,31 +400,23 @@ export function clearings() {
 }
 
 export class Finds {
-  constructor({ scene, world, hud }) {
+  constructor({ scene, world, hud, progress }) {
     this.hud = hud;
-    this.found = this.#load();
+    this.progress = progress;
     this.items = [];
     this.group = new THREE.Group();
     this.group.name = 'finds';
     scene.add(this.group);
     for (const p of PLACES) this.#build(p, world);
+    // Things you've taken are gone from where they lay.
+    progress.onChange(() => {
+      for (const it of this.items) if (it.item && !it.place.look) it.item.visible = !this.found.includes(it.place.id);
+    });
   }
 
-  #load() {
-    try {
-      const a = JSON.parse(localStorage.getItem(STORE) ?? '[]');
-      return Array.isArray(a) ? a : [];
-    } catch {
-      return [];
-    }
-  }
-
-  #save() {
-    try {
-      localStorage.setItem(STORE, JSON.stringify(this.found));
-    } catch {
-      // private mode
-    }
+  /** What the server says you've found. */
+  get found() {
+    return this.progress.state?.finds ?? [];
   }
 
   #build(p, world) {
@@ -500,17 +491,13 @@ export class Finds {
 
   take(it) {
     const p = it.place;
-    if (!this.found.includes(p.id)) {
-      this.found.push(p.id);
-      this.#save();
-    }
+    if (!this.found.includes(p.id)) this.progress.act('find', { id: p.id }).catch(() => {});
     if (it.item && !p.look) it.item.visible = false;
     this.hud.say(p.text, Math.min(9, 3 + p.text.length / 22));
   }
 
   /** For the chart: what you've found, in the order you found it. */
   summary() {
-    const names = this.found.map((id) => PLACES.find((p) => p.id === id)?.name).filter(Boolean);
-    return { count: names.length, total: PLACES.length, names };
+    return { names: this.found.map((id) => PLACES.find((p) => p.id === id)?.name).filter(Boolean) };
   }
 }
