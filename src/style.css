@@ -347,3 +347,48 @@ html, body {
   height: auto;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
+
+/* Talking: a small paper card at the bottom, their words and your replies. */
+.talk {
+  position: fixed;
+  left: 50%;
+  bottom: 13%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  padding: 12px 16px 10px;
+  color: var(--paper-ink);
+  background: var(--paper);
+  border-radius: 3px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  display: none;
+  z-index: 10;
+}
+.talk.show { display: block; }
+.talk .who { font-variant: small-caps; letter-spacing: 0.06em; font-size: 0.85rem; opacity: 0.7; }
+.talk .said { margin: 4px 0 10px; font-size: 1.08rem; line-height: 1.35; }
+.talk .replies { display: grid; gap: 4px; }
+.talk .replies button {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  text-align: left;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--paper-ink);
+  background: transparent;
+  border: 0;
+  padding: 3px 2px;
+  cursor: pointer;
+}
+.talk .replies button:hover { background: rgba(43, 36, 29, 0.06); }
+.talk kbd {
+  min-width: 1.4em;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: center;
+  background: #fffaf0;
+  border-radius: 3px;
+  box-shadow: 0 1px 0 rgba(43, 36, 29, 0.45);
+}
+.night .talk { filter: brightness(0.8); }

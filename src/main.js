@@ -30,6 +30,8 @@ import { Interior } from './interior.js';
 import { Fishing } from './fishing.js';
 import { Wildlife } from './wildlife.js';
 import { IslandLife } from './islandlife.js';
+import { Villages } from './village.js';
+import { Talk } from './talk.js';
 import { Finds, keepsake } from './finds.js';
 import { WreckCourse } from './course.js';
 import { HatchPuzzle } from './hatch.js';
@@ -130,6 +132,9 @@ const audio = new OceanAudio();
 const fishing = new Fishing({ scene, hud, player, audio, progress });
 const wildlife = new Wildlife({ scene, audio });
 const islandLife = new IslandLife({ scene });
+const villages = new Villages({ scene, world });
+let hoursNow = 12;
+const talk = new Talk({ progress, hours: () => hoursNow });
 const stormFx = new Storm({ scene, audio });
 if (dev.storm !== null) forceStorm(dev.storm);
 const weather = { warned: false, wild: false };
@@ -247,6 +252,7 @@ const STATION_KEYS = {
 };
 const tmpV = new THREE.Vector3();
 let wasNight = null;
+let villagesPlaced = false;
 const PLATFORM_LOCAL = new THREE.Vector3(-6.05, LAYOUT.platform.y, 0);
 
 function putDown() {
@@ -330,6 +336,14 @@ function findInteraction() {
         if (near.course) treasure.claim(near);
       },
     };
+  }
+  // Someone to talk to? (Not when they're asleep.)
+  const who = player.mode === 'swim' ? null : villages.nearest(player.pos);
+  if (who) {
+    const first = who.def.name.split(' ')[0];
+    if (!who.awakeNow) return { key: '', label: 'Asleep.' };
+    if (talk.open) return null;
+    return { key: 'E', label: `Talk to ${first}`, act: () => talk.begin(who) };
   }
   const find = player.mode === 'swim' ? null : finds.near(player.pos);
   if (find) {
@@ -443,6 +457,13 @@ function frame(now) {
   islands.update(t, 1 + 3 * storm);
   wildlife.update(dt, { t, waveScale: swell, camera, player, boat });
   islandLife.update(dt, { t, camera, player, night: atmosphere.uniforms.uNight.value });
+  if (!villagesPlaced) {
+    villages.place(dev.hours ?? hoursAt(t));
+    villagesPlaced = true;
+  }
+  hoursNow = dev.hours ?? hoursAt(t);
+  villages.update(dt, { t, hours: hoursNow, player, night: atmosphere.uniforms.uNight.value });
+  talk.update(input, player);
   wildlife.writeShoals(ocean.uniforms.uShoals.value);
 
   // Boat physics at a fixed rate.
@@ -492,7 +513,7 @@ function frame(now) {
   // Player.
   const interaction = findInteraction();
   hud.setPrompt(interaction?.key, interaction?.label);
-  if (interaction && input.pressed('KeyE')) {
+  if (interaction?.act && input.pressed('KeyE')) {
     interaction.act();
     input.hits.delete('KeyE');
   }
@@ -574,7 +595,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {

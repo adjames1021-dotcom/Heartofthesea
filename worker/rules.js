@@ -6,6 +6,8 @@
 
 import { issueMap, dig, near, claim } from './treasure.js';
 import { ITEMS, FIND_IDS } from '../shared/items.js';
+import { TALK, repliesAt } from '../shared/talk.js';
+import { VILLAGERS } from '../shared/villages.js';
 
 /** A brand-new player. */
 export function freshState(now) {
@@ -20,7 +22,9 @@ export function freshState(now) {
     finds: [], // things picked up on the islands, in order
     items: [], // what you own: { id, kind, got, kg?, where: 'bear' | 'hold' }
     catches: { counts: {}, biggest: null, last: 0 },
-    journal: [],
+    journal: [], // notes in your own words: { t, quest, text }
+    quests: {}, // { [id]: { stage, started, done } }
+    met: {}, // who you've talked to
     nextId: 1,
   };
 }
@@ -145,6 +149,35 @@ const ACTIONS = {
 
 // Actions that only look.
 const READ_ONLY = new Set(['hello', 'near']);
+
+/** Do what a reply in a conversation does. */
+function effects(s, list, now) {
+  for (const [what, a, b] of list ?? []) {
+    if (what === 'met') s.met[a] = true;
+    else if (what === 'start' && !s.quests[a]) s.quests[a] = { stage: 0, started: now, done: false };
+    else if (what === 'note') s.journal.push({ t: now, quest: a, text: b });
+    else if (what === 'stage' && s.quests[a]) s.quests[a].stage = b;
+    else if (what === 'done' && s.quests[a]) s.quests[a].done = true;
+    else if (what === 'give') give(s, a, now);
+    else if (what === 'take') {
+      const i = s.items.findIndex((it) => it.kind === a);
+      if (i >= 0) s.items.splice(i, 1);
+    }
+  }
+}
+
+ACTIONS.talk = async (s, a, { now }) => {
+  if (!Object.hasOwn(VILLAGERS, a.who) || !Object.hasOwn(TALK, a.who)) return fail('who');
+  const convo = TALK[a.who].find((c) => c.id === a.convo);
+  if (!convo || !convo.when(s)) return fail('not now');
+  const line = Object.hasOwn(convo.lines, a.line) ? convo.lines[a.line] : null;
+  if (!line) return fail('what');
+  const reply = repliesAt(line, s)[a.pick];
+  if (!reply) return fail('no such reply');
+  effects(s, reply.do, now);
+  s.journal = s.journal.slice(-200);
+  return { ok: true, to: reply.to ?? null };
+};
 
 /**
  * Apply one action to a copy of the state. Returns { state, reply }; state is

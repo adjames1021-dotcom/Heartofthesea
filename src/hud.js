@@ -33,7 +33,7 @@ export class Hud {
     const text = label ? `${key}|${label}` : '';
     if (text === this.last.prompt) return;
     this.last.prompt = text;
-    this.prompt.innerHTML = label ? `<kbd>${key}</kbd> ${label}` : '';
+    this.prompt.innerHTML = label ? `${key ? `<kbd>${key}</kbd> ` : ''}${label}` : '';
   }
 
   /** rows: [[keys, what], ...] or null */

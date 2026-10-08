@@ -46,7 +46,8 @@ function capsule(r, len) {
 
 export class Bear {
   constructor(look = 'brown') {
-    const L = LOOKS[look] ?? LOOKS.brown;
+    // A named look, or a look of its own (villagers: their own fur and ink).
+    const L = typeof look === 'object' ? { ...LOOKS.brown, zip: false, ...look } : LOOKS[look] ?? LOOKS.brown;
     this.look = L;
     const toon = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: ramp });
     this.mat = {
@@ -193,6 +194,12 @@ export class Bear {
     this.pose = this.#emptyPose();
   }
 
+  /** Something worn on the head (a hat, a scarf): sits on the head and moves with it. */
+  wear(object, on = 'head') {
+    (on === 'head' ? this.head : this.hips).add(object);
+    return object;
+  }
+
   /** A fishing rod in the right paw, angled up and out. */
   setRod(visible, model = null) {
     if (!this.rod && model) {
@@ -235,6 +242,39 @@ export class Bear {
     const speed = s.speed ?? 0;
 
     switch (s.mode) {
+      case 'sit': {
+        // Sat on a log or a bench: legs out in front, paws on knees.
+        target.legX = [-1.45, -1.45];
+        target.bob = -0.24;
+        target.lean = -0.08;
+        target.armX = [-0.55, -0.55];
+        target.armZ = [-0.15, 0.15];
+        target.headX = 0.05 + Math.sin(t * 0.4) * 0.04;
+        break;
+      }
+      case 'sleep':
+        // Curled up (the villager lies the whole body down).
+        target.legX = [-0.6, -0.4];
+        target.armX = [-0.9, -0.7];
+        target.armZ = [0.3, -0.3];
+        target.headX = 0.3;
+        break;
+      case 'wave': {
+        // One arm up, waving from the elbow.
+        target.armX = [0, -2.7];
+        target.armZ = [-0.4, -0.25 + Math.sin(t * 9) * 0.45];
+        target.headX = -0.1;
+        break;
+      }
+      case 'work': {
+        // Busy hands in front: mending a net, gutting, splitting.
+        const w = Math.sin(t * 5.5);
+        target.armX = [-1.05 + w * 0.15, -1.0 - w * 0.15];
+        target.armZ = [0.2, -0.2];
+        target.headX = 0.35;
+        target.lean = 0.12;
+        break;
+      }
       case 'walk': {
         this.phase += dt * (4 + speed * 2.4);
         const sw = Math.sin(this.phase);
@@ -366,6 +406,8 @@ export class Bear {
       }
     }
     if (s.mode !== 'idle') this.idleT = 0;
+    // Looking at something (radians from straight ahead): turn the head.
+    if (s.look !== undefined && s.look !== null) target.headY = Math.max(-1.1, Math.min(1.1, s.look));
 
     const p = this.pose;
     for (const key of ['bob', 'lean', 'roll', 'headX', 'headZ', 'headY']) p[key] += (target[key] - p[key]) * k;
