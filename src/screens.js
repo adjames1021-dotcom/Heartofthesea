@@ -1,5 +1,6 @@
 import { ISLANDS, groundAt } from '../shared/world.js';
 import { HAND } from './mapview.js';
+import { CHANGES, VERSION, BUILD } from './version.js';
 
 // Two screens you can call up: the controls (H), with a plan of the boat
 // showing where each station is, and the chart (Tab) of the whole sea.
@@ -76,6 +77,12 @@ export class Screens {
         </div>
         <p class="sub">To go ashore: get close to an island, press <kbd>G</kbd> at the helm to drop the anchor, and swim.</p>
         <p class="sub">Treasure: you start with a map (<kbd>M</kbd>). Dig with <kbd>F</kbd> near the X, carry the chest back and put it down on the boat; there's usually another map inside. Out of maps? There's one on the chart table below decks.</p>
+        <section class="news">
+          <h3>Version ${VERSION} <span class="build">build ${BUILD.hash}${BUILD.date ? `, ${BUILD.date}` : ''}</span></h3>
+          ${CHANGES.slice(0, 3)
+            .map(([v, what]) => `<div class="row"><span>${v}</span>${what}</div>`)
+            .join('')}
+        </section>
         <p class="close">Press <kbd>H</kbd> to close</p>
       </div>`;
     document.body.appendChild(this.controls);

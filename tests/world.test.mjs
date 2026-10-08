@@ -119,3 +119,11 @@ test('climb chests only count from up there', () => {
   assert.equal(claim({ course: 'constructor', x: 0, y: 0, z: 0 }).result, 'nothing');
   assert.ok(foreTopChest().y > 10 && gannetNest().y > 20 && hatchChest().y > 2);
 });
+
+test('the version in package.json matches the game', async () => {
+  const { readFileSync } = await import('node:fs');
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
+  const src = readFileSync(new URL('../src/version.js', import.meta.url), 'utf8');
+  const v = src.match(/\['([0-9.]+)'/)[1];
+  assert.equal(pkg.version.replace(/\.0$/, ''), v);
+});

@@ -200,10 +200,11 @@ export class CollisionWorld {
   }
 
   /** Is a small sphere at p touching any collider (not terrain)? */
-  blocked(p, r = 0.25) {
+  /** Is a sphere at p inside anything? skipBodies: ignore moving bodies (the camera looks through the boat's rigging). */
+  blocked(p, r = 0.25, skipBodies = false) {
     const list = this.nearby(p.x, p.z, r + 1, _list2);
     for (const col of list) {
-      if (col.rail) continue;
+      if (col.rail || (skipBodies && col.body)) continue;
       if (sphereVs(col, p, r)) return true;
     }
     return false;

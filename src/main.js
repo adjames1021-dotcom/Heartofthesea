@@ -9,6 +9,7 @@ import { heightAt, setWaveDamping } from '../shared/waves.js';
 import { dampingAt, groundAt, ISLAND_BY_ID, toWorld, gannetNest } from '../shared/world.js';
 import { hoursAt, swellScaleAt, cloudCoverAt, windAt, stormAt, nextStormIn, forceStorm } from '../shared/environment.js';
 import { Storm } from './storm.js';
+import { VERSION, BUILD } from './version.js';
 import { BOAT } from '../shared/boat.js';
 import { Atmosphere } from './atmosphere.js';
 import { Ocean } from './ocean.js';
@@ -27,6 +28,7 @@ import { Screens } from './screens.js';
 import { Interior } from './interior.js';
 import { Fishing } from './fishing.js';
 import { Wildlife } from './wildlife.js';
+import { IslandLife } from './islandlife.js';
 import { Finds, keepsake } from './finds.js';
 import { WreckCourse } from './course.js';
 import { HatchPuzzle } from './hatch.js';
@@ -121,6 +123,7 @@ const finds = new Finds({ scene, world, hud });
 const audio = new OceanAudio();
 const fishing = new Fishing({ scene, hud, player, audio });
 const wildlife = new Wildlife({ scene, audio });
+const islandLife = new IslandLife({ scene });
 const stormFx = new Storm({ scene, audio });
 if (dev.storm !== null) forceStorm(dev.storm);
 const weather = { warned: false, wild: false };
@@ -199,6 +202,7 @@ const ui = {
   panel: document.getElementById('panel'),
   toggle: document.getElementById('settings-toggle'),
   start: document.getElementById('start'),
+  version: document.getElementById('version'),
 };
 ui.sound.addEventListener('click', async () => {
   const on = await audio.toggle();
@@ -209,7 +213,14 @@ ui.toggle.addEventListener('click', () => {
   const open = ui.panel.classList.toggle('open');
   ui.toggle.setAttribute('aria-expanded', String(open));
 });
-renderer.domElement.addEventListener('mousedown', () => ui.start.classList.add('gone'), { once: true });
+renderer.domElement.addEventListener('mousedown', () => {
+  ui.start.classList.add('gone');
+  ui.version.classList.add('gone');
+}, { once: true });
+// Which version this is, on the start screen (and in Settings and on the H screen).
+ui.version.textContent = `Version ${VERSION} · build ${BUILD.hash}${BUILD.date ? ` · ${BUILD.date}` : ''}`;
+console.info(`Heart of the Sea ${VERSION} (${BUILD.hash} ${BUILD.date})`);
+document.getElementById('settings-version').textContent = `Version ${VERSION} (${BUILD.hash})`;
 
 // ---------- Interactions ----------
 const STATION_KEYS = {
@@ -414,6 +425,7 @@ function frame(now) {
   const storm = stormAt(t);
   islands.update(t, 1 + 3 * storm);
   wildlife.update(dt, { t, waveScale: swell, camera, player, boat });
+  islandLife.update(dt, { t, camera, player, night: atmosphere.uniforms.uNight.value });
   wildlife.writeShoals(ocean.uniforms.uShoals.value);
 
   // Boat physics at a fixed rate.
@@ -428,6 +440,11 @@ function frame(now) {
   // The storm itself: rain, lightning, a dark sea, the wind howling.
   const flash = stormFx.update(dt, { storm, camera, wind: env.wind, inside: interior.inside, night: atmosphere.uniforms.uNight.value });
   atmosphere.setWeather(storm, flash);
+  if (interior.inside) {
+    // Below decks the light is the lamps and what comes through the ports.
+    atmosphere.hemi.intensity *= 0.32;
+    atmosphere.light.intensity *= 0.25;
+  }
   ocean.uniforms.uStorm.value = storm;
   audio.setWeather(storm, env.wind.speed);
   islands.lighthouse?.update(dt, Math.max(atmosphere.uniforms.uNight.value, storm * 0.9));
@@ -506,7 +523,7 @@ function frame(now) {
 
   hud.setKeys(player.mode === 'station' ? STATION_KEYS[player.station === 'helm' && !BOAT.arcade ? 'helmRealistic' : player.station] : null);
   hud.setInstruments(player.station === 'helm' ? boat.state : null);
-  interior.update(atmosphere.uniforms.uNight.value);
+  interior.update(atmosphere.uniforms.uNight.value, camera);
   const nearBoat = interior.inside || player.platform === boat.body || player.mode === 'station' || Math.hypot(player.pos.x - boat.state.x, player.pos.z - boat.state.z) < 30;
   hud.setAnchor(nearBoat ? boat.state : null);
   boatNotices();
@@ -537,7 +554,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, finds, ocean, controls, stormFx, atmosphere, env, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, finds, ocean, controls, stormFx, atmosphere, env, THREE };
 }
 
 syncClock().finally(() => {

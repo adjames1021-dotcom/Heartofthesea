@@ -43,6 +43,11 @@ surfs down the faces of the seas, heels hard, gets slewed about by gusts
 and seas on the quarter, and throws spray over the bow. (Fair-weather
 sailing is around 8–10 knots.) `?dev&storm=1` forces a storm for testing.
 
+Ashore there are crabs that scuttle off sideways and burrow, sandpipers
+running at the water's edge, butterflies over the grass, goats on the hills
+that trot off if you walk up to them, lizards on the rocks, and fireflies in
+the woods at night.
+
 There's life about: gulls wheel over the islands and keep the boat company
 (and sit on the water until you get too close), gannets fold up and plunge
 into the sea off the Stack, dolphins come to ride the bow when you sail
@@ -98,8 +103,10 @@ forgiving. Settings → Sailing switches to realistic, where you trim the
 main and jib sheets yourself (↑↓ and ←→ at the helm). The halyard and
 windlass stations still work in both.
 
-The steps at the front of the cockpit (E) go below: a galley, a saloon and
-a forward cabin with a bed. There's always a spare treasure map on the
+The steps at the front of the cockpit (E) go below, into a cabin about the
+size a real 37-footer has: galley to port, chart table to starboard, a saloon
+with settees and a drop-leaf table, and a V-berth in the bow. Below decks
+the camera looks down into the cabin from above, like a cutaway. There's always a spare treasure map on the
 chart table if you've run out, and you can cook what you catch on the stove.
 
 There are eleven things to find on the islands, some in plain sight, some
@@ -157,6 +164,13 @@ is kept in the browser's localStorage under `hots.v1`.
 
 Maps are signed with a random key the Worker makes for itself the first time
 it runs and keeps in a Durable Object (`Keeper`), so there's nothing to set up.
+## Versions
+
+The start screen, Settings and the controls screen (H) show the version and
+the commit it was built from. `src/version.js` has the list of versions and
+what each changed; bump it (and `version` in package.json, which a test
+checks) with every update.
+
 ## Develop
 
 ```bash
@@ -222,6 +236,8 @@ src/boat.js            the sloop's model, stations, lights and colliders
 src/collision.js       collision world: statics, moving bodies, ground probes
 src/islands.js         island props; src/terrain.js island meshes; src/vegetation.js grass and trees
 src/fishing.js         rod, float, bites and the catch log
+src/islandlife.js      crabs, sandpipers, butterflies, goats, lizards, fireflies
+src/version.js         version number and what each version changed
 src/storm.js           rain, lightning and the flash; the storm's strength is shared/environment.js
 src/lighthouse.js      the lighthouse, the crater lake and the big tree
 src/wildlife.js        birds, dolphins, turtles, seals, shoals (the shoals are drawn in src/ocean.js)

@@ -116,6 +116,18 @@ html, body {
   transition: opacity 0.6s ease;
 }
 .start.gone { opacity: 0; }
+.version {
+  position: fixed;
+  left: 16px;
+  bottom: 14px;
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+.version.gone { opacity: 0; }
+.panel .rows .ver { font-size: 0.78rem; color: rgba(43, 36, 29, 0.7); text-align: center; padding-top: 2px; }
 
 .hud { position: fixed; inset: 0; pointer-events: none; font-size: 0.9rem; color: var(--ink); }
 .hud kbd,
@@ -311,6 +323,9 @@ html, body {
 .screen-card .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0 24px; }
 .screen-card .row { display: flex; gap: 10px; align-items: baseline; margin: 3px 0; }
 .screen-card .row span { display: inline-flex; gap: 2px; min-width: 5.2em; }
+.screen-card .news { margin-top: 10px; padding-top: 6px; border-top: 1px solid var(--paper-rule); }
+.screen-card .news .build { font-weight: 400; font-size: 0.85rem; opacity: 0.65; margin-left: 6px; }
+.screen-card .news .row span { min-width: 3em; opacity: 0.7; }
 .chart-screen canvas {
   width: min(92vh, 92vw);
   height: auto;

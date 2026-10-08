@@ -59,7 +59,7 @@ function chestModel() {
   return g;
 }
 
-function crabModel() {
+export function crabModel() {
   const g = new THREE.Group();
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const parts = [];

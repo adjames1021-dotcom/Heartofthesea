@@ -227,6 +227,9 @@ export class Bear {
    */
   update(dt, s) {
     const target = this.#emptyPose();
+    // Standing on a heeling deck: arms out a little for balance.
+    const brace = Math.min(1, Math.max(0, ((s.brace ?? 0) - 0.08) / 0.35));
+    target.armZ = [-0.4 - 0.9 * brace, 0.4 + 0.9 * brace];
     const t = s.t;
     const k = 1 - Math.exp(-dt * 12);
     const speed = s.speed ?? 0;

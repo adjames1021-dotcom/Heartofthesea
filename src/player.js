@@ -60,6 +60,7 @@ export class Player {
     this.fallStart = null;
     this.flopT = 0;
     this.animMode = 'idle';
+    this.stepOff = 0; // visual-only height offset that eases out after a step
     this.effort = 0;
     this.turning = 0;
     this.speed = 0;
@@ -120,6 +121,10 @@ export class Player {
     else this.#walk(dt, input, ctx);
 
     this.bear.root.position.copy(this.pos);
+    // Steps and snaps move the body at once but the model eases after it.
+    this.stepOff = (this.stepOff ?? 0) * Math.exp(-dt * 14);
+    if (Math.abs(this.stepOff) > 0.6) this.stepOff = 0;
+    this.bear.root.position.y += this.stepOff;
     // Swimming: the model lies forward from its feet, so lift it to keep
     // head and shoulders out of the water.
     // (Eased, so going in and out of the water doesn't pop.)
@@ -141,8 +146,19 @@ export class Player {
       this.bear.root.quaternion.setFromRotationMatrix(_m);
     } else {
       this.bear.root.rotation.set(0, this.heading, 0);
+      // On a deck that heels and pitches, lean with it: most of the way, as
+      // a bear standing braced would.
+      const onDeck = this.platform?.matrix && this.mode !== 'swim';
+      const deck = onDeck ? _a.setFromMatrixColumn(this.platform.matrix, 1).normalize() : _a.copy(UP);
+      this.deckUp ??= UP.clone();
+      this.deckUp.lerp(deck, 1 - Math.exp(-dt * 10)).normalize();
+      _b.copy(UP).lerp(this.deckUp, 0.75).normalize();
+      _q.setFromUnitVectors(UP, _b);
+      this.bear.root.quaternion.premultiply(_q);
+      this.tilt = Math.acos(Math.min(1, this.deckUp.y));
     }
     this.bear.update(dt, {
+      brace: this.tilt ?? 0,
       mode: this.animOverride ?? this.animMode,
       speed: this.speed,
       t: ctx.t,
@@ -226,9 +242,11 @@ export class Player {
     this.vel.y -= GRAV * dt * 0.5;
     this.grounded = !!ground && this.vel.y <= 0.5;
     if (!this.grounded && wasGrounded && this.vel.y <= 0) {
-      // Stick to the ground walking downhill or off small steps.
-      const hit = this.world.probeDown(this.pos.x, this.pos.z, this.pos.y + 0.05, 0.45);
+      // Stick to the ground walking downhill or off small steps (further on
+      // a deck, which can fall away under you as she pitches).
+      const hit = this.world.probeDown(this.pos.x, this.pos.z, this.pos.y + 0.05, this.platform ? 0.75 : 0.45);
       if (hit && hit.normal.y > 0.6) {
+        this.stepOff += this.pos.y - hit.y;
         this.pos.y = hit.y;
         this.grounded = true;
         this.#setPlatform(hit.collider);
@@ -278,6 +296,7 @@ export class Player {
       const sz = this.pos.z + wish.z * 0.45;
       const hit = this.world.probeDown(sx, sz, this.pos.y + 0.5, 0.48);
       if (hit && hit.y > this.pos.y + 0.04 && hit.normal.y > 0.7) {
+        this.stepOff += this.pos.y - (hit.y + 0.01); // ease up the step, don't pop
         this.pos.set(this.pos.x + wish.x * 0.08, hit.y + 0.01, this.pos.z + wish.z * 0.08);
         this.#setPlatform(hit.collider);
       }
@@ -331,7 +350,10 @@ export class Player {
     }
 
     this.speed = Math.hypot(this.vel.x, this.vel.z);
-    if (!this.grounded) this.animMode = 'air';
+    // Only look airborne once really off the ground: a moving deck can drop
+    // away from under you for a frame, and the arms shouldn't fly up for that.
+    this.airT = this.grounded ? 0 : (this.airT ?? 0) + dt;
+    if (!this.grounded && (this.airT > 0.15 || this.vel.y > 1)) this.animMode = 'air';
     else this.animMode = this.speed > 0.25 ? 'walk' : this.carrying ? 'carry' : 'idle';
     if (this.mode !== 'swim') this.mode = this.grounded ? 'ground' : 'air';
   }

@@ -11,7 +11,7 @@ export class FollowCamera {
     this.yaw = 0; // camera sits at target + (sin yaw, ·, cos yaw) * dist
     this.pitch = 0.32;
     this.dist = 5.5;
-    this.zoom = { foot: 5.5, helm: 11, cabin: 2.8 };
+    this.zoom = { foot: 5.5, helm: 11, cabin: 4.6 };
     this.context = 'foot';
     this.target = new THREE.Vector3();
     this.smoothTarget = new THREE.Vector3();
@@ -49,13 +49,18 @@ export class FollowCamera {
     this.smoothTarget.z += (target.z - this.smoothTarget.z) * k;
     this.smoothTarget.y += (target.y - this.smoothTarget.y) * ky;
 
-    const cp = Math.cos(this.pitch);
-    const dir = new THREE.Vector3(Math.sin(this.yaw) * cp, Math.sin(this.pitch), Math.cos(this.yaw) * cp);
+    // Below decks the camera looks down into the cabin from above, like a
+    // cutaway: the walls and deckhead between it and the bear are only drawn
+    // from the inside, so they drop out of the way.
+    const cabin = context === 'cabin';
+    const pitch = cabin ? 0.92 : this.pitch;
+    const cp = Math.cos(pitch);
+    const dir = new THREE.Vector3(Math.sin(this.yaw) * cp, Math.sin(pitch), Math.cos(this.yaw) * cp);
     // Pull in if a hill, a hull or a rock is in the way.
     let d = this.dist;
-    for (let s = 0.6; s <= this.dist; s += 0.4) {
+    for (let s = 0.6; !cabin && s <= this.dist; s += 0.4) {
       const p = this.smoothTarget.clone().addScaledVector(dir, s);
-      if (groundAt(p.x, p.z) > p.y - 0.4 || (world && world.blocked(p, 0.25))) {
+      if (groundAt(p.x, p.z) > p.y - 0.4 || (world && world.blocked(p, 0.25, true))) {
         d = Math.max(1.0, s - 0.5);
         break;
       }
@@ -65,7 +70,7 @@ export class FollowCamera {
     this.blockedDist = d;
     const pos = this.smoothTarget.clone().addScaledVector(dir, d);
     const floor = Math.max(groundAt(pos.x, pos.z) + 0.4, heightAt(pos.x, pos.z, t, waveScale) + 0.35);
-    if (pos.y < floor) pos.y = floor;
+    if (pos.y < floor && !cabin) pos.y = floor;
     this.camera.position.copy(pos);
     this.camera.lookAt(this.smoothTarget);
   }
