@@ -435,3 +435,6 @@ html, body {
 .talk.cook { left: 24px; transform: none; bottom: 16%; width: min(380px, calc(100vw - 48px)); }
 
 .panel .rows .visit-link { justify-self: start; font-size: 0.85rem; padding: 4px 8px; word-break: break-all; text-align: left; }
+
+/* Frame-rate readout (Settings → Frame rate). */
+.fps { position: fixed; top: 10px; right: 12px; z-index: 30; display: none; font-size: 0.8rem; padding: 2px 7px; color: var(--paper-ink); background: var(--paper); border-radius: 3px; pointer-events: none; }

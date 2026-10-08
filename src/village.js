@@ -7,6 +7,12 @@ import { paint, mergeParts, segment, rock } from './props.js';
 import { deepenShadows } from './atmosphere.js';
 import { Bear } from './bear.js';
 import { rodModel } from './fishing.js';
+import { handVillage } from './handvillage.js';
+import { NavGrid } from './navgrid.js';
+import { WindowLights, Smoke } from './kit.js';
+
+// Villages rebuilt by hand so far (src/handvillage.js); the rest are still plain.
+const HAND = new Set(['cove']);
 
 // The villages: huts, docks, drying racks, nets and fires, and the people who
 // live there going about their day by the shared clock (shared/villages.js
@@ -152,6 +158,27 @@ class Builder {
     this.world = world;
     this.parts = [];
     this.yaw = -isl.rot; // three.js yaw of the island frame
+    this.walkBlock = []; // places villagers shouldn't walk that aren't solid (under a stilt hut): world rects
+  }
+
+  /** Keep walkers out of a rectangle (island-local centre, size, facing): for routes only. */
+  noWalk(lx, lz, w, d, face = 0) {
+    const p = this.w(lx, lz);
+    this.walkBlock.push({ x: p.x, z: p.z, hx: w / 2 + 0.3, hz: d / 2 + 0.3, yaw: this.yaw - face });
+  }
+
+  /** Is a world point inside one of the no-walk rectangles? */
+  inNoWalk(x, z) {
+    for (const r of this.walkBlock) {
+      const dx = x - r.x;
+      const dz = z - r.z;
+      const c = Math.cos(r.yaw);
+      const s = Math.sin(r.yaw);
+      const u = dx * c - dz * s;
+      const v = dx * s + dz * c;
+      if (Math.abs(u) < r.hx && Math.abs(v) < r.hz) return true;
+    }
+    return false;
   }
 
   /** Local (lx, lz) → world { x, z }. */
@@ -192,6 +219,7 @@ class Builder {
     piece(box(D + 0.3, 0.16, W + 0.3, WOOD_DARK, 0, 0, 0), 0, y0 - 0.08, 0);
     const [fx, fz] = at(0, 0);
     this.solid(fx, y0 - 0.1, fz, D + 0.3, 0.2, W + 0.3, f);
+    this.noWalk(fx, fz, D + 0.3, W + 0.3, f);
     for (const [u, v] of [[-1.3, -1.6], [1.3, -1.6], [-1.3, 1.6], [1.3, 1.6], [0, -1.6], [0, 1.6]]) {
       const [x, z] = at(u, v);
       const p = this.w(x, z);
@@ -291,6 +319,7 @@ class Builder {
     const c = Math.cos(face);
     const s = Math.sin(face);
     const parts = [];
+    this.solid(lx, groundAt(this.w(lx, lz).x, this.w(lx, lz).z) + 0.95, lz, 0.25, 1.9, 2.8, face);
     for (const v of [-1.3, 1.3]) {
       for (const u of [-0.5, 0.5]) parts.push(paint(segment(V(u, 0, v), V(0, 1.9, v), 0.04, 0.035, 5), WOOD_DARK));
     }
@@ -793,13 +822,28 @@ class Villager {
     const fd = from ? this.#spotDef(from) : null;
     const td = this.#spotDef(to);
     const sameSide = fd && (fd.ground || td.ground);
+    // Two places down the same way (both on the dock, say): no need to go
+    // back to the middle of the village in between.
+    const fv = fd?.via ?? [];
+    const tv = td.via ?? [];
+    let common = 0;
+    while (common < fv.length && common < tv.length && fv[common].join() === tv[common].join()) common++;
     if (fd && !sameSide) {
-      for (const p of [...(fd.via ?? [])].reverse()) out.push(this.#pt(p));
-      out.push(this.#pt(this.village.hub));
+      for (const p of fv.slice(common).reverse()) out.push(this.#pt(p));
+      if (!common) out.push(this.#pt(this.village.hub));
     }
-    if (!sameSide) for (const p of td.via ?? []) out.push(this.#pt(p));
+    if (!sameSide) for (const p of tv.slice(common)) out.push(this.#pt(p));
     out.push(this.#pt([...td.at, ...(td.y !== undefined ? [td.y] : [])]));
-    return out;
+    if (!this.nav) return out;
+    // On the ground, go round whatever's in the way rather than through it.
+    const routed = [];
+    let prev = { x: this.pos.x, z: this.pos.z, y: this.onGround === false ? this.pos.y : null };
+    for (const p of out) {
+      if (prev.y === null && p.y === null) for (const m of this.nav.find(prev, p)) routed.push({ x: m.x, z: m.z, y: null });
+      routed.push(p);
+      prev = p;
+    }
+    return routed;
   }
 
   /** Put them straight where their routine says (on loading). */
@@ -832,7 +876,7 @@ class Villager {
     }
     let mode = 'idle';
     let speed = 0;
-    if (this.path.length) {
+    if (this.path.length && !this.listening) {
       // Walk the waypoints. Between two points on the ground, follow it;
       // otherwise (a ramp, the dock) go evenly from one height to the next.
       const p = this.path[0];
@@ -862,6 +906,8 @@ class Villager {
       }
       mode = 'walk';
       speed = 1.25;
+    } else if (this.path.length) {
+      mode = 'idle'; // stopped to talk on the way somewhere
     } else {
       mode = this.act === 'away' ? 'idle' : this.act;
     }
@@ -869,7 +915,7 @@ class Villager {
     // Someone with something to say turns to you and waves now and then;
     // anyone awake glances at you when you're close.
     let look = null;
-    const awakeNow = awake(this.def, h) && !this.path.length;
+    const awakeNow = (awake(this.def, h) && !this.path.length) || this.listening;
     if (player && awakeNow) {
       const dx = player.pos.x - this.pos.x;
       const dz = player.pos.z - this.pos.z;
@@ -919,17 +965,28 @@ export class Villages {
     scene.add(this.group);
     this.people = [];
     this.fires = [];
+    this.hand = []; // hand-built villages: { detail, far, life, hub }
+    this.windows = new WindowLights(scene, 5);
+    this.chimneys = [];
     for (const [id, v] of Object.entries(VILLAGES)) this.#build(id, v, world);
+    this.smoke = new Smoke(scene, this.chimneys.map((c) => c.pos));
   }
 
   #build(id, v, world) {
     const isl = ISLAND_BY_ID[v.island];
     const b = new Builder(isl, world);
     const rand = mulberry32(id.length * 991);
-    for (const h of v.huts) b.hut(h);
-    if (v.dock) b.dock(v.dock);
-    for (const [x, z, f] of v.racks ?? []) b.rack(x, z, f);
-    for (const [x, z, f] of v.boats ?? []) b.boat(x, z, f, rand() < 0.5 ? '#3c5a78' : '#8a3a2e');
+    if (HAND.has(id)) {
+      const hv = handVillage(b, id, v, netMesh);
+      this.group.add(hv.detail, hv.far);
+      this.windows.add(hv.windows);
+      for (const c of hv.chimneys) this.chimneys.push({ pos: c, village: id });
+      this.hand.push({ id, ...hv });
+    }
+    for (const h of HAND.has(id) ? [] : v.huts) b.hut(h);
+    if (v.dock && !HAND.has(id)) b.dock(v.dock);
+    for (const [x, z, f] of HAND.has(id) ? [] : v.racks ?? []) b.rack(x, z, f);
+    for (const [x, z, f] of HAND.has(id) ? [] : v.boats ?? []) b.boat(x, z, f, rand() < 0.5 ? '#3c5a78' : '#8a3a2e');
     if (v.slip) b.slipway(v.slip);
     if (v.shed) b.shed(v.shed);
     for (const [x, z, f] of v.timber ?? []) b.timber(x, z, f);
@@ -940,7 +997,7 @@ export class Villages {
     if (v.ropewalk) b.ropewalk(v.ropewalk);
     if (v.sailboat) b.sailboat(...v.sailboat);
     if (v.garden) b.garden(v.garden);
-    for (const [x, z] of v.pots ?? []) {
+    for (const [x, z] of HAND.has(id) ? [] : v.pots ?? []) {
       const pot = new THREE.CylinderGeometry(0.3, 0.32, 0.5, 8, 1, false, 0, Math.PI);
       pot.rotateZ(Math.PI / 2);
       const p = b.w(x, z);
@@ -965,11 +1022,12 @@ export class Villages {
       }
       const fire = new Fire(fp, fy);
       fire.village = id;
+      world.addStatic({ type: 'cyl', x: fp.x, z: fp.z, r: 0.75, y0: fy - 0.5, y1: fy + 0.35, noClimb: true });
       this.fires.push(fire);
       this.group.add(fire.group);
     }
     // Nets on poles.
-    for (const [x, z, f] of v.nets ?? []) {
+    for (const [x, z, f] of HAND.has(id) ? [] : v.nets ?? []) {
       for (const s of [-1, 1]) {
         const px = x + Math.sin(f) * s * 1.6;
         const pz = z - Math.cos(f) * s * 1.6;
@@ -1002,12 +1060,26 @@ export class Villages {
         for (const v of [-0.6, 0.6]) b.put(box(0.36, 0.36, 0.07, WOOD_DARK, 0, 0, 0), bx, y + 0.17, bz - Math.cos(f) * v, f);
       }
     }
+    const mine = [];
     for (const [pid, def] of Object.entries(VILLAGERS)) {
       if (def.village !== id) continue;
       const vil = new Villager(pid, def, v, b);
       this.group.add(vil.bear.root);
       this.people.push(vil);
+      mine.push(vil);
     }
+    // Where they can walk: everything built is in the world now.
+    const pts = [v.hub, ...Object.values(v.spots ?? {}).flatMap((sp) => [sp.at, ...(sp.via ?? [])])];
+    for (const vil of mine) for (const sp of Object.values(vil.def.spots ?? {})) pts.push(sp.at, ...(sp.via ?? []));
+    const wpts = pts.map((p) => b.w(p[0], p[1]));
+    const bounds = {
+      x0: Math.min(...wpts.map((p) => p.x)) - 8,
+      x1: Math.max(...wpts.map((p) => p.x)) + 8,
+      z0: Math.min(...wpts.map((p) => p.z)) - 8,
+      z1: Math.max(...wpts.map((p) => p.z)) + 8,
+    };
+    const grid = new NavGrid(world, bounds, (x, z) => b.inNoWalk(x, z));
+    for (const vil of mine) vil.nav = grid;
   }
 
   /** Put everyone where they should be at this hour (on loading). */
@@ -1015,13 +1087,37 @@ export class Villages {
     for (const p of this.people) p.place(h);
   }
 
-  update(dt, { t, hours, player, night = 0 }) {
+  update(dt, { t, hours, player, night = 0, camera = null, wind = null }) {
     for (const p of this.people) {
+      // Nobody's drawn from a long way off.
+      const far = camera && p.pos.distanceToSquared(camera.position) > 170 * 170;
+      p.bear.root.visible = !far && (p.act !== 'away' || p.path.length > 0);
+      if (far) {
+        // Out of sight: just be where the day says (no walking about unseen).
+        if (routineAt(p.def, hours).spot !== p.spot || p.path.length) p.place(hours);
+        p.awakeNow = p.act !== 'away' && p.act !== 'sleep';
+        continue;
+      }
       p.update(dt, t, hours, player);
-      p.awakeNow = awake(p.def, hours) && !p.path.length;
+      // Awake unless actually lying in bed (or away up the tower): someone
+      // walking somewhere, even to bed, will stop and talk.
+      p.awakeNow = p.act !== 'away' && !(p.act === 'sleep' && !p.path.length);
     }
     const lit = hours >= 17 || hours < 7.5;
     for (const f of this.fires) f.update(t, lit, night);
+    if (!camera) return;
+    // Hand-built villages: the full thing near, a plain one far off.
+    for (const hv of this.hand) {
+      const near = hv.hub.distanceToSquared(camera.position) < 230 * 230;
+      hv.detail.visible = near;
+      hv.far.visible = !near;
+      if (near) for (const l of hv.life) l.update(t, wind);
+    }
+    // Lamps in the windows from dusk till an hour after bed, and before dawn.
+    this.windows.update(t, camera, night, (w) => (hours >= 17 && hours < w.bed + 1) || hours < 6.5 || (w.bed < 12 && hours < w.bed + 1));
+    // Chimneys smoke morning and evening, a thread in the day.
+    const cook = hours < 9 || hours > 17 ? 1 : 0.35;
+    this.smoke.update(dt, wind, cook, 1 - night, innerHeight);
   }
 
   /** Someone close enough to talk to (awake or not). */

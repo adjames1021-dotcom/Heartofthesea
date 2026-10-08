@@ -246,6 +246,30 @@ const ui = {
   start: document.getElementById('start'),
   version: document.getElementById('version'),
 };
+// A frame-rate readout, for measuring (Settings, or ?fps). Off unless asked for.
+const fpsEl = document.createElement('div');
+fpsEl.className = 'fps';
+document.body.appendChild(fpsEl);
+const fpsMeter = { on: params.has('fps'), n: 0, t: 0 };
+try {
+  fpsMeter.on ||= localStorage.getItem('hots.fps') === 'on';
+} catch {
+  // fine
+}
+const fpsBtn = document.getElementById('fps-toggle');
+function showFps(on) {
+  fpsMeter.on = on;
+  fpsEl.style.display = on ? 'block' : 'none';
+  fpsBtn.textContent = `Frame rate: ${on ? 'shown' : 'hidden'}`;
+  fpsBtn.setAttribute('aria-pressed', String(on));
+  try {
+    localStorage.setItem('hots.fps', on ? 'on' : 'off');
+  } catch {
+    // fine
+  }
+}
+showFps(fpsMeter.on);
+fpsBtn.addEventListener('click', () => showFps(!fpsMeter.on));
 ui.sound.addEventListener('click', async () => {
   const on = await audio.toggle();
   ui.sound.textContent = on ? 'Sound on' : 'Sound off';
@@ -545,7 +569,7 @@ function frame(now) {
   hoursNow = dev.hours ?? hoursAt(t);
   // Anyone with something to say to you turns and waves.
   for (const p of villages.people) p.wantsToTalk = !!WANTS[p.id]?.(progress.state);
-  villages.update(dt, { t, hours: hoursNow, player, night: atmosphere.uniforms.uNight.value });
+  villages.update(dt, { t, hours: hoursNow, player, night: atmosphere.uniforms.uNight.value, camera, wind: env.wind });
   talk.update(input, player);
   gathering.update(dt);
   decorating.update(dt, { input, boat, player, inside: interior.inside });
@@ -705,6 +729,17 @@ function frame(now) {
 
   atmosphere.focusShadows(controls ? controls.target : player.pos);
   composer.render(dt);
+  if (fpsMeter.on) {
+    // Real time, not the clamped step, so slow machines read true.
+    fpsMeter.n++;
+    fpsMeter.since ??= now;
+    if (now - fpsMeter.since >= 500) {
+      const fps = (fpsMeter.n * 1000) / (now - fpsMeter.since);
+      fpsEl.textContent = `${fps < 10 ? fps.toFixed(1) : Math.round(fps)} fps`;
+      fpsMeter.n = 0;
+      fpsMeter.since = now;
+    }
+  }
   input.endFrame();
   requestAnimationFrame(frame);
 }
