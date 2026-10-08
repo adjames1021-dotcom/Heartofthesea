@@ -43,8 +43,8 @@ function chat(who, variants) {
 const any = () => true;
 
 const has = (s, kind) => (s?.items ?? []).some((i) => i.kind === kind);
-/** The first thing of value you're carrying (what ['pay'] hands over). */
-export const firstValuable = (s) => (s?.items ?? []).find((i) => ITEMS[i.kind]?.kind === 'valuable') ?? null;
+/** The first thing of value you're carrying, not counting what's on show in the cabin (what ['pay'] hands over). */
+export const firstValuable = (s) => (s?.items ?? []).find((i) => ITEMS[i.kind]?.kind === 'valuable' && !(s.decor ?? []).some((d) => d.item === i.id)) ?? null;
 const upgraded = (s, what) => (s?.upgrades ?? []).includes(what);
 const done = (s, id) => !!q(s, id)?.done;
 const stage = (s, id) => q(s, id)?.stage ?? -1;

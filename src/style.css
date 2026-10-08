@@ -433,3 +433,5 @@ html, body {
 
 /* The cooking card sits to one side so you can watch the pan. */
 .talk.cook { left: 24px; transform: none; bottom: 16%; width: min(380px, calc(100vw - 48px)); }
+
+.panel .rows .visit-link { justify-self: start; font-size: 0.85rem; padding: 4px 8px; word-break: break-all; text-align: left; }

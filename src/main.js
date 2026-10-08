@@ -38,7 +38,8 @@ import { Cooking } from './cooking.js';
 import { describe } from '../shared/food.js';
 import { QuestWorld } from './questworld.js';
 import { WANTS } from '../shared/talk.js';
-import { Finds, keepsake } from './finds.js';
+import { Finds } from './finds.js';
+import { Decorating } from './decorate.js';
 import { WreckCourse } from './course.js';
 import { HatchPuzzle } from './hatch.js';
 import { StackClimb } from './stack.js';
@@ -152,11 +153,22 @@ const treasure = new Treasure({ scene, world, hud, progress });
 const screens = new Screens();
 const interior = new Interior({ scene, world });
 const cooking = new Cooking({ progress, hud, audio, interior, villages });
-interior.showFinds(finds.found, keepsake);
-boat.setUpgrades(progress.state?.upgrades);
+const decorating = new Decorating({ interior, progress, hud, camera, canvas: renderer.domElement });
+// Visiting someone's boat (?visit=<their id>): their cabin and what the yard's done to her.
+const visitId = /^[0-9a-f]{16}$/.test(params.get('visit') ?? '') ? params.get('visit') : null;
+let visit = null;
+if (visitId) {
+  try {
+    const r = await fetch(`/api/cabin/${visitId}`);
+    if (r.ok) visit = await r.json();
+  } catch {
+    visit = null;
+  }
+}
+if (visit) decorating.visit(visit.decor ?? []);
+boat.setUpgrades((visit ?? progress.state)?.upgrades);
 progress.onChange((st) => {
-  interior.showFinds(finds.found, keepsake);
-  boat.setUpgrades(st?.upgrades);
+  if (!visit) boat.setUpgrades(st?.upgrades);
 });
 document.getElementById('controls')?.addEventListener('click', () => screens.toggleControls(true));
 
@@ -250,6 +262,16 @@ console.info(`Heart of the Sea ${VERSION} (${BUILD.hash} ${BUILD.date})`);
 document.getElementById('settings-version').textContent = `Version ${VERSION} (${BUILD.hash})`;
 // Your save code, to carry on somewhere else; and a box to use another one.
 document.getElementById('save-code').textContent = progress.online ? progress.code : 'not saving (offline)';
+// A link for someone else to come aboard (they see your cabin as you've left it).
+document.getElementById('visit-link').addEventListener('click', async (e) => {
+  const link = `${location.origin}/?visit=${progress.id}`;
+  try {
+    await navigator.clipboard.writeText(link);
+    e.target.textContent = 'Copied';
+  } catch {
+    e.target.textContent = link;
+  }
+});
 document.getElementById('load-code').addEventListener('submit', async (e) => {
   e.preventDefault();
   const input = document.getElementById('code-input');
@@ -264,6 +286,7 @@ const STATION_KEYS = {
   halyards: [['W S', 'hoist / lower main'], ['A D', 'furl / unfurl jib'], ['R', 'reef'], ['E', 'leave']],
   windlass: [['W', 'raise anchor'], ['S', 'let out chain'], ['E', 'leave']],
 };
+const DECOR_KEYS = [['Mouse', 'move it over a surface or a wall'], ['Q', 'turn it (or the wheel)'], ['E', 'put it down (or click)'], ['Esc', 'put it back']];
 const tmpV = new THREE.Vector3();
 let wasNight = null;
 let villagesPlaced = false;
@@ -316,7 +339,19 @@ function findInteraction() {
     const ladder = interior.arrival;
     const atStove = interior.nearStove(player.pos) && Math.hypot(stove.x - player.pos.x, stove.z - player.pos.z) < Math.hypot(ladder.x - player.pos.x, ladder.z - player.pos.z);
     if (atStove) return cooking.open ? null : { key: 'E', label: 'Cook', act: () => cooking.begin('galley') };
+    // Something you're carrying about the cabin to put somewhere.
+    if (decorating.holding) {
+      if (decorating.nearLocker(player.pos)) return { key: 'E', label: 'Put it in the locker', act: () => decorating.stow() };
+      return { key: 'E', label: 'Put it down', act: () => decorating.putDown() };
+    }
     if (interior.nearLadder(player.pos)) return { key: 'E', label: 'Go up on deck', act: goUp };
+    // Things on show about the cabin: pick one up to move it (unless the
+    // chart table's nearer, where the maps are).
+    if (decorating.nearLocker(player.pos)) return decorating.lockerOpen ? null : { key: 'E', label: 'Open the locker', act: () => decorating.openLocker() };
+    const thing = decorating.near(player.pos);
+    const chart = interior.chartTable.clone().add(interior.group.position);
+    const chartD = Math.hypot(chart.x - player.pos.x, chart.z - player.pos.z);
+    if (thing && (!interior.nearChartTable(player.pos) || thing.d < chartD)) return { key: 'E', label: thing.label, act: () => decorating.pickUp(thing.id) };
     if (interior.nearChartTable(player.pos)) {
       // A spare treasure map is always here if you've run out.
       if (!treasure.state.maps.length) {
@@ -395,10 +430,7 @@ function findInteraction() {
     return {
       key: 'E',
       label: find.place.label,
-      act: () => {
-        finds.take(find);
-        interior.showFinds(finds.found, keepsake);
-      },
+      act: () => finds.take(find),
     };
   }
   const note = player.mode === 'swim' ? null : puzzles.nearest(player.pos);
@@ -512,6 +544,7 @@ function frame(now) {
   villages.update(dt, { t, hours: hoursNow, player, night: atmosphere.uniforms.uNight.value });
   talk.update(input, player);
   gathering.update(dt);
+  decorating.update(dt, { input, boat, player, inside: interior.inside });
   cooking.update(dt, { input, player, inside: interior.inside });
   // What you last ate, while it lasts: a stronger swimmer, steadier on deck, or better eyes at night.
   const fed = progress.state?.fed;
@@ -556,6 +589,11 @@ function frame(now) {
     // Start looking forward along the deck.
     follow.yaw = Math.atan2(-Math.cos(boat.state.heading), -Math.sin(boat.state.heading)) + 0.5;
     started = true;
+    // Come to visit: straight down to look round their cabin.
+    if (visit) {
+      goBelow();
+      hud.say("Someone else's boat. Have a look round.", 4);
+    }
     // Your first map; and chests dug up last time but not got home are
     // waiting in the cockpit (now the boat is where it should be).
     treasure.start(() => boat.toWorld(new THREE.Vector3(-2.6 - Math.random() * 1.2, LAYOUT.cockpit.sole + 0.1, (Math.random() - 0.5) * 0.8)));
@@ -607,7 +645,7 @@ function frame(now) {
     boat.state.lights = !boat.state.lights;
     hud.say(boat.state.lights ? 'Lights on.' : 'Lights off.', 2);
   }
-  if (input.pressed('KeyQ')) {
+  if (input.pressed('KeyQ') && !decorating.holding) {
     const ready = !interior.inside && player.mode === 'ground' && player.grounded && !player.carrying;
     fishing.press({ t, waveScale: swell, night: atmosphere.uniforms.uNight.value > 0.5, canFish: ready, onBoat, shoalNear: (p) => wildlife.shoalNear(p.x, p.z) });
   }
@@ -630,7 +668,7 @@ function frame(now) {
   }
   audio.setEngine(boat.state.engine, boat.state.throttle);
 
-  hud.setKeys(player.mode === 'station' ? STATION_KEYS[player.station === 'helm' && !BOAT.arcade ? 'helmRealistic' : player.station] : null);
+  hud.setKeys(decorating.holding ? DECOR_KEYS : player.mode === 'station' ? STATION_KEYS[player.station === 'helm' && !BOAT.arcade ? 'helmRealistic' : player.station] : null);
   hud.setInstruments(player.station === 'helm' ? boat.state : null);
   interior.update(atmosphere.uniforms.uNight.value, camera);
   const nearBoat = interior.inside || player.platform === boat.body || player.mode === 'station' || Math.hypot(player.pos.x - boat.state.x, player.pos.z - boat.state.z) < 30;
@@ -668,7 +706,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {

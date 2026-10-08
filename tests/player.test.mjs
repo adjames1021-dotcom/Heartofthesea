@@ -279,3 +279,30 @@ test('raw fish goes off after a couple of days; you can throw it out but not eat
   assert.equal(out.reply.result, 'off');
   assert.equal(out.state.items.length, 1);
 });
+
+// --- The cabin ---
+import { cabinLayout } from '../shared/decor.js';
+
+test('finds go on show in the cabin; you can move them, hang them up or put them away', async () => {
+  let s = (await apply(freshState(0), { type: 'find', id: 'bell' }, ctx())).state;
+  const bell = s.items[0].id;
+  assert.deepEqual(cabinLayout(s).map((d) => d.kind), ['bell'], 'on show where it first goes');
+  let r = await apply(s, { type: 'place', item: bell, at: [0.2, 0.73, 0.1], yaw: 1, wall: false }, ctx());
+  assert.ok(r.reply.ok);
+  assert.deepEqual(cabinLayout(r.state)[0].at, [0.2, 0.73, 0.1]);
+  assert.equal((await apply(r.state, { type: 'place', item: bell, at: [40, 0, 0], yaw: 0 }, ctx())).reply.ok, false, 'not outside the cabin');
+  r = await apply(r.state, { type: 'stow', item: bell }, ctx());
+  assert.equal(cabinLayout(r.state).length, 0, 'put away');
+  // Copper's not for show.
+  const c = withItems(freshState(0), 'copper');
+  assert.equal((await apply(c, { type: 'place', item: 't0', at: [0, 0.73, 0], yaw: 0 }, ctx())).reply.ok, false);
+});
+
+test("Ned won't take the candlesticks off your shelf", async () => {
+  let s = withItems(freshState(0), 'candlesticks', 'watch', 'copper');
+  s = (await apply(s, { type: 'place', item: 't0', at: [0, 1.32, 1.4], yaw: 0 }, ctx())).state;
+  s = { ...s, met: { ned: true }, quests: { hull: { stage: 0, started: 0, done: false } } };
+  ({ s } = await talk(s, 'ned', [0, 0, 0, 0]));
+  assert.ok(s.upgrades.includes('hull'));
+  assert.deepEqual(s.items.map((i) => i.kind), ['candlesticks'], 'paid with the watch');
+});

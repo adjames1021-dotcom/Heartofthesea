@@ -17,6 +17,7 @@ const ROWS = {
     ['E', 'at the steps in the cockpit: go below'],
     ['E', 'talk to someone (then 1 2 3 to answer)'],
     ['E', 'at the stove below, or a lit fire: cook (then 1 2 3)'],
+    ['E', 'below decks: pick a thing up, then the mouse moves it, Q turns it, E or a click puts it down'],
     ['J', 'journal'],
     ['Tab', 'chart'],
     ['H', 'this screen'],

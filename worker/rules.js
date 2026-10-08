@@ -8,6 +8,7 @@ import { issueMap, dig, near, claim } from './treasure.js';
 import { ITEMS, FIND_IDS, VALUABLE_IDS } from '../shared/items.js';
 import { TALK, repliesAt, firstValuable } from '../shared/talk.js';
 import { UPGRADES } from '../shared/upgrades.js';
+import { decorable, inCabin, MAX_DECOR } from '../shared/decor.js';
 import { VILLAGERS } from '../shared/villages.js';
 import { QUESTS } from '../shared/quests.js';
 import { hoursAt, DAY_LENGTH } from '../shared/environment.js';
@@ -36,7 +37,8 @@ export function freshState(now) {
     picked: {}, // when each fruit tree was last picked (shared/gather.js)
     cooking: {}, // what's on the heat: { 'galley/pan': { since, items } }
     fed: null, // what you last ate is doing for you: { effect, until }
-    decor: [], // things placed about the cabin
+    decor: [], // things put about the cabin: { item, kind, at: [x, y, z], yaw, wall }
+    stowed: [], // finds put away in the locker rather than out on show
     nextId: 1,
   };
 }
@@ -217,6 +219,30 @@ const ACTIONS = {
       learned = true;
     }
     return { ok: true, result, item: it.id, kind: it.kind, recipe, learned };
+  },
+
+  /** Put something down somewhere in the cabin (or hang it on a wall). */
+  async place(s, a) {
+    const it = s.items.find((i) => i.id === a.item);
+    if (!it || !decorable(it.kind)) return fail('what');
+    if (!Array.isArray(a.at) || a.at.length !== 3 || !finite(...a.at, a.yaw) || !inCabin(a.at)) return fail('where');
+    s.decor ??= [];
+    s.decor = s.decor.filter((d) => d.item !== it.id);
+    if (s.decor.length >= MAX_DECOR) return fail('full');
+    const r = (n) => Math.round(n * 1000) / 1000;
+    s.decor.push({ item: it.id, kind: it.kind, at: a.at.map(r), yaw: r(a.yaw), wall: !!a.wall });
+    s.stowed = (s.stowed ?? []).filter((id) => id !== it.id);
+    return { ok: true };
+  },
+
+  /** Put something away in the locker. */
+  async stow(s, a) {
+    const it = s.items.find((i) => i.id === a.item);
+    if (!it || !decorable(it.kind)) return fail('what');
+    s.decor = (s.decor ?? []).filter((d) => d.item !== it.id);
+    s.stowed ??= [];
+    if (!s.stowed.includes(it.id)) s.stowed.push(it.id);
+    return { ok: true };
   },
 
   /** Eat something. Good food does you a little good for a while. */

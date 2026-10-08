@@ -226,6 +226,14 @@ export class Interior {
       parts.push(paint(pillow, '#fbf8f0'));
     }
     box(fx0 + 0.3, 0.5, 0, 0.36, 0.06, half(fx0) * 1.5, '#b8463b', false); // folded blanket
+    // The locker under the berth: two drawers, with brass pulls.
+    for (const z of [-0.36, 0.36]) {
+      box(fx0 - 0.006, 0.17, z, 0.012, 0.22, 0.5, TEAK_LIGHT, false);
+      const pull = new THREE.TorusGeometry(0.025, 0.006, 4, 10);
+      pull.rotateY(Math.PI / 2);
+      pull.translate(fx0 - 0.02, 0.2, z);
+      parts.push(paint(pull, BRASS));
+    }
     // A little shelf each side, and a hanging oilskin by the door.
     for (const s of [-1, 1]) box(2.5, 1.12, s * (half(2.5) * 0.92 - 0.1), 1.0, 0.03, 0.18, TEAK_DARK, false);
     const coat = new THREE.CylinderGeometry(0.12, 0.2, 0.75, 8);
@@ -233,6 +241,7 @@ export class Interior {
     parts.push(paint(coat, '#d9a92e'));
 
     const mesh = new THREE.Mesh(mergeParts(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    this.mesh = mesh; // the surfaces things can be put on (src/decorate.js)
     mesh.receiveShadow = true;
     mesh.castShadow = true;
     this.group.add(mesh);
@@ -378,36 +387,6 @@ export class Interior {
   nearChartTable(p) {
     const c = this.chartTable.clone().add(ORIGIN);
     return Math.hypot(p.x - c.x, p.z - c.z) < 0.85;
-  }
-
-  /**
-   * What you've found on the islands, kept aboard: small things on the saloon
-   * table, the logbook and spyglass on the chart table, the bell by the
-   * steps, the name board over the doorway. make(id) builds each one.
-   */
-  showFinds(found, make) {
-    const cz = half(-2.4) * 0.8 - 0.36;
-    const SLOTS = {
-      bottle: [-0.55, 0.73, 0.15, 0.3], float: [-0.3, 0.73, -0.18, 0], lead: [-0.05, 0.73, 0.2, 0.8],
-      cowrie: [0.15, 0.73, -0.12, 0.4], seaglass: [0.3, 0.73, 0.12, 0], scallop: [0.42, 0.73, -0.15, 2.4], pipe: [0.5, 0.73, 0.12, 1],
-      log: [-2.75, 0.8, cz + 0.1, 0.2], spyglass: [-2.2, 0.8, cz + 0.12, -0.3],
-      bell: [AFT + 0.06, 1.62, 0.62, Math.PI / 2], nameboard: [1.39, 1.79, 0, -Math.PI / 2],
-    };
-    this.kept ??= new Map();
-    for (const id of found) {
-      if (this.kept.has(id) || !SLOTS[id]) continue;
-      const o = make(id);
-      if (!o) continue;
-      const [x, y, z, yaw] = SLOTS[id];
-      o.position.set(x, y, z);
-      if (id === 'nameboard') {
-        o.rotation.order = 'YXZ';
-        o.scale.setScalar(0.5);
-      }
-      o.rotation.y = yaw;
-      this.group.add(o);
-      this.kept.set(id, o);
-    }
   }
 
   /** Daylight in the portholes follows the sky. night: 0 day … 1 night. camera: hide the beams when looking in from above. */

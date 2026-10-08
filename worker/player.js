@@ -4,6 +4,7 @@
 
 import { DurableObject } from 'cloudflare:workers';
 import { apply, freshState, publicState } from './rules.js';
+import { cabinLayout } from '../shared/decor.js';
 
 export class Player extends DurableObject {
   async #load() {
@@ -30,6 +31,6 @@ export class Player extends DurableObject {
   /** What a visitor sees when they come aboard: the cabin, not the rest. */
   async cabin() {
     const s = await this.#load();
-    return { decor: s.decor ?? [], upgrades: s.upgrades ?? [] };
+    return { decor: cabinLayout(s), upgrades: s.upgrades ?? [] };
   }
 }
