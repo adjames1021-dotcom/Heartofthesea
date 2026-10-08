@@ -8,6 +8,8 @@ import { issueMap, dig, near, claim } from './treasure.js';
 import { ITEMS, FIND_IDS } from '../shared/items.js';
 import { TALK, repliesAt } from '../shared/talk.js';
 import { VILLAGERS } from '../shared/villages.js';
+import { QUESTS } from '../shared/quests.js';
+import { hoursAt } from '../shared/environment.js';
 
 /** A brand-new player. */
 export function freshState(now) {
@@ -25,6 +27,8 @@ export function freshState(now) {
     journal: [], // notes in your own words: { t, quest, text }
     quests: {}, // { [id]: { stage, started, done } }
     met: {}, // who you've talked to
+    recipes: [], // dishes you know how to make
+    talking: null, // where you are in a conversation: { who, convo, line }
     nextId: 1,
   };
 }
@@ -159,24 +163,52 @@ function effects(s, list, now) {
     else if (what === 'stage' && s.quests[a]) s.quests[a].stage = b;
     else if (what === 'done' && s.quests[a]) s.quests[a].done = true;
     else if (what === 'give') give(s, a, now);
-    else if (what === 'take') {
+    else if (what === 'learn') {
+      s.recipes ??= [];
+      if (!s.recipes.includes(a)) s.recipes.push(a);
+    } else if (what === 'take') {
       const i = s.items.findIndex((it) => it.kind === a);
       if (i >= 0) s.items.splice(i, 1);
     }
   }
 }
 
+/** Something out in the world for a quest (shared/quests.js): only counts at the right stage. */
+ACTIONS.quest = async (s, a, { now }) => {
+  const qd = Object.hasOwn(QUESTS, a.id) ? QUESTS[a.id] : null;
+  const step = qd && Object.hasOwn(qd.steps, a.step) ? qd.steps[a.step] : null;
+  const st = s.quests[a.id];
+  if (!step || !st || st.done || st.stage !== step.stage) return fail('not now');
+  if (!finite(a.x, a.z) || Math.hypot(a.x - step.at[0], a.z - step.at[1]) > step.reach + 3) return fail('where');
+  effects(s, step.do, now);
+  return { ok: true, say: step.say };
+};
+
+/**
+ * Pick a reply in a conversation. A conversation can only be opened when its
+ * `when` says so; after that you can only carry on along it, one reply at a
+ * time (it's fine for the reply you pick to change what `when` would say).
+ */
 ACTIONS.talk = async (s, a, { now }) => {
   if (!Object.hasOwn(VILLAGERS, a.who) || !Object.hasOwn(TALK, a.who)) return fail('who');
   const convo = TALK[a.who].find((c) => c.id === a.convo);
-  if (!convo || !convo.when(s)) return fail('not now');
-  const line = Object.hasOwn(convo.lines, a.line) ? convo.lines[a.line] : null;
+  const at = String(a.line);
+  if (!convo) return fail('what');
+  if (at === '0') {
+    if (!convo.when(s, hoursAt(now))) return fail('not now');
+  } else {
+    const t = s.talking;
+    if (!t || t.who !== a.who || t.convo !== a.convo || t.line !== at) return fail('not now');
+  }
+  const line = Object.hasOwn(convo.lines, at) ? convo.lines[at] : null;
   if (!line) return fail('what');
   const reply = repliesAt(line, s)[a.pick];
   if (!reply) return fail('no such reply');
   effects(s, reply.do, now);
   s.journal = s.journal.slice(-200);
-  return { ok: true, to: reply.to ?? null };
+  const to = reply.to ?? null;
+  s.talking = to !== null && convo.lines[to] ? { who: a.who, convo: a.convo, line: String(to) } : null;
+  return { ok: true, to };
 };
 
 /**
@@ -194,6 +226,6 @@ export async function apply(state, action, ctx) {
 
 /** What the browser gets to see of the state. */
 export function publicState(s) {
-  const { nextId, catches, ...rest } = s;
+  const { nextId, catches, talking, ...rest } = s;
   return { ...rest, catches: { counts: catches.counts, biggest: catches.biggest } };
 }

@@ -259,11 +259,11 @@ function rockAt(b, lx, lz, s, y) {
 }
 
 /** A net hung to dry between two poles. */
-function netMesh() {
+export function netMesh(color = '#3f4a46', repeat = [3, 2]) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const ctx = c.getContext('2d');
-  ctx.strokeStyle = '#3f4a46';
+  ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   for (let i = -128; i < 256; i += 12) {
     ctx.beginPath();
@@ -275,7 +275,7 @@ function netMesh() {
   }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(3, 2);
+  tex.repeat.set(...repeat);
   return new THREE.MeshLambertMaterial({ map: tex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
 }
 

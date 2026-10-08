@@ -32,6 +32,9 @@ import { Wildlife } from './wildlife.js';
 import { IslandLife } from './islandlife.js';
 import { Villages } from './village.js';
 import { Talk } from './talk.js';
+import { Journal } from './journal.js';
+import { QuestWorld } from './questworld.js';
+import { WANTS } from '../shared/talk.js';
 import { Finds, keepsake } from './finds.js';
 import { WreckCourse } from './course.js';
 import { HatchPuzzle } from './hatch.js';
@@ -135,6 +138,8 @@ const islandLife = new IslandLife({ scene });
 const villages = new Villages({ scene, world });
 let hoursNow = 12;
 const talk = new Talk({ progress, hours: () => hoursNow });
+const journal = new Journal({ progress });
+const questWorld = new QuestWorld({ scene, progress });
 const stormFx = new Storm({ scene, audio });
 if (dev.storm !== null) forceStorm(dev.storm);
 const weather = { warned: false, wild: false };
@@ -337,6 +342,18 @@ function findInteraction() {
       },
     };
   }
+  // Something out in the world for a quest you're on.
+  const qt = questWorld.near(player.pos);
+  if (qt) {
+    return {
+      key: 'E',
+      label: qt.def.label,
+      act: async () => {
+        const said = await questWorld.look(qt, player.pos);
+        if (said) hud.say(said, 7);
+      },
+    };
+  }
   // Someone to talk to? (Not when they're asleep.)
   const who = player.mode === 'swim' ? null : villages.nearest(player.pos);
   if (who) {
@@ -462,6 +479,8 @@ function frame(now) {
     villagesPlaced = true;
   }
   hoursNow = dev.hours ?? hoursAt(t);
+  // Anyone with something to say to you turns and waves.
+  for (const p of villages.people) p.wantsToTalk = !!WANTS[p.id]?.(progress.state);
   villages.update(dt, { t, hours: hoursNow, player, night: atmosphere.uniforms.uNight.value });
   talk.update(input, player);
   wildlife.writeShoals(ocean.uniforms.uShoals.value);
@@ -530,7 +549,17 @@ function frame(now) {
     }
   }
   if (input.pressed('KeyM')) treasure.toggleMap();
-  if (input.pressed('KeyH')) screens.toggleControls();
+  if (input.pressed('KeyH')) {
+    journal.toggle(false);
+    screens.toggleControls();
+  }
+  if (input.pressed('KeyJ')) {
+    screens.toggleControls(false);
+    screens.chart.classList.remove('open');
+    journal.toggle();
+  }
+  if (journal.open && input.pressed('Escape')) journal.toggle(false);
+  journal.update(input);
   // Lights: L anywhere aboard. They come on by themselves at dusk and go off at dawn.
   const nightNow = atmosphere.uniforms.uNight.value > 0.5;
   if (nightNow !== wasNight) {
@@ -546,7 +575,10 @@ function frame(now) {
     const ready = !interior.inside && player.mode === 'ground' && player.grounded && !player.carrying;
     fishing.press({ t, waveScale: swell, night: atmosphere.uniforms.uNight.value > 0.5, canFish: ready, onBoat, shoalNear: (p) => wildlife.shoalNear(p.x, p.z) });
   }
-  if (input.pressed('Tab')) screens.toggleChart();
+  if (input.pressed('Tab')) {
+    journal.toggle(false);
+    screens.toggleChart();
+  }
   screens.update({ boat, player, wind: env.wind, aboard: interior.inside, catchLog: fishing.summary(), finds: finds.summary() });
   if (player.station !== 'helm') {
     if (input.pressed('ArrowRight')) treasure.flip(1);
@@ -595,7 +627,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {

@@ -392,3 +392,41 @@ html, body {
   box-shadow: 0 1px 0 rgba(43, 36, 29, 0.45);
 }
 .night .talk { filter: brightness(0.8); }
+
+/* The journal (J): a notebook open at two pages, written by hand. */
+.journal-screen { pointer-events: auto; }
+.journal {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: min(940px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  color: #2f281f;
+  background: #efe6cf;
+  border-radius: 3px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+  font-family: 'Reenie Beanie', 'Comic Sans MS', cursive;
+  font-size: 1.45rem;
+  line-height: 30px;
+  min-height: min(470px, calc(100vh - 48px));
+}
+.journal .page {
+  overflow: auto;
+  padding: 26px 30px 18px 34px;
+  /* Faint ruled lines, one per line of writing. */
+  background: repeating-linear-gradient(to bottom, transparent 0 29px, rgba(70, 58, 42, 0.13) 29px 30px);
+  background-position: 0 25px;
+}
+.journal .page + .page { border-left: 1px solid rgba(70, 58, 42, 0.28); box-shadow: inset 10px 0 14px -10px rgba(70, 58, 42, 0.35); }
+.journal h3 { margin: 0; font-size: 1.7rem; font-weight: 400; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.journal p { margin: 0 0 0 0; }
+.journal ul { margin: 0 0 30px; padding: 0 0 0 1em; list-style: '– '; }
+.journal .entry { margin-bottom: 30px; }
+.journal .entry.done { opacity: 0.5; }
+.journal .empty { opacity: 0.6; }
+.journal b { font-weight: 400; text-decoration: underline; text-decoration-thickness: 1px; }
+.journal .close { margin-top: 30px; text-align: right; opacity: 0.55; }
+@media (max-width: 640px) {
+  .journal { grid-template-columns: 1fr; overflow: auto; }
+  .journal .page { overflow: visible; }
+  .journal .page + .page { border-left: 0; box-shadow: none; border-top: 1px solid rgba(70, 58, 42, 0.28); }
+}

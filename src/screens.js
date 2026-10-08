@@ -15,6 +15,8 @@ const ROWS = {
     ['M', 'treasure maps (← → to flip)'],
     ['L', 'boat lights, from anywhere aboard'],
     ['E', 'at the steps in the cockpit: go below'],
+    ['E', 'talk to someone (then 1 2 3 to answer)'],
+    ['J', 'journal'],
     ['Tab', 'chart'],
     ['H', 'this screen'],
   ],

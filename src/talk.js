@@ -69,7 +69,8 @@ export class Talk {
     }
     this.busy = false;
     if (!this.v) return;
-    const to = res?.ok ? res.to : r.to;
+    // Offline, the talk still flows (nothing's kept); refused, it ends.
+    const to = res?.ok ? res.to : !res || res.why === 'offline' ? r.to : null;
     if (to !== null && to !== undefined && this.convo.lines[to]) {
       this.line = String(to);
       this.#render();

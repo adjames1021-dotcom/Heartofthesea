@@ -18,6 +18,12 @@ export const ITEMS = {
   squid: { kind: 'fish', name: 'squid', plural: 'squid', kg: [0.2, 0.8] },
   boot: { kind: 'junk', name: 'old boot', kg: [0.6, 0.6] },
 
+  // --- Materials, things to hand over, things given ---
+  copper: { kind: 'material', name: 'sheet of copper', plural: 'sheets of copper' },
+  corkfloat: { kind: 'find', name: "cork float from Oda's nets", plural: 'cork floats' },
+  knife: { kind: 'errand', name: "Gwen's gutting knife" },
+  saltfish: { kind: 'food', name: 'salt fish', plural: 'salt fish' },
+
   // --- Things found on the islands (src/finds.js) ---
   log: { kind: 'find', name: "the Kittiwake's log" },
   spyglass: { kind: 'find', name: 'brass spyglass' },
@@ -33,7 +39,7 @@ export const ITEMS = {
 };
 
 /** Things found on the islands, in the order they're listed. */
-export const FIND_IDS = Object.keys(ITEMS).filter((k) => ITEMS[k].kind === 'find');
+export const FIND_IDS = ['log', 'spyglass', 'bell', 'pipe', 'nameboard', 'bottle', 'lead', 'float', 'cowrie', 'seaglass', 'scallop'];
 
 const NUMBERS = ['no', 'a', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 
