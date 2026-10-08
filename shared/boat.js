@@ -296,7 +296,9 @@ export function stepBoat(b, dt, env) {
     }
     const p = Math.min(pen, 1.5);
     // Push toward deeper water and grind the boat to a stop on the sand.
-    pointForce(c.x, c.z, nx * 9000 * p - vel.x * 5000 * p, nz * 9000 * p - vel.z * 5000 * p);
+    // Doubled planking (b.tough) lets her slide off rather than stick.
+    const grind = b.tough ? 2600 : 5000;
+    pointForce(c.x, c.z, nx * 9000 * p - vel.x * grind * p, nz * 9000 * p - vel.z * grind * p);
   }
   b.aground = aground;
 
@@ -307,7 +309,7 @@ export function stepBoat(b, dt, env) {
   b.v += (Fs / mSway - b.u * b.r) * dt;
   b.r += (M / BOAT.inertiaYaw) * dt;
   if (aground) {
-    const k = Math.exp(-1.5 * dt);
+    const k = Math.exp(-(b.tough ? 0.7 : 1.5) * dt);
     b.u *= k;
     b.v *= k;
     b.r *= k;

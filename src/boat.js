@@ -388,12 +388,91 @@ class SailMesh {
 
 const REEF_LUFF = [1, 0.82, 0.66];
 
+// ---------------------------------------------------------------------------
+// What the yard has done to her (shared/upgrades.js). Built once, shown when
+// she has it.
+// ---------------------------------------------------------------------------
+
+/** Half-breadth of the hull at x, at height y (on the lofted surface). */
+function hullZ(x, y) {
+  const u = uOf(x);
+  const sh = sheerY(u);
+  const kd = keelD(u);
+  const e = 2 / 3.4;
+  const t = Math.min(1, Math.max(0, (sh - y) / (sh + kd)));
+  const sn = Math.pow(t, 1 / e);
+  const cs = Math.sqrt(Math.max(0, 1 - sn * sn));
+  return hb(u) * Math.pow(cs, e);
+}
+
+/** Doubled planking: oak strakes along the topsides, bolted, and copper on the stem and forefoot. */
+function doubledPlanking() {
+  const parts = [];
+  const OAK = '#8a6a45';
+  const COPPER = '#b0703f';
+  const BOLT = '#c48a52';
+  for (const side of [-1, 1]) {
+    for (const [y, x0, x1] of [[0.9, -4.9, 4.7], [0.62, -4.7, 4.85], [0.34, -4.3, 4.6]]) {
+      const n = 22;
+      let prev = null;
+      for (let i = 0; i <= n; i++) {
+        const x = x0 + ((x1 - x0) * i) / n;
+        const p = new THREE.Vector3(x, y, side * (hullZ(x, y) + 0.035));
+        if (prev) {
+          parts.push(paint(segment(prev, p, 0.05, 0.05, 4), OAK));
+          if (i % 2 === 0) {
+            const bolt = new THREE.CylinderGeometry(0.022, 0.022, 0.03, 6);
+            bolt.rotateX(Math.PI / 2);
+            bolt.translate(p.x, p.y, side * (hullZ(x, y) + 0.085));
+            parts.push(paint(bolt, BOLT));
+          }
+        }
+        prev = p;
+      }
+    }
+  }
+  // Copper sheathing round the bow at the waterline, a sheet at a time.
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 5; i++) {
+      const xa = 5.45 - i * 0.5;
+      const xb = xa - 0.52;
+      const pos = [];
+      for (const [ya, yb] of [[-0.12, 0.18]]) {
+        const A = [xa, ya, side * (hullZ(xa, ya) + 0.012)];
+        const B = [xb, ya, side * (hullZ(xb, ya) + 0.012)];
+        const C = [xb, yb, side * (hullZ(xb, yb) + 0.012)];
+        const D = [xa, yb, side * (hullZ(xa, yb) + 0.012)];
+        if (side > 0) pos.push(...A, ...C, ...B, ...A, ...D, ...C);
+        else pos.push(...A, ...B, ...C, ...A, ...C, ...D);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      parts.push(paint(g, i % 2 ? COPPER : '#a8683a'));
+    }
+  }
+  // A copper band up the stem.
+  const stem = [];
+  for (let i = 0; i <= 6; i++) {
+    const y = -0.4 + (i / 6) * 1.65;
+    const x = L / 2 - 0.02 - 0.02 * i;
+    stem.push(new THREE.Vector3(Math.min(x, L / 2 + 0.02), y, 0));
+  }
+  for (let i = 1; i < stem.length; i++) parts.push(paint(segment(stem[i - 1], stem[i], 0.05, 0.05, 5), COPPER));
+  const m = new THREE.Mesh(mergeParts(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
+const UPGRADE_MODELS = { hull: doubledPlanking };
+
 export class Boat {
   constructor({ x, z, heading }) {
     this.state = createBoat({ x, z, heading });
     this.root = new THREE.Group();
     this.root.name = 'boat';
     this.root.add(buildStatic());
+    this.upgrades = {};
 
     const t = textures();
     const sailMat = new THREE.MeshLambertMaterial({ map: t.sail, side: THREE.DoubleSide, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.04 });
@@ -559,6 +638,17 @@ export class Boat {
   }
 
   /** Float on the waves, move the spars and sails. Call once per frame. */
+  /** Show what the yard has done to her (list of shared/upgrades.js ids). */
+  setUpgrades(list = []) {
+    for (const id of list) {
+      if (this.upgrades[id] || !UPGRADE_MODELS[id]) continue;
+      this.upgrades[id] = UPGRADE_MODELS[id]();
+      this.root.add(this.upgrades[id]);
+    }
+    for (const [id, m] of Object.entries(this.upgrades)) m.visible = list.includes(id);
+    this.state.tough = list.includes('hull');
+  }
+
   update(dt, t, waveScale) {
     const b = this.state;
     const v = this.vis;

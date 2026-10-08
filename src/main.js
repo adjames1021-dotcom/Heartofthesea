@@ -148,7 +148,11 @@ const treasure = new Treasure({ scene, world, hud, progress });
 const screens = new Screens();
 const interior = new Interior({ scene, world });
 interior.showFinds(finds.found, keepsake);
-progress.onChange(() => interior.showFinds(finds.found, keepsake));
+boat.setUpgrades(progress.state?.upgrades);
+progress.onChange((st) => {
+  interior.showFinds(finds.found, keepsake);
+  boat.setUpgrades(st?.upgrades);
+});
 document.getElementById('controls')?.addEventListener('click', () => screens.toggleControls(true));
 
 // Arcade (sails trim themselves, quick and forgiving) or realistic sailing.

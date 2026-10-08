@@ -5,8 +5,9 @@
 // The browser asks ("I dug here", "I caught a mackerel"); these decide.
 
 import { issueMap, dig, near, claim } from './treasure.js';
-import { ITEMS, FIND_IDS } from '../shared/items.js';
-import { TALK, repliesAt } from '../shared/talk.js';
+import { ITEMS, FIND_IDS, VALUABLE_IDS } from '../shared/items.js';
+import { TALK, repliesAt, firstValuable } from '../shared/talk.js';
+import { UPGRADES } from '../shared/upgrades.js';
 import { VILLAGERS } from '../shared/villages.js';
 import { QUESTS } from '../shared/quests.js';
 import { hoursAt } from '../shared/environment.js';
@@ -29,6 +30,8 @@ export function freshState(now) {
     met: {}, // who you've talked to
     recipes: [], // dishes you know how to make
     talking: null, // where you are in a conversation: { who, convo, line }
+    upgrades: [], // what's been done to your boat (shared/upgrades.js)
+    decor: [], // things placed about the cabin
     nextId: 1,
   };
 }
@@ -44,6 +47,13 @@ function give(s, kind, now, extra = {}) {
 
 function chestId(s) {
   return `c${s.nextId++}`;
+}
+
+/** A small stable number from a string. */
+function hashText(t) {
+  let h = 2166136261;
+  for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619);
+  return h >>> 0;
 }
 
 const finite = (...v) => v.every((x) => typeof x === 'number' && Number.isFinite(x));
@@ -109,13 +119,16 @@ const ACTIONS = {
   },
 
   /** A chest set down on your boat: it opens, and there's usually a map in it. */
-  async deliver(s, a, { secret }) {
+  async deliver(s, a, { secret, now }) {
     const c = s.chests[a.chest];
     if (!c || c.delivered) return fail('no chest');
     c.delivered = true;
     const map = await issueMap(secret, { not: c.from ? [c.from] : [] });
     s.maps.push(map);
-    return { ok: true, map };
+    // And something of value under the map.
+    const kind = VALUABLE_IDS[hashText(`${a.chest}:${s.created}`) % VALUABLE_IDS.length];
+    give(s, kind, now);
+    return { ok: true, map, kind };
   },
 
   /** Picked something up on an island. */
@@ -166,6 +179,12 @@ function effects(s, list, now) {
     else if (what === 'learn') {
       s.recipes ??= [];
       if (!s.recipes.includes(a)) s.recipes.push(a);
+    } else if (what === 'pay') {
+      const v = firstValuable(s);
+      if (v) s.items = s.items.filter((i) => i !== v);
+    } else if (what === 'upgrade') {
+      s.upgrades ??= [];
+      if (UPGRADES[a] && !s.upgrades.includes(a)) s.upgrades.push(a);
     } else if (what === 'take') {
       const i = s.items.findIndex((it) => it.kind === a);
       if (i >= 0) s.items.splice(i, 1);

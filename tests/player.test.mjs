@@ -183,3 +183,32 @@ test('the writing: short lines, no stock phrases, no shouting', () => {
     assert.ok(t.length <= 190, `short: ${t}`);
   }
 });
+
+test('a chest has something of value in it as well as the map', async () => {
+  let s = freshState(5);
+  s.chests.c9 = { from: 'bar', found: 0, delivered: false };
+  const r = await apply(s, { type: 'deliver', chest: 'c9' }, ctx());
+  assert.ok(r.reply.ok && r.reply.map && ITEMS[r.reply.kind]?.kind === 'valuable');
+  assert.ok(r.state.items.some((i) => i.kind === r.reply.kind));
+});
+
+test("Ned doubles her planking for the copper and something for his time", async () => {
+  let s = freshState(0);
+  ({ s } = await talk(s, 'ned', [0]));
+  // Nothing to give him yet: he says what he wants.
+  let c;
+  ({ s, convo: c } = await talk(s, 'ned', [0, 0, 0, 0]));
+  assert.equal(c, 'hull-ask');
+  assert.ok(s.quests.hull && !s.upgrades.length);
+  assert.equal(openingFor('ned', s, 12).id, 'hull-wait');
+  // Copper alone isn't enough.
+  s = { ...s, items: [...s.items, { id: 'x1', kind: 'copper', got: 0, where: 'hold' }] };
+  assert.equal(openingFor('ned', s, 12).id, 'hull-wait');
+  s = { ...s, items: [...s.items, { id: 'x2', kind: 'watch', got: 0, where: 'hold' }, { id: 'x3', kind: 'ring', got: 0, where: 'hold' }] };
+  ({ s, convo: c } = await talk(s, 'ned', [0, 0, 0, 0]));
+  assert.equal(c, 'hull-do');
+  assert.deepEqual(s.upgrades, ['hull']);
+  assert.deepEqual(s.items.map((i) => i.kind), ['ring'], 'the copper and the first valuable went');
+  assert.ok(s.quests.hull.done);
+  assert.match(lineText(openingFor('ned', s, 14).lines[0], s, 14), /shrug it off/);
+});

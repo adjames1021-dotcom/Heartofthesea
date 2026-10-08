@@ -62,6 +62,50 @@ function hat(kind) {
     const tail = new THREE.BoxGeometry(0.1, 0.18, 0.03);
     tail.translate(0.03, 0.58, 0.31);
     parts.push(paint(shawl, '#b8463b'), paint(knot, '#a33c32'), paint(tail, '#a33c32'));
+  } else if (kind === 'apron') {
+    // A leather apron, worn on the body: a bib curved round the front, with
+    // a strap round the neck and ties round the middle.
+    const prof = [[0.16, 0.2], [0.26, 0.31], [0.42, 0.35], [0.58, 0.33], [0.72, 0.27], [0.81, 0.17]];
+    const rAt = (y) => {
+      for (let k = 0; k + 1 < prof.length; k++) {
+        const [y0, r0] = prof[k];
+        const [y1, r1] = prof[k + 1];
+        if (y >= y0 && y <= y1) return r0 + ((y - y0) / (y1 - y0)) * (r1 - r0);
+      }
+      return 0.2;
+    };
+    const pos = [];
+    const rows = 8;
+    const cols = 6;
+    const grid = [];
+    for (let i = 0; i <= rows; i++) {
+      const y = 0.2 + (i / rows) * 0.52;
+      const span = 0.7 - 0.25 * (i / rows); // narrower at the bib
+      grid.push([]);
+      for (let j = 0; j <= cols; j++) {
+        const a = -span + (2 * span * j) / cols;
+        const r = rAt(y) + 0.018;
+        grid[i].push([Math.sin(a) * r, y, Math.cos(a) * r]);
+      }
+    }
+    for (let i = 0; i < rows; i++) {
+      for (let j = 0; j < cols; j++) pos.push(...grid[i][j], ...grid[i][j + 1], ...grid[i + 1][j + 1], ...grid[i][j], ...grid[i + 1][j + 1], ...grid[i + 1][j]);
+    }
+    const bib = new THREE.BufferGeometry();
+    bib.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const strap = new THREE.TorusGeometry(0.15, 0.014, 4, 16);
+    strap.rotateX(Math.PI / 2 - 0.35);
+    strap.translate(0, 0.79, 0.04);
+    const ties = new THREE.TorusGeometry(0.365, 0.014, 4, 24);
+    ties.rotateX(Math.PI / 2);
+    ties.translate(0, 0.43, 0);
+    const pocket = new THREE.BoxGeometry(0.16, 0.1, 0.02);
+    pocket.rotateX(-0.08);
+    pocket.translate(0, 0.33, 0.355);
+    const pencil = new THREE.CylinderGeometry(0.008, 0.008, 0.12, 5);
+    pencil.rotateZ(0.25);
+    pencil.translate(0.04, 0.4, 0.36);
+    parts.push(paint(bib, '#6b4a30'), paint(strap, '#5a3d27'), paint(ties, '#5a3d27'), paint(pocket, '#5e4029'), paint(pencil, '#c9a23a'));
   } else if (kind === 'cap') {
     const crown = new THREE.CylinderGeometry(0.27, 0.25, 0.13, 16);
     crown.translate(0, 0.54, -0.02);
@@ -251,6 +295,263 @@ class Builder {
   }
 }
 
+// ---------------------------------------------------------------------------
+// The boatyard: a slipway with a boat in frame on it, the shed, timber and rope.
+// ---------------------------------------------------------------------------
+
+const TAR = '#3d3631';
+const OAK = '#9a7b55';
+const OAK_PALE = '#b39468';
+const ROPE = '#b8a275';
+
+/** A part in a frame turned by `face` (island-local) about (lx, lz), at absolute height y. */
+function framePut(b, geo, lx, y, lz, face) {
+  b.put(geo, lx, y, lz, face);
+}
+
+Object.assign(Builder.prototype, {
+  /** Ways down the beach into the water, on sleepers, and a boat half built on them. */
+  slipway(sl) {
+    const [x0, z0] = sl.from;
+    const [x1, z1] = sl.to;
+    const f = Math.atan2(z1 - z0, x1 - x0);
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const p0 = this.w(x0, z0);
+    const p1 = this.w(x1, z1);
+    const y0 = groundAt(p0.x, p0.z) + 0.16;
+    const y1 = groundAt(p1.x, p1.z) + 0.16;
+    const drop = Math.atan2(y0 - y1, len);
+    const at = (u, v) => [x0 + Math.cos(f) * u - Math.sin(f) * v, z0 + Math.sin(f) * u + Math.cos(f) * v];
+    const railY = (u) => y0 + ((y1 - y0) * u) / len;
+    // The two ways.
+    for (const v of [-sl.width / 2, sl.width / 2]) {
+      const g = new THREE.BoxGeometry(len, 0.18, 0.26);
+      g.rotateZ(-drop);
+      const [mx, mz] = at(len / 2, v);
+      framePut(this, paint(g, WOOD_WET), mx, (y0 + y1) / 2, mz, f);
+    }
+    // Sleepers across, propped up off the sand where it falls away.
+    for (let u = 0.6; u < len; u += 1.5) {
+      const [mx, mz] = at(u, 0);
+      framePut(this, box(0.24, 0.14, sl.width + 0.8, u % 3 < 1.5 ? WOOD_DARK : WOOD_WET, 0, 0, 0), mx, railY(u) - 0.16, mz, f);
+      for (const v of [-sl.width / 2, sl.width / 2]) {
+        const [bx, bz] = at(u, v);
+        const p = this.w(bx, bz);
+        const g = groundAt(p.x, p.z);
+        if (railY(u) - 0.23 - g > 0.05) this.put(paint(segment(V(0, g - 0.3, 0), V(0, railY(u) - 0.22, 0), 0.1, 0.1, 4), WOOD_WET), bx, 0, bz);
+      }
+    }
+    // The boat in frame: keel, stem and sternpost, ribs, the lower strakes
+    // planked, the upper ones not yet. Her bow points down the slip.
+    const BL = 8.6; // length on deck
+    const D = 1.7; // keel to sheer
+    const half = (x) => 1.45 * Math.pow(Math.max(0, 1 - (x / (BL / 2)) ** 2), 0.55) + 0.05;
+    const sheer = (x) => D + 0.12 * (x / (BL / 2)) ** 2;
+    const section = (x, t) => {
+      // t: 0 at the keel → 1 at the sheer, round the bilge.
+      const a = t * (Math.PI / 2);
+      return [half(x) * Math.pow(Math.sin(a), 0.75), sheer(x) * (1 - Math.pow(Math.cos(a), 0.6))];
+    };
+    const parts = [];
+    parts.push(box(BL - 0.4, 0.22, 0.2, OAK, 0, 0.11, 0));
+    // Stem and sternpost.
+    parts.push(paint(segment(V(BL / 2 - 0.3, 0.1, 0), V(BL / 2 + 0.15, sheer(BL / 2) + 0.35, 0), 0.1, 0.09, 4), OAK));
+    parts.push(paint(segment(V(-BL / 2 + 0.25, 0.1, 0), V(-BL / 2 + 0.05, sheer(-BL / 2) + 0.25, 0), 0.1, 0.09, 4), OAK));
+    parts.push(box(0.08, 1.0, 1.7, OAK_PALE, -BL / 2 + 0.12, sheer(-BL / 2) - 0.45, 0));
+    // Ribs.
+    for (let x = -BL / 2 + 0.6; x <= BL / 2 - 0.5; x += 0.55) {
+      for (const side of [-1, 1]) {
+        let prev = null;
+        for (let k = 0; k <= 6; k++) {
+          const [hz, hy] = section(x, k / 6);
+          const p = V(x, hy + 0.1, side * hz);
+          if (prev) parts.push(paint(segment(prev, p, 0.05, 0.05, 4), OAK_PALE));
+          prev = p;
+        }
+      }
+    }
+    // Planking up to about two thirds of the way, a strake at a time.
+    const strakes = 5;
+    for (let k = 0; k < strakes; k++) {
+      const ta = k / 8;
+      const tb = (k + 1) / 8 - 0.01;
+      const pos = [];
+      const nx = 14;
+      for (let i = 0; i < nx; i++) {
+        const xa = -BL / 2 + 0.35 + ((BL - 0.8) * i) / nx;
+        const xb = -BL / 2 + 0.35 + ((BL - 0.8) * (i + 1)) / nx;
+        for (const side of [-1, 1]) {
+          const [za0, ya0] = section(xa, ta);
+          const [za1, ya1] = section(xa, tb);
+          const [zb0, yb0] = section(xb, ta);
+          const [zb1, yb1] = section(xb, tb);
+          const A = [xa, ya0 + 0.1, side * (za0 + 0.04)];
+          const B = [xb, yb0 + 0.1, side * (zb0 + 0.04)];
+          const C = [xb, yb1 + 0.1, side * (zb1 + 0.04)];
+          const E = [xa, ya1 + 0.1, side * (za1 + 0.04)];
+          // Both faces, so it reads from inside as well as out.
+          pos.push(...A, ...B, ...C, ...A, ...C, ...E, ...A, ...C, ...B, ...A, ...E, ...C);
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      parts.push(paint(g, k % 2 ? OAK : OAK_PALE));
+    }
+    // Shores holding her upright, from the sand to her sides.
+    const shores = [];
+    for (const xs of [-2.4, 0, 2.4]) {
+      for (const side of [-1, 1]) {
+        const [hz, hy] = section(xs, 0.62);
+        shores.push([xs, side, hz, hy]);
+      }
+    }
+    // Put her together, sloping with the slip, sat on a cradle.
+    const hullU = len * 0.32;
+    const g = mergeParts(parts);
+    g.rotateZ(-drop);
+    const [hx, hz] = at(hullU, 0);
+    framePut(this, g, hx, railY(hullU) + 0.22, hz, f);
+    for (const u of [hullU - 3, hullU, hullU + 3]) {
+      const [cx, cz] = at(u, 0);
+      framePut(this, box(0.35, 0.3, sl.width + 0.3, WOOD_DARK, 0, 0, 0), cx, railY(u) + 0.08, cz, f);
+    }
+    for (const [xs, side, hz2, hy] of shores) {
+      const u = hullU + xs;
+      const [tx, tz] = at(u, side * (hz2 + 0.05));
+      const top = railY(u) + 0.32 + hy - xs * Math.tan(drop) * 0;
+      const [fx, fz] = at(u, side * (hz2 + 1.6));
+      const pf = this.w(fx, fz);
+      const pt = this.w(tx, tz);
+      this.parts.push(paint(segment(V(pf.x, groundAt(pf.x, pf.z) - 0.1, pf.z), V(pt.x, top, pt.z), 0.06, 0.05, 4), WOOD_DARK));
+    }
+    // You can't walk through her.
+    this.solid(hx, railY(hullU) + 1.0, hz, BL, 1.9, 2.9, f, { roll: -drop });
+  },
+
+  /** The shed: three walls and an open front, a tarred roof, a bench and a cot. */
+  shed(sh) {
+    const [lx, lz] = sh.at;
+    const W = sh.w; // along z
+    const D = sh.d; // along x, open at +x
+    const H = 2.5;
+    const y0 = sh.floor;
+    const put = (geo, x, y, z) => this.put(geo, lx + x, y, lz + z, 0);
+    const solid = (x, y, z, w, h, d) => this.solid(lx + x, y, lz + z, w, h, d, 0);
+    // Floor on a footing of stones.
+    put(box(D, 0.14, W, WOOD_DARK, 0, 0, 0), 0, y0 - 0.07, 0);
+    solid(0, y0 - 0.1, 0, D, 0.2, W);
+    for (const [x, z] of [[-D / 2 + 0.3, -W / 2 + 0.3], [D / 2 - 0.3, -W / 2 + 0.3], [-D / 2 + 0.3, W / 2 - 0.3], [D / 2 - 0.3, W / 2 - 0.3], [0, -W / 2 + 0.3], [0, W / 2 - 0.3]]) {
+      const p = this.w(lx + x, lz + z);
+      this.parts.push(rockAt(this, lx + x, lz + z, 0.42, Math.min(groundAt(p.x, p.z), y0 - 0.4)));
+    }
+    // A step up at the front.
+    put(box(0.6, 0.12, 2.4, WOOD_WET, 0, 0, 0), D / 2 + 0.3, y0 - 0.2, 0);
+    solid(D / 2 + 0.3, y0 - 0.22, 0, 0.6, 0.16, 2.4);
+    // Walls of upright boards: back and both sides.
+    put(box(0.1, H, W, WOOD, 0, 0, 0), -D / 2, y0 + H / 2, 0);
+    solid(-D / 2, y0 + H / 2, 0, 0.2, H, W);
+    for (const side of [-1, 1]) {
+      put(box(D, H, 0.1, WOOD, 0, 0, 0), 0, y0 + H / 2, side * W / 2);
+      solid(0, y0 + H / 2, side * W / 2, D, H, 0.2);
+      for (let x = -D / 2 + 0.4; x < D / 2; x += 0.42) put(box(0.025, H, 0.02, WOOD_DARK, 0, 0, 0), x, y0 + H / 2, side * (W / 2 + 0.055));
+    }
+    for (let z = -W / 2 + 0.4; z < W / 2; z += 0.42) put(box(0.02, H, 0.025, WOOD_DARK, 0, 0, 0), -D / 2 - 0.055, y0 + H / 2, z);
+    // Front posts and a beam over the opening.
+    for (const side of [-1, 1]) put(box(0.18, H + 0.1, 0.18, WOOD_DARK, 0, 0, 0), D / 2 - 0.09, y0 + H / 2, side * (W / 2 - 0.09));
+    put(box(0.2, 0.22, W, WOOD_DARK, 0, 0, 0), D / 2 - 0.1, y0 + H - 0.1, 0);
+    // Gables and the roof, ridge running front to back, tarred.
+    const pitch = 0.5;
+    const rise = (W / 2) * Math.tan(pitch);
+    for (const x of [-D / 2, D / 2 - 0.1]) {
+      const gable = new THREE.BufferGeometry();
+      gable.setAttribute('position', new THREE.Float32BufferAttribute([0, H, -W / 2, 0, H, W / 2, 0, H + rise, 0, 0, H, W / 2, 0, H, -W / 2, 0, H + rise, 0], 3));
+      put(paint(gable, WOOD), x, y0, 0);
+    }
+    for (const side of [-1, 1]) {
+      const roof = new THREE.BoxGeometry(D + 0.9, 0.1, W / 2 / Math.cos(pitch) + 0.45);
+      roof.rotateX(side * pitch);
+      put(paint(roof, TAR), 0.15, y0 + H + rise / 2 + 0.05, side * (W / 4 + 0.1));
+    }
+    // The bench along the back, with a vice and tools.
+    const bx = -D / 2 + 0.45;
+    const bz = -W / 2 + 1.75;
+    put(box(0.72, 0.08, 2.5, OAK, 0, 0, 0), bx, y0 + 0.86, bz);
+    for (const [dx, dz] of [[-0.28, -1.15], [0.28, -1.15], [-0.28, 1.15], [0.28, 1.15]]) put(box(0.08, 0.86, 0.08, WOOD_DARK, 0, 0, 0), bx + dx, y0 + 0.43, bz + dz);
+    put(box(0.6, 0.06, 2.3, WOOD_DARK, 0, 0, 0), bx, y0 + 0.25, bz);
+    put(box(0.16, 0.2, 0.3, '#4a4f52', 0, 0, 0), bx + 0.36, y0 + 0.96, bz + 0.9); // vice
+    put(box(0.04, 0.02, 0.55, '#8d9295', 0, 0, 0), bx + 0.1, y0 + 0.91, bz - 0.5); // saw blade
+    put(box(0.07, 0.1, 0.12, OAK_PALE, 0, 0, 0), bx + 0.1, y0 + 0.94, bz - 0.84); // its handle
+    put(paint(segment(V(0, 0, 0), V(0.3, 0, 0.05), 0.018, 0.018, 4), OAK_PALE), bx - 0.15, y0 + 0.92, bz + 0.1); // mallet handle
+    put(box(0.12, 0.1, 0.1, '#7a5a3a', 0, 0, 0), bx + 0.17, y0 + 0.93, bz + 0.12); // mallet head
+    solid(bx, y0 + 0.45, bz, 0.72, 0.9, 2.5);
+    // Tools on the back wall.
+    for (let i = 0; i < 4; i++) put(box(0.03, 0.4 + (i % 2) * 0.15, 0.06, i % 2 ? '#6d7275' : OAK_PALE, 0, 0, 0), -D / 2 + 0.08, y0 + 1.6, bz - 0.9 + i * 0.5);
+    // The cot in the back corner.
+    const cz = W / 2 - 1.15;
+    put(box(0.85, 0.3, 1.95, WOOD_DARK, 0, 0, 0), -D / 2 + 0.55, y0 + 0.15, cz);
+    put(box(0.8, 0.07, 1.7, '#5f6a5a', 0, 0, 0), -D / 2 + 0.55, y0 + 0.34, cz + 0.1);
+    put(box(0.5, 0.1, 0.32, '#d9d2c2', 0, 0, 0), -D / 2 + 0.55, y0 + 0.4, cz - 0.72);
+    // A bucket of tar by the door.
+    const pail = new THREE.CylinderGeometry(0.2, 0.16, 0.34, 10);
+    put(paint(pail, '#3a3532'), D / 2 - 0.5, y0 + 0.17, -W / 2 + 0.5);
+  },
+
+  /** Sawn planks stacked to season, sticks between the layers. */
+  timber(lx, lz, face) {
+    const g = groundAt(this.w(lx, lz).x, this.w(lx, lz).z);
+    for (const u of [-1.8, 0, 1.8]) this.put(box(0.16, 0.14, 1.4, WOOD_WET, 0, 0, 0), lx + Math.cos(face) * u, g + 0.07, lz + Math.sin(face) * u, face);
+    for (let layer = 0; layer < 4; layer++) {
+      const y = g + 0.17 + layer * 0.12;
+      for (let k = 0; k < 4; k++) {
+        const v = -0.48 + k * 0.32;
+        this.put(box(4.4 - (layer % 2) * 0.3, 0.06, 0.28, layer % 2 ? OAK : OAK_PALE, 0, 0, 0), lx - Math.sin(face) * v, y, lz + Math.cos(face) * v, face);
+      }
+      for (const u of [-1.8, 0, 1.8]) this.put(box(0.05, 0.05, 1.3, WOOD_DARK, 0, 0, 0), lx + Math.cos(face) * u, y + 0.06, lz + Math.sin(face) * u, face);
+    }
+    this.solid(lx, g + 0.35, lz, 4.4, 0.7, 1.4, face);
+  },
+
+  /** Trunks waiting to be sawn. */
+  logs(lx, lz, face) {
+    const g = groundAt(this.w(lx, lz).x, this.w(lx, lz).z);
+    const rows = [[-0.6, 0.22], [0, 0.22], [0.6, 0.22], [-0.3, 0.6], [0.3, 0.6], [0, 0.97]];
+    rows.forEach(([v, y], i) => {
+      const len = 3.4 + (i % 3) * 0.3;
+      const a = V(-len / 2, y, v);
+      const b2 = V(len / 2, y, v);
+      const geo = segment(a, b2, 0.22, 0.2, 7);
+      this.put(paint(geo, i % 2 ? '#6e5a44' : '#7a6650'), lx, g, lz, face);
+      const end = new THREE.CircleGeometry(0.2, 7);
+      end.rotateY(Math.PI / 2);
+      end.translate(len / 2 + 0.01, y, v);
+      this.put(paint(end, '#c7ab7f'), lx, g, lz, face);
+    });
+    this.solid(lx, g + 0.5, lz, 3.6, 1.0, 1.7, face);
+  },
+
+  /** A coil of rope on the sand. */
+  rope(lx, lz) {
+    const p = this.w(lx, lz);
+    const g = groundAt(p.x, p.z);
+    for (let i = 0; i < 4; i++) {
+      const t = new THREE.TorusGeometry(0.3 - i * 0.025, 0.045, 5, 16);
+      t.rotateX(Math.PI / 2);
+      this.put(paint(t, i % 2 ? ROPE : '#a8916a'), lx, g + 0.05 + i * 0.075, lz);
+    }
+  },
+
+  /** Trestles with a plank across, half sawn. */
+  sawhorse(lx, lz, face) {
+    const g = groundAt(this.w(lx, lz).x, this.w(lx, lz).z);
+    for (const u of [-0.9, 0.9]) {
+      for (const v of [-0.3, 0.3]) this.put(paint(segment(V(u, 0, v), V(u, 0.72, 0), 0.03, 0.03, 4), WOOD_DARK), lx, g, lz, face);
+      this.put(box(0.08, 0.06, 0.4, WOOD_DARK, u, 0.72, 0), lx, g, lz, face);
+    }
+    this.put(box(3.2, 0.06, 0.3, OAK_PALE, 0.3, 0.8, 0), lx, g, lz, face);
+    this.put(box(0.6, 0.02, 0.3, '#d8c49c', 1.1, 0.0 + 0.02, 0.6), lx, g, lz, face); // offcut on the sand
+  },
+});
+
 function rockAt(b, lx, lz, s, y) {
   const g = rock(s, Math.round(lx * 13 + lz * 7), '#8f8a80');
   const p = b.w(lx, lz);
@@ -339,7 +640,7 @@ class Villager {
     this.b = b;
     this.bear = new Bear(def.look);
     this.bear.root.scale.setScalar(def.size ?? 1);
-    if (def.wears) this.bear.wear(hat(def.wears), def.wears === 'shawl' ? 'body' : 'head');
+    if (def.wears) this.bear.wear(hat(def.wears), def.wears === 'shawl' || def.wears === 'apron' ? 'body' : 'head');
     this.rod = rodModel();
     this.bear.setRod(false, this.rod);
     this.pos = V();
@@ -504,6 +805,12 @@ export class Villages {
     if (v.dock) b.dock(v.dock);
     for (const [x, z, f] of v.racks ?? []) b.rack(x, z, f);
     for (const [x, z, f] of v.boats ?? []) b.boat(x, z, f, rand() < 0.5 ? '#3c5a78' : '#8a3a2e');
+    if (v.slip) b.slipway(v.slip);
+    if (v.shed) b.shed(v.shed);
+    for (const [x, z, f] of v.timber ?? []) b.timber(x, z, f);
+    for (const [x, z, f] of v.logs ?? []) b.logs(x, z, f);
+    for (const [x, z] of v.rope ?? []) b.rope(x, z);
+    if (v.horse) b.sawhorse(...v.horse);
     for (const [x, z] of v.pots ?? []) {
       const pot = new THREE.CylinderGeometry(0.3, 0.32, 0.5, 8, 1, false, 0, Math.PI);
       pot.rotateZ(Math.PI / 2);
@@ -552,9 +859,9 @@ export class Villages {
     this.group.add(m);
 
     // Benches where someone sits that isn't by the fire (Silas, at his door).
-    for (const def of Object.values(VILLAGERS)) {
-      if (def.village !== id) continue;
-      for (const sp of Object.values(def.spots ?? {})) {
+    const own = Object.values(VILLAGERS).filter((d) => d.village === id).map((d) => d.spots ?? {});
+    for (const spots of [v.spots ?? {}, ...own]) {
+      for (const sp of Object.values(spots)) {
         if (!sp.bench) continue;
         const f = Math.atan2(sp.face[1] - sp.at[1], sp.face[0] - sp.at[0]);
         const bx = sp.at[0] - Math.cos(f) * 0.15;

@@ -45,6 +45,30 @@ export const VILLAGES = {
       gwenBed: { at: [-30.6, 31.25], via: [[-31, 26.6], [-31, 29.1, 2.6]], y: 2.6, lie: -Math.PI / 2 },
     },
   },
+  // Not a village: Ned Pascoe's boatyard on the west side of the bay on
+  // Saddle Island, where your boat lies at anchor.
+  yard: {
+    name: "Pascoe's yard",
+    island: 'saddle',
+    does: 'boats',
+    hub: [-42, 213],
+    huts: [],
+    // The slipway runs down the beach into the bay, with a boat in frame on it.
+    slip: { from: [-45, 216], to: [-14, 216], width: 2.6 },
+    shed: { at: [-54, 212], w: 6.2, d: 5, floor: 2.55 }, // open to the east (+x)
+    timber: [[-46, 226.5, 0.05], [-47.5, 203, -0.1]],
+    logs: [[-41.5, 228.5, 0.3]],
+    rope: [[-49.6, 218.6], [-50.4, 207.2], [-48.9, 206.4]],
+    horse: [-42, 210, 0.1],
+    spots: {
+      hull: { at: [-36.3, 213.3], face: [-36.3, 216], via: [] },
+      hull2: { at: [-31.5, 218.7], face: [-31.5, 216], via: [[-40.5, 220.8]] },
+      saw: { at: [-42, 208.6], face: [-42, 210], via: [] },
+      bench: { at: [-55.2, 210.6], face: [-57, 210.6], via: [[-49.5, 211.5], [-51.4, 211.5, 2.55]], y: 2.55 },
+      seat: { at: [-48.6, 221.4], face: [-38, 221.4], via: [[-46, 219.5]], bench: true },
+      bed: { at: [-56.1, 213.9], via: [[-49.5, 211.5], [-51.4, 211.5, 2.55], [-54, 213.2, 2.55]], y: 2.55, lie: 0 },
+    },
+  },
 };
 
 /** The people. look: fur colours for src/bear.js; wears: what's on their head. */
@@ -112,6 +136,24 @@ export const VILLAGERS = {
       lightBench: { at: [52.2, 4.6], face: [40, 4.6], via: [], ground: true, bench: true },
       lightAway: { at: [55.6, 2], via: [], hidden: true },
     },
+  },
+  ned: {
+    name: 'Ned Pascoe',
+    village: 'yard',
+    job: 'builds and mends boats, and has opinions about yours',
+    look: { fur: '#7a6656', patch: '#d8c9b0', ear: '#a0806a', ink: '#33281f' },
+    wears: 'apron',
+    size: 1.08,
+    routine: [
+      [5.5, 'bench', 'work'],
+      [7, 'hull', 'work'],
+      [10, 'saw', 'work'],
+      [12.5, 'seat', 'sit'],
+      [13.5, 'hull2', 'work'],
+      [17.5, 'bench', 'work'],
+      [19, 'seat', 'sit'],
+      [21, 'bed', 'sleep'],
+    ],
   },
 };
 

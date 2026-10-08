@@ -6,6 +6,7 @@
 import { ITEMS, FIND_IDS, countOf } from '../shared/items.js';
 import { QUESTS } from '../shared/quests.js';
 import { RECIPES } from '../shared/food.js';
+import { UPGRADES } from '../shared/upgrades.js';
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -84,10 +85,12 @@ export class Journal {
           )
           .join('')
       : '<p class="empty">Nothing written down yet.</p>';
+    const done = (s.upgrades ?? []).filter((u) => UPGRADES[u]);
     const right = `
-      <h3>In the hold</h3>
-      ${hold.length ? `<ul>${hold.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="empty">Not much.</p>'}
-      ${recipes.length ? `<h3>Cooking</h3>${recipes.map((r) => `<p><b>${esc(RECIPES[r].name)}.</b> ${esc(RECIPES[r].note)}</p>`).join('')}` : ''}`;
+      <div class="entry"><h3>In the hold</h3>
+      ${hold.length ? `<ul>${hold.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="empty">Not much.</p>'}</div>
+      ${done.length ? `<div class="entry"><h3>Done to her</h3>${done.map((u) => `<p>${esc(UPGRADES[u].say)}</p>`).join('')}</div>` : ''}
+      ${recipes.length ? `<div class="entry"><h3>Cooking</h3>${recipes.map((r) => `<p><b>${esc(RECIPES[r].name)}.</b> ${esc(RECIPES[r].note)}</p>`).join('')}</div>` : ''}`;
     this.el.innerHTML = `
       <div class="journal">
         <section class="page">${left}</section>

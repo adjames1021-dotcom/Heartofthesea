@@ -29,6 +29,8 @@ export const QUESTS = {
   knife: { title: "Gwen's knife", steps: {} },
   // Tam thinks something shines in the Molly Ann's crow's nest (the climb on the wreck).
   foretop: { title: "Tam's crow's nest", steps: {} },
+  // Ned Pascoe at the yard will double her planking, for copper and something for his time.
+  hull: { title: 'Doubling her planks', steps: {} },
   // Silas saw a sail off the Brothers with no lights.
   sail: { title: 'A sail with no lights', steps: {} },
 };

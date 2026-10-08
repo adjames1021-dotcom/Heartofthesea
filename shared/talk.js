@@ -13,10 +13,15 @@
 //   ['give', kind]         they give you something
 //   ['take', kind]         you hand something over (the reply only shows if you have it)
 //   ['met', who]           you've talked to them now
+//   ['pay']                you hand over the first thing of value you've got
+//   ['upgrade', what]      something's done to your boat (shared/upgrades.js)
+//   ['learn', recipe]      you know how to make something now
 //
 // Rules for the writing: short lines, people talk like people (a bit
 // distracted, sometimes off the point), nobody gives speeches, no
 // "greetings", no exclamation marks unless something really is surprising.
+
+import { ITEMS, countOf } from './items.js';
 
 const q = (s, id) => s?.quests?.[id] ?? null; // a quest's state, or null if never started
 const met = (s, who) => !!s?.met?.[who];
@@ -38,6 +43,9 @@ function chat(who, variants) {
 const any = () => true;
 
 const has = (s, kind) => (s?.items ?? []).some((i) => i.kind === kind);
+/** The first thing of value you're carrying (what ['pay'] hands over). */
+export const firstValuable = (s) => (s?.items ?? []).find((i) => ITEMS[i.kind]?.kind === 'valuable') ?? null;
+const upgraded = (s, what) => (s?.upgrades ?? []).includes(what);
 const done = (s, id) => !!q(s, id)?.done;
 const stage = (s, id) => q(s, id)?.stage ?? -1;
 const solved = (s, id) => (s?.solved ?? []).includes(id);
@@ -195,6 +203,64 @@ export const TALK = {
       { if: any, say: 'Light goes on at sunset. Not before. Oil costs.', reply: 'Fair enough.' },
     ]),
   ],
+  ned: [
+    // Doubling her planking (shared/upgrades.js: hull).
+    {
+      id: 'hull-ask',
+      when: (s) => met(s, 'ned') && !q(s, 'hull') && !upgraded(s, 'hull'),
+      lines: {
+        0: { say: "Who's been putting her on the rocks?", replies: [{ say: 'Me, now and then.', to: 1 }, { say: 'Nobody.', to: 1 }] },
+        1: { say: 'Shows. Her topsides are thin as a biscuit. I could double the planking along her waterline.', replies: [{ say: 'What would that take?', to: 2 }, { say: "She's fine as she is." }] },
+        2: {
+          say: "Timber I've got. Copper for her stem I haven't. And something for my time.",
+          replies: [
+            { say: "I'll find some copper.", to: 3, needs: (st) => !has(st, 'copper'), do: [['start', 'hull'], ['note', 'hull', 'Ned Pascoe, at the boatyard on Saddle, will double her planking along the waterline and put copper on her stem. He has the timber. He wants a sheet of copper, and something for his time.']] },
+            { say: "I've got a sheet of copper.", to: 4, needs: (st) => has(st, 'copper'), do: [['start', 'hull'], ['note', 'hull', "Ned Pascoe, at the boatyard on Saddle, will double her planking along the waterline and put copper on her stem. He'll take the Molly Ann's copper, and something for his time."]] },
+          ],
+        },
+        3: { say: "Copper comes off wrecks. That's all I'll say.", replies: [{ say: 'Right.' }] },
+        4: { say: 'Have you now. Bring it with something for my time, then.', replies: [{ say: "I'll see what I've got." }] },
+      },
+    },
+    {
+      id: 'hull-do',
+      when: (s) => !!q(s, 'hull') && !done(s, 'hull') && has(s, 'copper') && !!firstValuable(s),
+      lines: {
+        0: { say: 'That my copper?', replies: [{ say: 'Off the Molly Ann.', to: 1 }] },
+        1: {
+          say: 'Good stuff. Bronze-fastened, she was. What have you got for my time?',
+          replies: [
+            {
+              say: (st) => (firstValuable(st) ? `There's ${countOf(firstValuable(st).kind, 1)}.` : 'There was something.'),
+              to: 2,
+              needs: (st) => has(st, 'copper') && !!firstValuable(st),
+              do: [['take', 'copper'], ['pay'], ['upgrade', 'hull'], ['done', 'hull'], ['note', 'hull', 'Gave Ned the copper and something out of one of the chests. He had the planks cut already, the day I anchored. Doubled her along the waterline and put the copper on her stem.']],
+            },
+          ],
+        },
+        2: { say: "I cut the planks the day you dropped anchor. Copper was all I was waiting on.", replies: [{ say: 'You were that sure?', to: 3 }] },
+        3: { say: 'Go and look at her.', replies: [{ say: 'I will.' }] },
+      },
+    },
+    {
+      id: 'hull-wait',
+      when: (s) => !!q(s, 'hull') && !done(s, 'hull'),
+      lines: {
+        0: {
+          say: (s) => (has(s, 'copper') ? "Copper's good. Now my time. I don't work for thanks." : 'Copper. Off a wreck, usually.'),
+          replies: [{ say: (s) => (has(s, 'copper') ? "I'll find something." : "I'm looking.") }],
+        },
+      },
+    },
+    chat('ned', [
+      { if: (s) => !met(s, 'ned'), say: "Pascoe. That's yours in the bay? Plastic. Well. Somebody has to.", reply: 'She floats.' },
+      { if: (s, h) => upgraded(s, 'hull') && morning(h), say: "Been round her bow this morning. That copper's settling in.", reply: 'Good.' },
+      { if: (s) => upgraded(s, 'hull'), say: "Put her on the sand and see. She'll shrug it off now.", reply: "I'll try not to." },
+      { if: (s, h) => morning(h), say: "Kettle's on. Not for you.", reply: 'Fair.' },
+      { if: (s, h) => evening(h), say: "Light's going. Can't see a joint in this light.", reply: "I'll leave you to it." },
+      { if: any, say: "That plank's been in steam an hour. Talk quick.", reply: "I'll come back." },
+    ]),
+  ],
 };
 
 /** Who has something to say to you (they'll turn to you and wave). */
@@ -203,6 +269,7 @@ export const WANTS = {
   tam: (s) => (done(s, 'nets') && !q(s, 'foretop') && !solved(s, 'wreck')) || (!!q(s, 'foretop') && !done(s, 'foretop') && solved(s, 'wreck')),
   gwen: (s) => (met(s, 'gwen') && !q(s, 'knife')) || (has(s, 'knife') && !done(s, 'knife')),
   silas: (s) => !!q(s, 'knife') && !done(s, 'knife') && !has(s, 'knife'),
+  ned: (s) => (met(s, 'ned') && !q(s, 'hull') && !upgraded(s, 'hull')) || (!!q(s, 'hull') && !done(s, 'hull') && has(s, 'copper') && !!firstValuable(s)),
 };
 
 /** The conversation someone opens with, for this state and hour. */

@@ -5,6 +5,9 @@ import { mulberry32 } from '../shared/noise.js';
 import { paint, mergeParts, segment } from './props.js';
 import { drawMap } from './mapview.js';
 import { groundColorAt } from './terrain.js';
+import { countOf } from '../shared/items.js';
+
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 
 // Treasure on the client: maps you carry, digging, holes, chests and crabs.
 // Where treasure is and whether a hole has it is the server's call, and the
@@ -574,7 +577,9 @@ export class Treasure {
     }
     try {
       const r = await this.progress.act('deliver', { chest: c.chestId });
-      this.hud.say(r.ok && r.map ? "There's a map inside." : 'Empty.');
+      if (!r.ok) this.hud.say('Empty.');
+      else if (r.kind) this.hud.say(`${cap(countOf(r.kind, 1))}, and a map.`, 4);
+      else this.hud.say("There's a map inside.");
     } catch {
       this.hud.say('Empty.');
     }

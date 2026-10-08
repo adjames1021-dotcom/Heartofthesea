@@ -419,7 +419,7 @@ html, body {
 .journal .page + .page { border-left: 1px solid rgba(70, 58, 42, 0.28); box-shadow: inset 10px 0 14px -10px rgba(70, 58, 42, 0.35); }
 .journal h3 { margin: 0; font-size: 1.7rem; font-weight: 400; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
 .journal p { margin: 0 0 0 0; }
-.journal ul { margin: 0 0 30px; padding: 0 0 0 1em; list-style: '– '; }
+.journal ul { margin: 0; padding: 0 0 0 1em; list-style: '– '; }
 .journal .entry { margin-bottom: 30px; }
 .journal .entry.done { opacity: 0.5; }
 .journal .empty { opacity: 0.6; }
