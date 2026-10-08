@@ -167,8 +167,11 @@ if (visitId) {
 }
 if (visit) decorating.visit(visit.decor ?? []);
 boat.setUpgrades((visit ?? progress.state)?.upgrades);
+interior.setUpgrades((visit ?? progress.state)?.upgrades);
 progress.onChange((st) => {
-  if (!visit) boat.setUpgrades(st?.upgrades);
+  if (visit) return;
+  boat.setUpgrades(st?.upgrades);
+  interior.setUpgrades(st?.upgrades);
 });
 document.getElementById('controls')?.addEventListener('click', () => screens.toggleControls(true));
 
@@ -422,6 +425,7 @@ function findInteraction() {
       act: async () => {
         const r = await gathering.pick(tree, player.pos);
         if (r?.ok) hud.say(`${describe({ kind: r.kind }).replace(/^./, (c) => c.toUpperCase())}.`, 2);
+        else if (r?.why === 'full') hud.say("The hold's full.", 2);
       },
     };
   }

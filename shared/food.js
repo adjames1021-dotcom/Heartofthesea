@@ -15,8 +15,8 @@ export const PAN = { fish: [16, 34], fruit: [9, 22], food: [8, 22] };
 export const POT = [45, 95];
 const PACE = ['fruit', 'food', 'fish'];
 
-/** Where you can cook and what's there: the galley stove has a pan and a pot, a village fire a pan. */
-export const VESSELS = { galley: ['pan', 'pot'], 'fire:cove': ['pan'] };
+/** Where you can cook and what's there: the galley stove has a pan and a pot, each village fire a griddle. */
+export const VESSELS = { galley: ['pan', 'pot'], 'fire:cove': ['pan'], 'fire:landing': ['pan'], 'fire:strand': ['pan'] };
 export const ROOM = { pan: 2, pot: 3 };
 
 const WHITE_FISH = ['pollock', 'bass', 'plaice', 'mullet', 'wrasse', 'grouper', 'parrotfish'];
@@ -85,20 +85,28 @@ export function goneOff(it, t) {
   return t - (it.cookedAt ?? it.got ?? t) > days * DAY_LENGTH;
 }
 
-/** [done from, burnt from] for what's in a vessel. */
-export function windowFor(vessel, kinds) {
-  if (vessel === 'pot') return POT;
-  let pace = 'fruit';
-  for (const k of kinds) {
-    const c = ITEMS[k]?.kind;
-    if (PACE.indexOf(c) > PACE.indexOf(pace)) pace = c;
+/**
+ * [done from, burnt from] for what's in a vessel. A better stove (one of
+ * Ned's) keeps a steadier heat: things take as long to cook but much
+ * longer to burn.
+ */
+export function windowFor(vessel, kinds, better = false) {
+  let w;
+  if (vessel === 'pot') w = POT;
+  else {
+    let pace = 'fruit';
+    for (const k of kinds) {
+      const c = ITEMS[k]?.kind;
+      if (PACE.indexOf(c) > PACE.indexOf(pace)) pace = c;
+    }
+    w = PAN[pace];
   }
-  return PAN[pace];
+  return better ? [w[0], w[0] + (w[1] - w[0]) * 1.8] : w;
 }
 
 /** How far along something on the heat is: 'raw', 'done' or 'burnt'. */
-export function doneness(vessel, kinds, secs) {
-  const [a, b] = windowFor(vessel, kinds);
+export function doneness(vessel, kinds, secs, better = false) {
+  const [a, b] = windowFor(vessel, kinds, better);
   return secs < a ? 'raw' : secs < b ? 'done' : 'burnt';
 }
 

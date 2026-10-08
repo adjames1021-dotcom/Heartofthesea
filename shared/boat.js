@@ -178,7 +178,8 @@ export function stepBoat(b, dt, env) {
   let Fs = 0;
 
   // --- Mainsail ---
-  const mainArea = BOAT.mainArea * b.mainHoist * BOAT.reefFactors[b.reef];
+  // Ned's bigger main (b.bigSail) has about a third more cloth.
+  const mainArea = BOAT.mainArea * (b.bigSail ? 1.3 : 1) * b.mainHoist * BOAT.reefFactors[b.reef];
   const autoTrim = (range) => clamp(absAwa - 16 * DEG, range[0], range[1]);
   const mainMax = BOAT.arcade ? autoTrim(BOAT.mainSheetRange) : lerp(BOAT.mainSheetRange[0], BOAT.mainSheetRange[1], b.mainSheet);
   const mainAng = Math.min(mainMax, absAwa);

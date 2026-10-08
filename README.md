@@ -72,6 +72,8 @@ Click to start. Mouse to look, wheel to zoom.
 | Q | fish: cast, then Q again when the float goes under |
 | M | hold up your maps (← → to go through them) |
 | L | the boat's lights, from anywhere aboard |
+| E, then 1 2 3 | talk to someone, and answer |
+| J | your journal |
 
 Walking into a waist-high edge pulls you up onto it. Jump at a ledge and you
 catch it: W climbs up, S drops, A/D shimmies along it. Walk or swim into a net
@@ -107,13 +109,13 @@ The steps at the front of the cockpit (E) go below, into a cabin about the
 size a real 37-footer has: galley to port, chart table to starboard, a saloon
 with settees and a drop-leaf table, and a V-berth in the bow. Below decks
 the camera looks down into the cabin from above, like a cutaway. There's always a spare treasure map on the
-chart table if you've run out, and you can cook what you catch on the stove.
+chart table if you've run out, and the galley stove is for cooking (below).
 
 There are eleven things to find on the islands, some in plain sight, some
 not: a fisherman's hut, a cairn on the summit, a burnt-out cottage, an
 upturned dinghy, an old anchor, and small things washed up on the beaches.
 E picks them up or reads them. Tab lists what you've found, and it's kept
-aboard: on the saloon table, the chart table and the saloon wall.
+aboard, on show in the cabin, where you can move it about (below).
 
 Fishing works from the deck, a beach or a rock: face the water and press Q.
 What bites depends on where you are (reef fish on the reef, flatfish over
@@ -122,6 +124,75 @@ you've caught.
 
 To go ashore: sail in close, press G at the helm, and swim. The swim
 platform at the stern is where you climb back aboard.
+
+## People and places
+
+Three villages, each its own sort of place, and a boatyard:
+
+| Where | Who |
+| --- | --- |
+| **Head Cove**, on Old Head. Fishing: stilt huts, a dock, drying racks, nets. | Oda Penhale (nets), Tam Ruddock (fishes off the dock, talks), Gwen Tallack (salts the catch), and Silas Hendy, who keeps the light up the hill. |
+| **The Landing**, on Green Island. Trading: a store, a quay, a ropewalk. | Hester Pengelly (the store), her boy Jory, Abel Trounson (under the big tree), Martha Vosper (rope). |
+| **Kettle Strand**, below the notch on Kettle Island. Half empty: ruined cottages, a jetty with boards missing. | Mags Rowe (goats, cheese, her own boat), Ben and Dorcas Clemo. |
+| **Pascoe's yard**, on the west side of the bay on Saddle. | Ned Pascoe, shipwright. |
+
+Everyone keeps their own hours on the shared clock: down at the dock at
+dawn, at work through the day, round the fire at dusk, asleep at night (and
+you can't talk to someone who's asleep). E talks to someone; 1, 2, 3 (or a
+click) picks what you say. Someone with something to say turns to you and
+waves. There are no markers over anyone.
+
+Things people ask of you come out of talking to them, and go in your
+journal (J) in your own words, with what's in the hold, the dishes you know
+and what's been done to the boat. Some lead on to each other: Oda's nets
+take you to the Molly Ann, and her copper is what Ned wants; once that's done
+Tam sends you up the wreck's foremast; Gwen's knife has Silas mention a sail
+with no lights, which takes you to Kettle and the Landing and ends in a
+treasure map; Abel's cairn is where the spyglass is; Martha's canvas becomes
+your bigger sail; Ben's lamp ends with his son's lantern on your bow.
+Directions are given the way people give them. People remember what you've
+done for them.
+
+**The yard.** Ned will do things to your boat that show: doubled planking
+and a copper stem (she slides off the sand instead of sticking), a bigger
+mainsail on a longer boom (faster), a second lantern up forward, crates on
+deck and a bigger hold (room for twice as much), and a cast-iron galley
+stove (much harder to burn things on). Each costs materials from the world
+(copper, canvas, rope, driftwood, old iron) and something of value from a
+chest. He says what he wants; nothing's listed, nothing has a number.
+
+**Food.** Fish from the line, fruit off the trees (limes, plantains,
+coconuts, which grow back after a while), salt fish and cheese from people,
+and trades at the Landing. Cook on the galley stove (a pan and a pot) or a
+village fire once it's lit: put things in, watch them and listen, and take
+them off when they look and sound right. Pale and quiet is raw; golden and
+sizzling is done; black, smoking and crackling is burnt. The right things
+together make a dish; you learn dishes by being told or by getting one
+right. Eating a good dish helps a little for a while (a stronger swimmer,
+steadier on a heeling deck, better eyes at night). Raw food goes off after a
+few days. Nothing else: no hunger, no starving.
+
+**The cabin.** Everything you find is on show below. Walk up to something
+and press E to pick it up; the mouse moves it over whatever's under it (a
+table, a shelf, the floor) or hangs it on a wall. Q or the wheel turns it, E
+or a click puts it down, Esc puts it back. The locker under the berth holds
+what isn't out. Things rock a little with the boat. Settings has a link for
+someone else to come aboard and look round your cabin as you've left it.
+
+## Your progress
+
+Everything that lasts (maps, finds, the hold, what people have asked of you,
+the journal, the boat's upgrades, the cabin) is kept on the server, not in
+the browser. Each player has their own little store on Cloudflare (a Durable
+Object called `Player`): one at a time, every request goes through the rules
+in `worker/rules.js`, which decide what's allowed, and the result is written
+before the answer goes back. The browser asks; the server decides.
+
+You don't sign in. The first time you play you're given a save code
+(Settings shows it, like `K7QM-XA2P-...`). The browser remembers it; to carry
+on somewhere else, type it into Settings there. Anyone with the code can play
+as you, so keep it to yourself. The visit link uses a different, public id
+that can only look at your cabin.
 
 ## Treasure
 
@@ -158,9 +229,10 @@ platform at the stern is where you climb back aboard.
 
 The server decides all of this. `worker/treasure.js` issues each map signed
 with HMAC (the client only gets the drawing, never the spot), decides every
-dig, and checks that you're really at a climb's chest before it counts. It
-keeps no state, so it costs nothing to run. Progress (maps held, chests found)
-is kept in the browser's localStorage under `hots.v1`.
+dig, and checks that you're really at a climb's chest before it counts. What
+you hold and have found is kept with the rest of your progress on the server
+(below). A chest has something of value in it as well as the next map: a
+pocket watch, a string of pearls, a brass sextant.
 
 Maps are signed with a random key the Worker makes for itself the first time
 it runs and keeps in a Durable Object (`Keeper`), so there's nothing to set up.
@@ -199,7 +271,8 @@ Developer URL parameters (append to the game URL):
 Debug pages: `dev/bear.html` (the character), `dev/maps.html` (every island's
 map sheet), `dev/props.html` and `dev/island-props.html` (props).
 
-To start over, clear `hots.v1` from localStorage.
+To start over, clear `hots.player` from localStorage (you'll be given a new
+save code; the old one still works if you type it back in).
 
 ## Deploy to Cloudflare
 
@@ -229,7 +302,21 @@ shared/world.js        island shapes and layout, ground and seabed, shallows,
                        digging rules, puzzle geometry (shadow spot, shelf, nest)
 shared/wreck.js        the Molly Ann's layout (renderer, course and server share it)
 shared/boat.js         sailing physics: sails, keel, rudder, heel, engine, anchor
+shared/items.js        everything you can own, and how it's written
+shared/villages.js     villages, people and their days; shared/talk.js what they say
+shared/quests.js       the steps of things people ask that are out in the world
+shared/food.js         cooking times, recipes, what eating does, going off
+shared/gather.js       where fruit, driftwood and iron are; shared/upgrades.js the yard
+shared/decor.js        what can go about the cabin, and where finds first go
 src/main.js            renderer, loop, interactions, keys
+src/progress.js        your save code, and asking the server to do things
+src/village.js         villages and the yard, and the people walking their day
+src/talk.js            the talk card; shared/talk.js has everything people say
+src/journal.js         the journal (J)
+src/questworld.js      things out in the world for quests (the copper, the bales)
+src/cooking.js         stove, pans, pot and fires; src/food3d.js food models
+src/gather.js          fruit trees, driftwood and old iron
+src/decorate.js        moving things about the cabin, the locker, visits
 src/player.js          the bear's controller: walk, swim, jump, ledges, nets, ropes
 src/bear.js            the bear's model and animation
 src/boat.js            the sloop's model, stations, lights and colliders
@@ -248,9 +335,11 @@ src/puzzles.js         notes and set pieces (Pell's Bar, the Horseshoe)
 src/hatch.js           the Molly Ann's hatch, yard, net and casks
 src/course.js          the wreck climb; src/stack.js the Gannet Stack climb
 src/ocean.js           ocean mesh and water shader; src/atmosphere.js sky and light
-worker/index.js        Worker routes: /api/time, /api/maps, /api/dig, /api/near, /api/claim
+worker/index.js        Worker routes: /api/time, /api/player, /api/player/new, /api/cabin/<id>
+worker/player.js       the Player Durable Object: one per save code
+worker/rules.js        what each action may do to your progress (all the server's rules)
 worker/treasure.js     treasure spots, map signing, dig and claim decisions
-tests/                 node tests for the world and the treasure rules
+tests/                 node tests for the world, the treasure and the progress rules
 ```
 
 ## Toward multiplayer
@@ -263,8 +352,9 @@ tests/                 node tests for the world and the treasure rules
 3. Broadcast boats, players and loose objects (chests, casks). Nobody needs to
    send the sea, the islands or the weather; they all come from the clock and
    the seed.
-4. Move map ownership and dug holes into the Durable Object so treasure and
-   puzzle state are shared.
+4. Each player's progress already lives in its own Durable Object
+   (`worker/player.js`); a shared `Ocean` object would hold what everyone
+   sees at once (boats, loose chests), and visits could become real boarding.
 
 ## Licensing note
 

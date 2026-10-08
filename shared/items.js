@@ -20,6 +20,13 @@ export const ITEMS = {
 
   // --- Materials, things to hand over, things given ---
   copper: { kind: 'material', name: 'sheet of copper', plural: 'sheets of copper' },
+  canvas: { kind: 'material', name: 'bale of canvas', plural: 'bales of canvas' },
+  rope: { kind: 'material', name: 'coil of rope', plural: 'coils of rope' },
+  driftwood: { kind: 'material', name: 'length of driftwood', plural: 'lengths of driftwood' },
+  iron: { kind: 'material', name: 'bit of old iron', plural: 'bits of old iron' },
+  oil: { kind: 'errand', name: 'can of paraffin', plural: 'cans of paraffin' },
+  lantern: { kind: 'errand', name: "Davey Clemo's ship's lantern" },
+  cheese: { kind: 'food', name: "round of goat's cheese", plural: "rounds of goat's cheese" },
   corkfloat: { kind: 'find', name: "cork float from Oda's nets", plural: 'cork floats' },
   knife: { kind: 'errand', name: "Gwen's gutting knife" },
   saltfish: { kind: 'food', name: 'salt fish', plural: 'salt fish', cooked: 'fried salt fish' },

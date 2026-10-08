@@ -84,7 +84,46 @@ function coconutPalm(rand, seed) {
   return { parts, fruit, leaves: [], height: 7, r: 0.26 };
 }
 
-const LABEL = { lime: 'Pick a lime', plantain: 'Cut a plantain', coconut: 'Pick up a coconut' };
+/** A length of driftwood on the sand, bleached and twisted. (It's all "fruit": gone when you've had it.) */
+function driftwood(rand) {
+  const fruit = new THREE.Group();
+  const parts = [];
+  let prev = V(-1.1, 0.1, 0);
+  for (let i = 1; i <= 5; i++) {
+    const p = V(-1.1 + i * 0.45, 0.1 + (rand() - 0.5) * 0.08, (rand() - 0.5) * 0.25);
+    parts.push(paint(segment(prev, p, 0.11 - i * 0.008, 0.1 - i * 0.008, 6), i % 2 ? '#c8bfae' : '#b8ae9a'));
+    prev = p;
+  }
+  parts.push(paint(segment(V(-0.3, 0.12, 0), V(-0.1, 0.32, 0.35), 0.04, 0.025, 4), '#c8bfae'));
+  const m = new THREE.Mesh(mergeParts(parts), mat);
+  m.castShadow = true;
+  fruit.add(m);
+  return { parts: [], fruit, leaves: [], height: 0, r: 0 };
+}
+
+/** Rusted iron: a bar, a ring and a bit of chain, where something burned or broke up. */
+function oldIron(rand) {
+  const fruit = new THREE.Group();
+  const parts = [];
+  parts.push(paint(segment(V(-0.45, 0.05, -0.1), V(0.4, 0.07, 0.15), 0.035, 0.035, 5), '#6e4a33'));
+  const ring = new THREE.TorusGeometry(0.16, 0.025, 5, 12);
+  ring.rotateX(Math.PI / 2 - 0.2);
+  ring.translate(0.1, 0.04, -0.3);
+  parts.push(paint(ring, '#5e3f2c'));
+  for (let i = 0; i < 4; i++) {
+    const l = new THREE.TorusGeometry(0.05, 0.014, 4, 8);
+    l.rotateY(i % 2 ? Math.PI / 2 : 0);
+    l.rotateX(Math.PI / 2 * (i % 2));
+    l.translate(-0.3 + i * 0.08, 0.03, 0.25 + rand() * 0.04);
+    parts.push(paint(l, '#7a5238'));
+  }
+  const m = new THREE.Mesh(mergeParts(parts), mat);
+  m.castShadow = true;
+  fruit.add(m);
+  return { parts: [], fruit, leaves: [], height: 0, r: 0 };
+}
+
+const LABEL = { lime: 'Pick a lime', plantain: 'Cut a plantain', coconut: 'Pick up a coconut', driftwood: 'Pick up the driftwood', iron: 'Pick up the old iron' };
 
 export class Gathering {
   constructor({ scene, world, progress }) {
@@ -98,14 +137,17 @@ export class Gathering {
       const rand = mulberry32(seed++ * 7919);
       const at = gatherWorld(id);
       const y = groundAt(at.x, at.z);
-      const plant = g.plant === 'lime' ? limeTree(rand) : g.plant === 'plantain' ? plantain(rand) : coconutPalm(rand, seed);
+      const make = { lime: limeTree, plantain, palm: (r) => coconutPalm(r, seed), driftwood, iron: oldIron }[g.plant];
+      const plant = make(rand);
       const root = new THREE.Group();
       root.position.set(at.x, y, at.z);
       root.rotation.y = rand() * TAU;
-      const m = new THREE.Mesh(mergeParts(plant.parts), mat);
-      m.castShadow = true;
-      m.receiveShadow = true;
-      root.add(m);
+      if (plant.parts.length) {
+        const m = new THREE.Mesh(mergeParts(plant.parts), mat);
+        m.castShadow = true;
+        m.receiveShadow = true;
+        root.add(m);
+      }
       if (plant.leaves.length) {
         const l = new THREE.Mesh(mergeParts(plant.leaves), leafMat);
         l.castShadow = true;
@@ -115,7 +157,7 @@ export class Gathering {
       if (g.plant === 'palm') for (const n of plant.fruit.children) n.position.y = groundAt(at.x + n.position.x, at.z + n.position.z) - y + 0.08;
       root.add(plant.fruit);
       this.group.add(root);
-      world.addStatic({ type: 'cyl', x: at.x, z: at.z, r: plant.r, y0: y - 1, y1: y + Math.min(plant.height, 2.4) });
+      if (plant.r) world.addStatic({ type: 'cyl', x: at.x, z: at.z, r: plant.r, y0: y - 1, y1: y + Math.min(plant.height, 2.4) });
       this.spots.push({ id, def: g, at, y, fruit: plant.fruit, label: LABEL[g.kind] });
     }
     this.t = 0;

@@ -181,7 +181,7 @@ export class Fishing {
     const c = this.progress.state?.catches;
     if (!c) return [];
     const rows = Object.entries(c.counts).map(([k, n]) => countOf(k, n));
-    if (c.biggest) rows.push(`biggest a ${FISH[c.biggest.kind]?.name ?? c.biggest.kind}, ${c.biggest.kg.toFixed(1)} kg`);
+    if (c.biggest) rows.push(`the biggest, a ${FISH[c.biggest.kind]?.name ?? c.biggest.kind}`);
     return rows;
   }
 
@@ -346,12 +346,17 @@ export class Fishing {
     this.player.bear.root.add(m);
     this.shown = m;
     // The server keeps it (and checks it's a fish of a sensible size).
-    this.progress?.act('catch', { kind: key, kg }).catch(() => {});
+    this.progress
+      ?.act('catch', { kind: key, kg })
+      .then((r) => r?.why === 'full' && this.hud.say("The hold's full. Back it goes.", 3))
+      .catch(() => {});
     if (f.junk) {
       this.hud.say('An old boot.', 3);
     } else {
+      // How big, in words, against others of its kind.
       const article = /^[aeiou]/.test(f.name) ? 'An' : 'A';
-      this.hud.say(`${article} ${f.name}. ${kg.toFixed(1)} kg.`, 3);
+      const t = (kg - f.kg[0]) / (f.kg[1] - f.kg[0]);
+      this.hud.say(`${article} ${f.name}.${t > 0.7 ? ' A big one.' : t < 0.15 ? ' A tiddler.' : ''}`, 3);
     }
   }
 }

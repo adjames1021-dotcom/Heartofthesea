@@ -7,6 +7,7 @@ import { ITEMS, FIND_IDS } from '../shared/items.js';
 import { QUESTS } from '../shared/quests.js';
 import { RECIPES, describe, sameKey } from '../shared/food.js';
 import { UPGRADES } from '../shared/upgrades.js';
+import { aboutCabin } from '../shared/decor.js';
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -63,8 +64,9 @@ export class Journal {
   /** What's aboard, in words: "three mackerel", "a burnt pollock", "a sheet of copper". */
   #hold(s) {
     const groups = new Map();
+    const shown = aboutCabin(s); // what's out in the cabin isn't in the hold
     for (const it of s.items ?? []) {
-      if (FIND_IDS.includes(it.kind) || !ITEMS[it.kind]) continue;
+      if (FIND_IDS.includes(it.kind) || !ITEMS[it.kind] || shown.has(it.id)) continue;
       const key = sameKey(it);
       if (!groups.has(key)) groups.set(key, { it, n: 0 });
       groups.get(key).n++;

@@ -214,7 +214,9 @@ test("Ned doubles her planking for the copper and something for his time", async
   assert.deepEqual(s.upgrades, ['hull']);
   assert.deepEqual(s.items.map((i) => i.kind), ['ring'], 'the copper and the first valuable went');
   assert.ok(s.quests.hull.done);
-  assert.match(lineText(openingFor('ned', s, 14).lines[0], s, 14), /shrug it off/);
+  assert.equal(openingFor('ned', s, 14).id, 'jobs-tell', 'and then he has more to say');
+  const small = TALK.ned.find((c) => c.id === 'small');
+  assert.match(lineText(small.lines[0], s, 14), /shrug it off/);
 });
 
 // --- Food ---
@@ -305,4 +307,85 @@ test("Ned won't take the candlesticks off your shelf", async () => {
   ({ s } = await talk(s, 'ned', [0, 0, 0, 0]));
   assert.ok(s.upgrades.includes('hull'));
   assert.deepEqual(s.items.map((i) => i.kind), ['candlesticks'], 'paid with the watch');
+});
+
+// --- The other villages ---
+const meet = async (s, ...who) => {
+  for (const w of who) ({ s } = await talk(s, w, [0]));
+  return s;
+};
+
+test("The sail with no lights: Silas, Mags, Hester, Mags again, and a map at the end", async () => {
+  let s = { ...freshState(0), quests: { knife: { stage: 0, started: 0, done: false } }, met: { silas: true } };
+  ({ s } = await talk(s, 'silas', [0, 0, 0]));
+  assert.equal(s.quests.sail.stage, 0);
+  s = await meet(s, 'mags', 'hester');
+  let c;
+  ({ s, convo: c } = await talk(s, 'mags', [0, 0, 0]));
+  assert.equal(c, 'sail-own');
+  assert.equal(s.quests.sail.stage, 1);
+  ({ s, convo: c } = await talk(s, 'hester', [0, 0, 0]));
+  assert.equal(c, 'sail-dues');
+  const maps = s.maps.length;
+  ({ s, convo: c } = await talk(s, 'mags', [0, 0, 0]));
+  assert.equal(c, 'sail-done');
+  assert.ok(s.quests.sail.done && s.maps.length === maps + 1 && has(s, 'cheese'), 'a map and a cheese');
+});
+
+test("Abel's cairn: go and look, and he tells you a recipe", async () => {
+  let s = await meet(freshState(0), 'abel');
+  ({ s } = await talk(s, 'abel', [0, 0, 0, 0]));
+  const at = QUESTS.cairn.steps.cairn.at;
+  const r = await apply(s, { type: 'quest', id: 'cairn', step: 'cairn', x: at[0] + 1, z: at[1] }, ctx());
+  assert.ok(r.reply.ok);
+  ({ s } = await talk(r.state, 'abel', [0, 0, 0]));
+  assert.ok(s.quests.cairn.done && s.recipes.includes('squid-coconut'));
+});
+
+test("Martha's canvas, then Ned makes a bigger sail of it", async () => {
+  let s = await meet(freshState(0), 'martha');
+  ({ s } = await talk(s, 'martha', [0, 0, 0]));
+  const at = QUESTS.canvas.steps.bale.at;
+  s = (await apply(s, { type: 'quest', id: 'canvas', step: 'bale', x: at[0], z: at[1] }, ctx())).state;
+  assert.equal(s.items.filter((i) => i.kind === 'canvas').length, 2);
+  ({ s } = await talk(s, 'martha', [0, 0, 0]));
+  assert.ok(s.quests.canvas.done && has(s, 'rope') && has(s, 'canvas'));
+  // Ned, once he's done the hull and said what else he can do.
+  s = withItems({ ...s, met: { ...s.met, ned: true }, upgrades: ['hull'] }, 'watch');
+  ({ s } = await talk(s, 'ned', [0, 0, 0]));
+  assert.ok(s.quests.yard);
+  ({ s } = await talk(s, 'ned', [0, 0]));
+  assert.deepEqual(s.upgrades, ['hull', 'sail']);
+  assert.ok(!has(s, 'canvas') && !has(s, 'rope') && !has(s, 'watch'));
+});
+
+test("Ben's lamp: oil from Silas, and Davey's lantern ends up on your bow", async () => {
+  let s = await meet(freshState(0), 'ben', 'silas');
+  ({ s } = await talk(s, 'ben', [0, 0, 0]));
+  assert.equal(s.quests.lamp.stage, 0);
+  let c;
+  ({ s, convo: c } = await talk(s, 'silas', [0, 0]));
+  assert.equal(c, 'lamp-oil');
+  ({ s, convo: c } = await talk(s, 'ben', [0, 0, 0]));
+  assert.equal(c, 'lamp-done');
+  assert.ok(has(s, 'lantern') && !has(s, 'oil'));
+  s = withItems({ ...s, met: { ...s.met, ned: true }, upgrades: ['hull'], quests: { ...s.quests, yard: { stage: 0, started: 0, done: false } } }, 'ring');
+  ({ s } = await talk(s, 'ned', [0, 0]));
+  assert.ok(s.upgrades.includes('lantern') && s.quests.lamp.done);
+});
+
+test('Hester trades, Dorcas tells you how to make do, and the hold fills up', async () => {
+  let s = withItems(await meet(freshState(0), 'hester', 'dorcas'), 'mackerel', 'pollock', 'bass');
+  let c;
+  ({ s, convo: c } = await talk(s, 'hester', [0, 0]));
+  assert.equal(c, 'trade');
+  assert.ok(has(s, 'canvas') && !has(s, 'mackerel'));
+  ({ s } = await talk(s, 'dorcas', [0]));
+  assert.ok(s.recipes.includes('saltfish-plantain'));
+  // A full hold turns fish away.
+  let full = withItems(freshState(0), ...Array(16).fill('lime'));
+  const r = await apply(full, { type: 'catch', kind: 'mackerel', kg: 0.5 }, ctx(100));
+  assert.equal(r.reply.why, 'full');
+  full = { ...full, upgrades: ['hold'] };
+  assert.ok((await apply(full, { type: 'catch', kind: 'mackerel', kg: 0.5 }, ctx(100))).reply.ok);
 });

@@ -34,8 +34,9 @@ function box(w, h, d, color, x, y, z, rx = 0, ry = 0, rz = 0) {
 // Hats: what the villagers wear, sat on the bear's head.
 // ---------------------------------------------------------------------------
 
-function hat(kind) {
+function hat(kind, tint = null) {
   const parts = [];
+  const c = (base) => tint ?? base;
   if (kind === 'souwester') {
     const crown = new THREE.CylinderGeometry(0.22, 0.27, 0.2, 14);
     crown.translate(0, 0.56, -0.02);
@@ -50,7 +51,7 @@ function hat(kind) {
     const roll = new THREE.TorusGeometry(0.28, 0.045, 6, 18);
     roll.rotateX(Math.PI / 2);
     roll.translate(0, 0.45, -0.02);
-    parts.push(paint(dome, '#3d5a88'), paint(roll, '#33507a'));
+    parts.push(paint(dome, c('#3d5a88')), paint(roll, new THREE.Color(c('#33507a')).multiplyScalar(0.85)));
   } else if (kind === 'shawl') {
     // Worn on the shoulders (on the body, not the head).
     const shawl = new THREE.TorusGeometry(0.29, 0.09, 6, 18);
@@ -61,7 +62,8 @@ function hat(kind) {
     knot.translate(0, 0.7, 0.3);
     const tail = new THREE.BoxGeometry(0.1, 0.18, 0.03);
     tail.translate(0.03, 0.58, 0.31);
-    parts.push(paint(shawl, '#b8463b'), paint(knot, '#a33c32'), paint(tail, '#a33c32'));
+    const dark = new THREE.Color(c('#a33c32')).multiplyScalar(tint ? 0.85 : 1);
+    parts.push(paint(shawl, c('#b8463b')), paint(knot, dark), paint(tail, dark));
   } else if (kind === 'apron') {
     // A leather apron, worn on the body: a bib curved round the front, with
     // a strap round the neck and ties round the middle.
@@ -105,7 +107,26 @@ function hat(kind) {
     const pencil = new THREE.CylinderGeometry(0.008, 0.008, 0.12, 5);
     pencil.rotateZ(0.25);
     pencil.translate(0.04, 0.4, 0.36);
-    parts.push(paint(bib, '#6b4a30'), paint(strap, '#5a3d27'), paint(ties, '#5a3d27'), paint(pocket, '#5e4029'), paint(pencil, '#c9a23a'));
+    const strapC = new THREE.Color(c('#5a3d27')).multiplyScalar(tint ? 0.8 : 1);
+    parts.push(paint(bib, c('#6b4a30')), paint(strap, strapC), paint(ties, strapC), paint(pocket, strapC), paint(pencil, '#c9a23a'));
+  } else if (kind === 'flatcap') {
+    // A flat tweed cap, peak pulled down.
+    const crown = new THREE.SphereGeometry(0.27, 14, 6, 0, TAU, 0, Math.PI / 2);
+    crown.scale(1, 0.38, 1.05);
+    crown.translate(0, 0.5, -0.01);
+    const peak = new THREE.CylinderGeometry(0.2, 0.2, 0.02, 12, 1, false, -Math.PI / 2, Math.PI);
+    peak.rotateX(0.18);
+    peak.translate(0, 0.5, 0.17);
+    parts.push(paint(crown, c('#6b5a44')), paint(peak, new THREE.Color(c('#6b5a44')).multiplyScalar(0.8)));
+  } else if (kind === 'neckerchief') {
+    // Knotted round the neck (worn on the body).
+    const band = new THREE.TorusGeometry(0.2, 0.045, 5, 16);
+    band.rotateX(Math.PI / 2);
+    band.translate(0, 0.79, 0.02);
+    const knot = new THREE.ConeGeometry(0.07, 0.12, 4);
+    knot.rotateX(Math.PI);
+    knot.translate(0, 0.72, 0.2);
+    parts.push(paint(band, c('#a8322a')), paint(knot, new THREE.Color(c('#a8322a')).multiplyScalar(0.85)));
   } else if (kind === 'cap') {
     const crown = new THREE.CylinderGeometry(0.27, 0.25, 0.13, 16);
     crown.translate(0, 0.54, -0.02);
@@ -192,15 +213,32 @@ class Builder {
     }
     // Dark seams so it reads as boards.
     for (let i = -3; i <= 3; i++) piece(box(0.012, H, 0.02, WOOD_DARK, 0, 0, 0), -D / 2 + 0.06, y0 + H / 2, i * 0.45);
-    // A thatched roof, pitched along the hut, hanging well over.
+    // A thatched roof, pitched along the hut, hanging well over. A ruin
+    // has lost most of one side and some of the other.
     for (const side of [-1, 1]) {
+      if (h.ruin && side < 0) {
+        const scrap = new THREE.BoxGeometry(D * 0.4, 0.16, W / 2 / Math.cos(0.55) * 0.6);
+        scrap.rotateX(side * 0.55);
+        piece(paint(scrap, '#7a6a4a'), -D * 0.25, y0 + H + 0.3, side * (W / 4 + 0.3));
+        continue;
+      }
       const roof = new THREE.BoxGeometry(D + 0.9, 0.16, W / 2 / Math.cos(0.55) + 0.5);
       roof.rotateX(side * 0.55);
-      piece(paint(roof, side > 0 ? THATCH : THATCH_DARK), 0, y0 + H + 0.42, side * (W / 4 + 0.08));
+      piece(paint(roof, h.ruin ? '#7a6a4a' : side > 0 ? THATCH : THATCH_DARK), 0, y0 + H + 0.42, side * (W / 4 + 0.08));
     }
-    // Inside: a low bunk with a blanket.
-    piece(box(1.0, 0.3, 2.0, WOOD_DARK, 0, 0, 0), -0.75, y0 + 0.15, 0.4);
-    piece(box(0.95, 0.06, 1.7, '#8a5a4a', 0, 0, 0), -0.75, y0 + 0.33, 0.5);
+    if (h.ruin) {
+      // Fallen thatch and a broken board on the floor; nobody sleeps here.
+      piece(box(1.4, 0.12, 0.9, '#6e5f45', 0, 0, 0, 0, 0.1, 0.06), -0.2, y0 + 0.06, -0.6);
+      piece(box(1.6, 0.05, 0.2, WOOD_WET, 0, 0, 0, 0, 0.4, 0.2), 0.3, y0 + 0.1, 0.5);
+    } else {
+      // Inside: a low bunk with a blanket (two, if two live here).
+      piece(box(1.0, 0.3, 2.0, WOOD_DARK, 0, 0, 0), -0.75, y0 + 0.15, 0.4);
+      piece(box(0.95, 0.06, 1.7, '#8a5a4a', 0, 0, 0), -0.75, y0 + 0.33, 0.5);
+      if (h.beds === 2) {
+        piece(box(1.0, 0.3, 2.0, WOOD_DARK, 0, 0, 0), 0.4, y0 + 0.15, 0.4);
+        piece(box(0.95, 0.06, 1.7, '#5a6a8a', 0, 0, 0), 0.4, y0 + 0.33, 0.5);
+      }
+    }
     // Steps (or a ramp) down from the door to the ground.
     const [rx, rz] = at(D / 2 + 2.6, 0);
     const pr = this.w(rx, rz);
@@ -228,7 +266,10 @@ class Builder {
     const mx = (x0 + x1) / 2;
     const mz = (z0 + z1) / 2;
     // Planks across the walkway, with gaps.
+    let k = 0;
     for (let u = -len / 2; u < len / 2; u += 0.36) {
+      // An old jetty's lost a plank here and there.
+      if (d.broken && (k++ % 7 === 3 || k % 11 === 5)) continue;
       const x = mx + Math.cos(f) * u;
       const z = mz + Math.sin(f) * u;
       this.put(box(0.32, 0.08, d.width, (Math.round(u * 10) % 3 ? WOOD : WOOD_DARK), 0, 0, 0), x, d.y - 0.04, z, f);
@@ -540,6 +581,89 @@ Object.assign(Builder.prototype, {
     }
   },
 
+  /** A crate of trade goods (stack: one on top). */
+  crate(lx, lz, face, stack = 0) {
+    const g = groundAt(this.w(lx, lz).x, this.w(lx, lz).z);
+    const y = g + 0.3 + stack * 0.6;
+    this.put(box(0.6, 0.6, 0.6, '#9c8058', 0, 0, 0), lx, y, lz, face);
+    for (const [dx, dz] of [[0.31, 0], [-0.31, 0]]) this.put(box(0.02, 0.6, 0.62, '#7a6244', dx, 0, dz), lx, y, lz, face);
+    for (const dy of [-0.25, 0.25]) this.put(box(0.62, 0.06, 0.62, '#7a6244', 0, dy, 0), lx, y, lz, face);
+    if (!stack) this.solid(lx, g + 0.45, lz, 0.6, 0.9, 0.6, face);
+  },
+
+  /** The ropewalk: posts in a line with strands strung along them, and a wheel at one end. */
+  ropewalk(rw) {
+    const [x0, z0] = rw.from;
+    const [x1, z1] = rw.to;
+    const f = Math.atan2(z1 - z0, x1 - x0);
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const at = (u) => [x0 + Math.cos(f) * u, z0 + Math.sin(f) * u];
+    const pts = [];
+    for (let u = 0; u <= len + 0.01; u += 4) {
+      const [x, z] = at(u);
+      const p = this.w(x, z);
+      const g = groundAt(p.x, p.z);
+      this.put(paint(segment(V(0, g - 0.2, 0), V(0, g + 1.0, 0), 0.05, 0.045, 5), WOOD_DARK), x, 0, z);
+      this.put(box(0.08, 0.06, 0.5, WOOD_DARK, 0, 0, 0), x, g + 1.0, z, f);
+      pts.push([p.x, g + 1.04, p.z]);
+    }
+    for (const off of [-0.15, 0, 0.15]) {
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1];
+        const b2 = pts[i];
+        const ox = -Math.sin(-this.yaw + f) * off;
+        const oz = Math.cos(-this.yaw + f) * off;
+        this.parts.push(paint(segment(V(a[0] + ox, a[1], a[2] + oz), V(b2[0] + ox, b2[1] - 0.04, b2[2] + oz), 0.012, 0.012, 3), ROPE));
+      }
+    }
+    // The spinning wheel at the start of the walk.
+    const [wx, wz] = at(-1.2);
+    const p = this.w(wx, wz);
+    const g = groundAt(p.x, p.z);
+    const wheel = new THREE.TorusGeometry(0.45, 0.04, 4, 14);
+    this.put(paint(wheel, WOOD), wx, g + 0.75, wz, f + Math.PI / 2);
+    this.put(box(0.12, 0.75, 0.5, WOOD_DARK, 0, 0, 0), wx, g + 0.37, wz, f);
+  },
+
+  /** A small sailing boat lying to a mooring off the jetty, mast up, sail stowed. */
+  sailboat(lx, lz, face) {
+    const hull = new THREE.SphereGeometry(1, 14, 6, 0, TAU, Math.PI / 2, Math.PI / 2);
+    hull.scale(0.9, 0.55, 2.5);
+    hull.translate(0, 0.35, 0);
+    const parts = [paint(hull, '#46423c')];
+    const rim = new THREE.TorusGeometry(1, 0.04, 4, 24);
+    rim.rotateX(Math.PI / 2);
+    rim.scale(0.9, 1, 2.5);
+    rim.translate(0, 0.35, 0);
+    parts.push(paint(rim, '#8a7a5a'));
+    parts.push(paint(segment(V(0, 0.2, 0.7), V(0, 4.6, 0.6), 0.05, 0.035, 5), '#8a6a45'));
+    parts.push(paint(segment(V(0, 1.05, 0.65), V(0, 1.05, -1.7), 0.035, 0.03, 5), '#8a6a45'));
+    // The sail, furled along the boom: dark tan, no lights anywhere.
+    parts.push(paint(segment(V(0, 1.15, 0.55), V(0, 1.15, -1.6), 0.11, 0.07, 6), '#7a4a32'));
+    const g = mergeParts(parts);
+    const p = this.w(lx, lz);
+    g.rotateY(this.yaw - face);
+    g.translate(p.x, 0.18, p.z);
+    this.parts.push(g);
+  },
+
+  /** A garden patch: dug rows with something green coming up. */
+  garden(gd) {
+    const [lx, lz] = gd.at;
+    for (let r = 0; r < 4; r++) {
+      const x = lx - gd.w / 2 + (r + 0.5) * (gd.w / 4);
+      for (let k = 0; k < 6; k++) {
+        const z = lz - gd.d / 2 + (k + 0.5) * (gd.d / 6);
+        const p = this.w(x, z);
+        const g = groundAt(p.x, p.z);
+        this.put(box(0.5, 0.12, 0.9, '#5a4632', 0, 0, 0), x, g + 0.03, z, 0);
+        const leaf = new THREE.IcosahedronGeometry(0.16 + ((r + k) % 3) * 0.04, 0);
+        leaf.scale(1, 0.7, 1);
+        this.put(paint(leaf, (r + k) % 2 ? '#5d8a3a' : '#6e9a44'), x, g + 0.2, z, 0);
+      }
+    }
+  },
+
   /** Trestles with a plank across, half sawn. */
   sawhorse(lx, lz, face) {
     const g = groundAt(this.w(lx, lz).x, this.w(lx, lz).z);
@@ -641,7 +765,7 @@ class Villager {
     this.b = b;
     this.bear = new Bear(def.look);
     this.bear.root.scale.setScalar(def.size ?? 1);
-    if (def.wears) this.bear.wear(hat(def.wears), def.wears === 'shawl' || def.wears === 'apron' ? 'body' : 'head');
+    if (def.wears) this.bear.wear(hat(def.wears, def.tint), ['shawl', 'apron', 'neckerchief'].includes(def.wears) ? 'body' : 'head');
     this.rod = rodModel();
     this.bear.setRod(false, this.rod);
     this.pos = V();
@@ -812,6 +936,10 @@ export class Villages {
     for (const [x, z, f] of v.logs ?? []) b.logs(x, z, f);
     for (const [x, z] of v.rope ?? []) b.rope(x, z);
     if (v.horse) b.sawhorse(...v.horse);
+    for (const [x, z, f, st] of v.crates ?? []) b.crate(x, z, f, st);
+    if (v.ropewalk) b.ropewalk(v.ropewalk);
+    if (v.sailboat) b.sailboat(...v.sailboat);
+    if (v.garden) b.garden(v.garden);
     for (const [x, z] of v.pots ?? []) {
       const pot = new THREE.CylinderGeometry(0.3, 0.32, 0.5, 8, 1, false, 0, Math.PI);
       pot.rotateZ(Math.PI / 2);

@@ -6,8 +6,8 @@
 
 import { issueMap, dig, near, claim } from './treasure.js';
 import { ITEMS, FIND_IDS, VALUABLE_IDS } from '../shared/items.js';
-import { TALK, repliesAt, firstValuable } from '../shared/talk.js';
-import { UPGRADES } from '../shared/upgrades.js';
+import { TALK, repliesAt, firstValuable, count } from '../shared/talk.js';
+import { UPGRADES, HOLD } from '../shared/upgrades.js';
 import { decorable, inCabin, MAX_DECOR } from '../shared/decor.js';
 import { VILLAGERS } from '../shared/villages.js';
 import { QUESTS } from '../shared/quests.js';
@@ -44,6 +44,12 @@ export function freshState(now) {
 }
 
 const fail = (why) => ({ ok: false, why });
+
+/** How full the hold is: food and materials (not keepsakes, not things of value). */
+export function holdUsed(s) {
+  return s.items.filter((i) => ['fish', 'fruit', 'food', 'dish', 'material', 'junk'].includes(ITEMS[i.kind]?.kind)).length;
+}
+const holdRoom = (s) => ((s.upgrades ?? []).includes('hold') ? HOLD.big : HOLD.small);
 
 /** A new item in the player's things. */
 function give(s, kind, now, extra = {}) {
@@ -153,6 +159,7 @@ const ACTIONS = {
     if (!it || (it.kind !== 'fish' && it.kind !== 'junk') || !finite(a.kg)) return fail('what');
     if (a.kg < it.kg[0] * 0.95 || a.kg > it.kg[1] * 1.05) return fail('size');
     if (now - s.catches.last < 2.5) return fail('too quick');
+    if (holdUsed(s) >= holdRoom(s)) return fail('full');
     s.catches.last = now;
     if (it.kind === 'fish') {
       s.catches.counts[a.kind] = (s.catches.counts[a.kind] ?? 0) + 1;
@@ -170,6 +177,7 @@ const ACTIONS = {
     if (Math.hypot(p.x - a.x, p.z - a.z) > 7) return fail('where');
     s.picked ??= {};
     if (!ripe(a.id, s.picked[a.id], now)) return fail('none left');
+    if (holdUsed(s) >= holdRoom(s)) return fail('full');
     s.picked[a.id] = now;
     const it = give(s, g.kind, now);
     return { ok: true, kind: it.kind };
@@ -201,7 +209,7 @@ const ACTIONS = {
     if (!c) return fail('nothing on');
     delete s.cooking[key];
     const kinds = c.items.map((i) => i.kind);
-    const result = doneness(a.vessel, kinds, now - c.since);
+    const result = doneness(a.vessel, kinds, now - c.since, a.where === 'galley' && (s.upgrades ?? []).includes('stove'));
     if (result === 'raw') {
       s.items.push(...c.items);
       return { ok: true, result };
@@ -303,6 +311,11 @@ function effects(s, list, now) {
     } else if (what === 'upgrade') {
       s.upgrades ??= [];
       if (UPGRADES[a] && !s.upgrades.includes(a)) s.upgrades.push(a);
+    } else if (what === 'takeN') {
+      for (let k = 0; k < b; k++) {
+        const i = s.items.findIndex((it) => !it.off && !it.cooked && (a === '@fish' ? ITEMS[it.kind]?.kind === 'fish' : it.kind === a));
+        if (i >= 0) s.items.splice(i, 1);
+      }
     } else if (what === 'take') {
       const i = s.items.findIndex((it) => it.kind === a);
       if (i >= 0) s.items.splice(i, 1);
@@ -326,7 +339,7 @@ ACTIONS.quest = async (s, a, { now }) => {
  * `when` says so; after that you can only carry on along it, one reply at a
  * time (it's fine for the reply you pick to change what `when` would say).
  */
-ACTIONS.talk = async (s, a, { now }) => {
+ACTIONS.talk = async (s, a, { now, secret }) => {
   if (!Object.hasOwn(VILLAGERS, a.who) || !Object.hasOwn(TALK, a.who)) return fail('who');
   const convo = TALK[a.who].find((c) => c.id === a.convo);
   const at = String(a.line);
@@ -342,6 +355,8 @@ ACTIONS.talk = async (s, a, { now }) => {
   const reply = repliesAt(line, s)[a.pick];
   if (!reply) return fail('no such reply');
   effects(s, reply.do, now);
+  // A treasure map, from someone who couldn't make it out.
+  for (const [what] of reply.do ?? []) if (what === 'map') s.maps.push(await issueMap(secret));
   s.journal = s.journal.slice(-200);
   const to = reply.to ?? null;
   s.talking = to !== null && convo.lines[to] ? { who: a.who, convo: a.convo, line: String(to) } : null;

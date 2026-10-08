@@ -6,6 +6,8 @@
 // `title` heads its page in the journal. `at` is a world position (x, z);
 // `reach` how close you need to be.
 
+import { ISLAND_BY_ID, toWorld } from './world.js';
+
 export const QUESTS = {
   // Oda's nets keep coming in cut, off the east side of Molly Ann Reef.
   nets: {
@@ -31,6 +33,50 @@ export const QUESTS = {
   foretop: { title: "Tam's crow's nest", steps: {} },
   // Ned Pascoe at the yard will double her planking, for copper and something for his time.
   hull: { title: 'Doubling her planks', steps: {} },
-  // Silas saw a sail off the Brothers with no lights.
+  // Silas saw a sail off the Brothers with no lights. (It's Mags Rowe's, from Kettle.)
   sail: { title: 'A sail with no lights', steps: {} },
+  // What Ned at the yard can do to the boat, and what he wants for it.
+  yard: { title: "Ned's work", steps: {} },
+  // Abel Trounson wants to know if the cairn he and his brother built on top of Saddle is still standing.
+  cairn: {
+    title: "Abel's cairn",
+    steps: {
+      cairn: {
+        island: 'saddle',
+        local: [-72.5, -39.5],
+        reach: 4,
+        stage: 0,
+        label: 'Look at the cairn',
+        say: 'Still standing, every stone. And one on top, newer than the rest, that nobody mentioned.',
+        do: [['stage', 'cairn', 1], ['note', 'cairn', "The cairn's still there on the top of Saddle, every stone. Someone's put a newer one on top."]],
+      },
+    },
+  },
+  // Martha Vosper thinks canvas off a passing ship will have washed up on the Brothers.
+  canvas: {
+    title: "Martha's canvas",
+    steps: {
+      bale: {
+        island: 'brothers',
+        local: [-49, 9.5],
+        reach: 2.4,
+        stage: 0,
+        label: 'Look at the bales',
+        say: 'Two bales of canvas, salt-stiff but sound, half buried in the shingle.',
+        do: [['stage', 'canvas', 1], ['give', 'canvas'], ['give', 'canvas'], ['note', 'canvas', 'Two bales of canvas on the shingle at the Brothers, salt-stiff but sound. Took them both.']],
+      },
+    },
+  },
+  // Ben Clemo's lamp has run out of oil; Silas might spare some.
+  lamp: { title: "Ben's lamp", steps: {} },
 };
+
+// Steps given on an island (`island`, `local`) get their world position here.
+for (const q of Object.values(QUESTS)) {
+  for (const st of Object.values(q.steps)) {
+    if (st.island) {
+      const w = toWorld(ISLAND_BY_ID[st.island], st.local[0], st.local[1]);
+      st.at = [Math.round(w.x * 10) / 10, Math.round(w.z * 10) / 10];
+    }
+  }
+}

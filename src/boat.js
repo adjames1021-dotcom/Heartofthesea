@@ -5,6 +5,7 @@ import { heightAt } from '../shared/waves.js';
 import { smoothstep, clamp } from '../shared/noise.js';
 import { loftHull, loftDeck, canvasTexture } from './hull.js';
 import { segment, paint, mergeParts } from './props.js';
+import { makeBox } from './collision.js';
 
 // The player's boat: an 11.4 m sloop in the spirit of your photos (white hull,
 // navy cove and boot stripes, teak decks, furling genoa). Physics lives in
@@ -464,7 +465,62 @@ function doubledPlanking() {
   return m;
 }
 
-const UPGRADE_MODELS = { hull: doubledPlanking };
+/** Davey Clemo's lantern on a bracket on the bow pulpit (it lights with the others). */
+function bowLantern() {
+  const g = new THREE.Group();
+  const parts = [];
+  const BRASS = '#b8913f';
+  parts.push(paint(segment(new THREE.Vector3(5.05, deckAt(5.05) + 0.62, 0), new THREE.Vector3(5.05, deckAt(5.05) + 0.9, 0), 0.015, 0.015, 5), METAL));
+  const base = new THREE.CylinderGeometry(0.075, 0.085, 0.04, 8);
+  base.translate(5.05, deckAt(5.05) + 0.92, 0);
+  const cap = new THREE.ConeGeometry(0.085, 0.09, 8);
+  cap.translate(5.05, deckAt(5.05) + 1.16, 0);
+  parts.push(paint(base, BRASS), paint(cap, BRASS));
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    parts.push(paint(segment(new THREE.Vector3(5.05 + Math.cos(a) * 0.065, deckAt(5.05) + 0.94, Math.sin(a) * 0.065), new THREE.Vector3(5.05 + Math.cos(a) * 0.065, deckAt(5.05) + 1.12, Math.sin(a) * 0.065), 0.008, 0.008, 3), BRASS));
+  }
+  g.add(new THREE.Mesh(mergeParts(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
+  const glassMat = new THREE.MeshBasicMaterial({ color: '#5a5040' });
+  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.058, 0.16, 8), glassMat);
+  glass.position.set(5.05, deckAt(5.05) + 1.03, 0);
+  g.add(glass);
+  const light = new THREE.PointLight('#ffcf8a', 0, 9, 1.5);
+  light.position.set(5.05, deckAt(5.05) + 1.03, 0);
+  g.add(light);
+  g.userData.light = (on) => {
+    glassMat.color.set(on ? '#ffd890' : '#5a5040');
+    light.intensity = on ? 3.5 : 0;
+  };
+  return g;
+}
+
+/** A built-out hold: crates lashed down on deck either side of the mast. [x, z, w, h, d] */
+const CRATES = [[2.75, -0.75, 0.55, 0.42, 0.5], [2.75, 0.75, 0.55, 0.42, 0.5], [3.3, -0.62, 0.45, 0.36, 0.42], [3.3, 0.62, 0.45, 0.36, 0.42]];
+function deckCrates() {
+  const parts = [];
+  for (const [x, z, w, h, d] of CRATES) {
+    const y = deckAt(x) + 0.02 + h / 2;
+    const b = new THREE.BoxGeometry(w, h, d);
+    b.translate(x, y, z);
+    parts.push(paint(b, '#9c8058'));
+    for (const dx of [-w / 2 - 0.005, w / 2 + 0.005]) {
+      const slat = new THREE.BoxGeometry(0.02, h, d + 0.01);
+      slat.translate(x + dx, y, z);
+      parts.push(paint(slat, '#7a6244'));
+    }
+    // A lashing over the top.
+    const lash = new THREE.BoxGeometry(0.03, 0.02, d + 0.06);
+    lash.translate(x, y + h / 2 + 0.01, z);
+    parts.push(paint(lash, '#c9b88a'));
+  }
+  const m = new THREE.Mesh(mergeParts(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
+const UPGRADE_MODELS = { hull: doubledPlanking, lantern: bowLantern, hold: deckCrates };
 
 export class Boat {
   constructor({ x, z, heading }) {
@@ -476,7 +532,7 @@ export class Boat {
 
     const t = textures();
     const sailMat = new THREE.MeshLambertMaterial({ map: t.sail, side: THREE.DoubleSide, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.04 });
-    this.main = new SailMesh(6, 10, sailMat);
+    this.main = new SailMesh(6, 10, sailMat.clone());
     this.jib = new SailMesh(6, 9, sailMat);
     this.root.add(this.main.mesh, this.jib.mesh);
 
@@ -647,6 +703,18 @@ export class Boat {
     }
     for (const [id, m] of Object.entries(this.upgrades)) m.visible = list.includes(id);
     this.state.tough = list.includes('hull');
+    // The deck crates are solid underfoot and in the way.
+    if (list.includes('hold') && this.body && !this.crateBoxes) {
+      this.crateBoxes = CRATES.map(([x, z, w, h, d]) => ({ ...makeBox({ center: new THREE.Vector3(x, deckAt(x) + 0.02 + h / 2, z), half: new THREE.Vector3(w / 2, h / 2, d / 2) }), body: this.body }));
+      this.body.boxes.push(...this.crateBoxes);
+    }
+    // A bigger main on a longer boom, in new cream canvas.
+    const big = list.includes('sail');
+    this.state.bigSail = big;
+    this.boomLen = big ? LAYOUT.boom.len * 1.16 : LAYOUT.boom.len;
+    this.luff = big ? 13.35 : 12.9;
+    this.boom.scale.x = this.boomLen / LAYOUT.boom.len;
+    this.main.mesh.material.color.set(big ? '#f4e9cf' : '#ffffff');
   }
 
   update(dt, t, waveScale) {
@@ -710,7 +778,8 @@ export class Boat {
     const h = b.mainHoist;
     this.main.mesh.visible = h > 0.02;
     if (!this.main.mesh.visible) return;
-    const luff = 12.9 * REEF_LUFF[b.reef] * h;
+    const luff = (this.luff ?? 12.9) * REEF_LUFF[b.reef] * h;
+    const boomLen = this.boomLen ?? LAYOUT.boom.len;
     const y0 = LAYOUT.boom.y + 0.12;
     const twist = 0.06 + 0.3 * b.mainSheet;
     const side = Math.sign(v.boom) || 1;
@@ -718,7 +787,7 @@ export class Boat {
     const aws = b.aws;
     this.main.build((s, tt, out) => {
       const y = y0 + luff * tt;
-      const chord = (LAYOUT.boom.len - 0.15) * (1 - tt) + 0.3 * tt + 0.55 * Math.sin(Math.PI * tt) * (1 - tt);
+      const chord = (boomLen - 0.15) * (1 - tt) + 0.3 * tt + 0.55 * Math.sin(Math.PI * tt) * (1 - tt);
       const ang = v.boom + side * twist * tt;
       const ca = Math.cos(ang);
       const sa = Math.sin(ang);
@@ -827,6 +896,7 @@ export class Boat {
     set(L.cockpit, on);
     this.deckLight.intensity = on ? 5 : 0;
     this.cockpitLight.intensity = on ? 3 : 0;
+    if (this.upgrades.lantern?.visible) this.upgrades.lantern.userData.light(on);
   }
 
   #buildChain() {

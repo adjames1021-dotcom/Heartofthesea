@@ -125,14 +125,13 @@ export class Cooking {
       vessels: { pan: { mesh: panG, food: [], flame }, pot: { mesh: pot.mesh, pot, food: [], flame: flame2 } },
       puffs: new Puffs(interior.group),
     };
-    // The fire in Head Cove: a griddle on the stones.
-    const fire = villages.fires.find((f) => f.village === 'cove');
-    if (fire) {
+    // Each village fire: a griddle on the stones.
+    for (const fire of villages.fires) {
       const g = panModel(0.2);
       g.position.set(0.42, 0.24, -0.38);
       g.rotation.y = 2.4;
       fire.group.add(g);
-      this.places['fire:cove'] = { name: 'The fire', parent: fire.group, fire, vessels: { pan: { mesh: g, food: [] } }, puffs: new Puffs(fire.group) };
+      this.places[`fire:${fire.village}`] = { name: 'The fire', parent: fire.group, fire, vessels: { pan: { mesh: g, food: [] } }, puffs: new Puffs(fire.group) };
     }
     this.card = document.createElement('div');
     this.card.className = 'talk cook';
@@ -171,10 +170,12 @@ export class Cooking {
   /** Where you could cook, standing at pos (or null). */
   placeAt(pos, inside) {
     if (inside) return this.interior.nearStove(pos) ? 'galley' : null;
-    const f = this.places['fire:cove'];
-    if (!f) return null;
-    const g = f.fire.group.position;
-    return f.fire.lit && Math.hypot(pos.x - g.x, pos.z - g.z) < 2.4 && Math.abs(pos.y - g.y) < 2 ? 'fire:cove' : null;
+    for (const [where, f] of Object.entries(this.places)) {
+      if (!f.fire) continue;
+      const g = f.fire.group.position;
+      if (f.fire.lit && Math.hypot(pos.x - g.x, pos.z - g.z) < 2.4 && Math.abs(pos.y - g.y) < 2) return where;
+    }
+    return null;
   }
 
   /** How far pos is from a place's fire (or stove). */
@@ -373,7 +374,8 @@ export class Cooking {
           continue;
         }
         const secs = now - on.since;
-        const [a, b] = windowFor(vessel, items.map((i) => i.kind));
+        const better = where === 'galley' && (this.progress.state?.upgrades ?? []).includes('stove');
+        const [a, b] = windowFor(vessel, items.map((i) => i.kind), better);
         // 0 raw … 1 just done … 2 as burnt as it gets; the last stretch before
         // burning starts to darken, so a careful eye can catch it.
         const late = Math.min(1, Math.max(0, (secs - (b - (b - a) * 0.3)) / ((b - a) * 0.3)));

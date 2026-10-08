@@ -240,6 +240,31 @@ export class Interior {
     coat.translate(bx + 0.14, 1.25, door + 0.3);
     parts.push(paint(coat, '#d9a92e'));
 
+    // Ned's stove, when he's fitted it: cast iron, with an oven, and a flue
+    // up through the deckhead. It sits over where the old one was.
+    {
+      const st = this.stove;
+      const sp = [];
+      const iron = '#2c2a28';
+      const b2 = (cx, cy, cz, sx, sy, sz, color) => {
+        const g = new THREE.BoxGeometry(sx, sy, sz);
+        g.translate(cx, cy, cz);
+        sp.push(paint(g, color));
+      };
+      // It stands proud of the counter, so the oven door shows.
+      b2(st.x, 0.46, st.z + 0.03, 0.6, 0.92, 0.66, iron);
+      b2(st.x, 0.925, st.z + 0.03, 0.64, 0.018, 0.7, '#1f1e1d');
+      b2(st.x, 0.4, st.z + 0.365, 0.42, 0.36, 0.02, '#3a3734'); // oven door
+      b2(st.x + 0.13, 0.48, st.z + 0.385, 0.1, 0.025, 0.025, '#b8913f'); // its handle
+      b2(st.x, 0.12, st.z + 0.365, 0.5, 0.09, 0.02, '#3a3734'); // ash drawer
+      sp.push(paint(segment(V(st.x - 0.18, 0.93, st.z - 0.2), V(st.x - 0.18, H + 0.2, st.z - 0.2), 0.05, 0.05, 8), iron));
+      for (const dx of [-0.25, 0.25]) b2(st.x + dx, 0.95, st.z + 0.36, 0.03, 0.04, 0.03, '#b8913f'); // rail posts
+      sp.push(paint(segment(V(st.x - 0.25, 0.97, st.z + 0.36), V(st.x + 0.25, 0.97, st.z + 0.36), 0.008, 0.008, 4), '#b8913f'));
+      this.betterStove = new THREE.Mesh(mergeParts(sp), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+      this.betterStove.visible = false;
+      this.group.add(this.betterStove);
+    }
+
     const mesh = new THREE.Mesh(mergeParts(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
     this.mesh = mesh; // the surfaces things can be put on (src/decorate.js)
     mesh.receiveShadow = true;
@@ -387,6 +412,11 @@ export class Interior {
   nearChartTable(p) {
     const c = this.chartTable.clone().add(ORIGIN);
     return Math.hypot(p.x - c.x, p.z - c.z) < 0.85;
+  }
+
+  /** What the yard's done that shows below (shared/upgrades.js). */
+  setUpgrades(list = []) {
+    this.betterStove.visible = list.includes('stove');
   }
 
   /** Daylight in the portholes follows the sky. night: 0 day … 1 night. camera: hide the beams when looking in from above. */

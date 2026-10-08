@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { groundAt } from '../shared/world.js';
 import { QUESTS } from '../shared/quests.js';
-import { mergeParts, rock } from './props.js';
+import { mergeParts, rock, paint, segment } from './props.js';
 import { netMesh } from './village.js';
 import { mulberry32, hash2 } from '../shared/noise.js';
 import { deepenShadows } from './atmosphere.js';
@@ -85,7 +85,33 @@ function copperSheet() {
   return group;
 }
 
-const MODELS = { copper: copperSheet };
+const MODELS = { copper: copperSheet, bale: canvasBales };
+
+/** Two bales of sailcloth washed up on the shingle, one half buried. */
+function canvasBales() {
+  const g = new THREE.Group();
+  const parts = [];
+  for (const [x, z, yaw, sink] of [[0, 0, 0.3, 0.12], [0.85, 0.5, -0.5, 0.28]]) {
+    const b = new THREE.CylinderGeometry(0.32, 0.32, 0.95, 10);
+    b.rotateZ(Math.PI / 2);
+    b.rotateY(yaw);
+    b.translate(x, 0.32 - sink, z);
+    parts.push(paint(b, '#d8cfb6'));
+    for (const t of [-0.3, 0.3]) {
+      const band = new THREE.TorusGeometry(0.33, 0.02, 4, 12);
+      band.rotateY(Math.PI / 2 + yaw);
+      band.translate(x + Math.cos(yaw) * t, 0.32 - sink, z - Math.sin(yaw) * t);
+      parts.push(paint(band, '#7a6a4a'));
+    }
+  }
+  // Weed caught on them.
+  parts.push(paint(segment(new THREE.Vector3(-0.3, 0.55, 0.1), new THREE.Vector3(0.2, 0.6, -0.15), 0.02, 0.01, 3), '#4a5a2a'));
+  const m = new THREE.Mesh(mergeParts(parts), mat);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  g.add(m);
+  return g;
+}
 
 export class QuestWorld {
   constructor({ scene, progress }) {
@@ -96,13 +122,16 @@ export class QuestWorld {
     this.steps = [];
     for (const [quest, q] of Object.entries(QUESTS)) {
       for (const [step, s] of Object.entries(q.steps)) {
+        // Some steps are things already there (the cairn); some need a model.
         const make = MODELS[step];
-        if (!make) continue;
-        const m = make();
-        const [x, z] = s.at;
-        m.position.set(x, groundAt(x, z) - 0.1, z);
-        m.rotation.y = 2.1;
-        this.group.add(m);
+        let m = null;
+        if (make) {
+          m = make();
+          const [x, z] = s.at;
+          m.position.set(x, groundAt(x, z) - 0.1, z);
+          m.rotation.y = 2.1;
+          this.group.add(m);
+        }
         this.steps.push({ quest, step, def: s, mesh: m });
       }
     }
