@@ -10,7 +10,9 @@ import { TALK, repliesAt, firstValuable } from '../shared/talk.js';
 import { UPGRADES } from '../shared/upgrades.js';
 import { VILLAGERS } from '../shared/villages.js';
 import { QUESTS } from '../shared/quests.js';
-import { hoursAt } from '../shared/environment.js';
+import { hoursAt, DAY_LENGTH } from '../shared/environment.js';
+import { GATHER, gatherWorld, ripe } from '../shared/gather.js';
+import { VESSELS, ROOM, EFFECTS, RECIPES, cookable, goneOff, doneness, recipeFor } from '../shared/food.js';
 
 /** A brand-new player. */
 export function freshState(now) {
@@ -31,6 +33,9 @@ export function freshState(now) {
     recipes: [], // dishes you know how to make
     talking: null, // where you are in a conversation: { who, convo, line }
     upgrades: [], // what's been done to your boat (shared/upgrades.js)
+    picked: {}, // when each fruit tree was last picked (shared/gather.js)
+    cooking: {}, // what's on the heat: { 'galley/pan': { since, items } }
+    fed: null, // what you last ate is doing for you: { effect, until }
     decor: [], // things placed about the cabin
     nextId: 1,
   };
@@ -155,14 +160,101 @@ const ACTIONS = {
     return { ok: true };
   },
 
-  /** Fry a fish on the galley stove (until proper cooking arrives). */
-  async cookOne(s, a, { now }) {
-    const fish = s.items.find((i) => ITEMS[i.kind]?.kind === 'fish');
-    if (!fish) return fail('no fish');
-    s.items = s.items.filter((i) => i !== fish);
-    return { ok: true, kind: fish.kind, now };
+  /** Picked something off a tree. */
+  async gather(s, a, { now }) {
+    const g = Object.hasOwn(GATHER, a.id) ? GATHER[a.id] : null;
+    if (!g || !finite(a.x, a.z)) return fail('what');
+    const p = gatherWorld(a.id);
+    if (Math.hypot(p.x - a.x, p.z - a.z) > 7) return fail('where');
+    s.picked ??= {};
+    if (!ripe(a.id, s.picked[a.id], now)) return fail('none left');
+    s.picked[a.id] = now;
+    const it = give(s, g.kind, now);
+    return { ok: true, kind: it.kind };
+  },
+
+  /** Put something in the pan or the pot. It starts cooking the moment the first thing goes in. */
+  async cookPut(s, a, { now }) {
+    if (!Object.hasOwn(VESSELS, a.where) || !VESSELS[a.where].includes(a.vessel)) return fail('where');
+    const it = s.items.find((i) => i.id === a.item);
+    if (!cookable(it)) return fail('not that');
+    s.cooking ??= {};
+    const key = `${a.where}/${a.vessel}`;
+    const c = (s.cooking[key] ??= { since: now, items: [] });
+    if (c.items.length >= ROOM[a.vessel]) return fail('full');
+    s.items = s.items.filter((i) => i !== it);
+    c.items.push(it);
+    return { ok: true };
+  },
+
+  /**
+   * Take it off the heat. How long it's been on decides: too soon and it's
+   * still raw (back it goes, as it was); in time and it's done; too long and
+   * it's burnt. The right things together make a dish, and you'll know it
+   * from then on.
+   */
+  async cookTake(s, a, { now }) {
+    const key = `${a.where}/${a.vessel}`;
+    const c = s.cooking?.[key];
+    if (!c) return fail('nothing on');
+    delete s.cooking[key];
+    const kinds = c.items.map((i) => i.kind);
+    const result = doneness(a.vessel, kinds, now - c.since);
+    if (result === 'raw') {
+      s.items.push(...c.items);
+      return { ok: true, result };
+    }
+    const recipe = recipeFor(a.vessel, kinds);
+    let it;
+    if (recipe) it = give(s, recipe, now, { cooked: result, cookedAt: now });
+    else if (c.items.length === 1) {
+      it = { ...c.items[0], cooked: result, cookedAt: now };
+      s.items.push(it);
+    } else it = give(s, a.vessel === 'pot' ? 'potful' : 'fryup', now, { cooked: result, cookedAt: now });
+    let learned = false;
+    if (recipe && result === 'done' && !s.recipes.includes(recipe)) {
+      s.recipes.push(recipe);
+      learned = true;
+    }
+    return { ok: true, result, item: it.id, kind: it.kind, recipe, learned };
+  },
+
+  /** Eat something. Good food does you a little good for a while. */
+  async eat(s, a, { now }) {
+    const it = s.items.find((i) => i.id === a.item);
+    if (!it) return fail('what');
+    const k = ITEMS[it.kind]?.kind;
+    if (!['fish', 'fruit', 'food', 'dish'].includes(k)) return fail('not food');
+    if (k === 'fish' && !it.cooked && !it.off) return fail('raw');
+    s.items = s.items.filter((i) => i !== it);
+    if (it.off) return { ok: true, result: 'off' };
+    if (it.cooked === 'burnt') return { ok: true, result: 'burnt' };
+    let effect = null;
+    let hours = 0;
+    if (RECIPES[it.kind]) {
+      effect = RECIPES[it.kind].effect;
+      hours = EFFECTS[effect].hours;
+    } else if ((k === 'fish' && it.cooked) || k === 'food') {
+      effect = 'steady';
+      hours = 4;
+    }
+    if (!effect) return { ok: true, result: 'plain' };
+    s.fed = { effect, until: now + (hours * DAY_LENGTH) / 24 };
+    return { ok: true, result: 'fed', effect };
   },
 };
+
+/** Raw food goes off after a few days. Returns whether anything did. */
+function spoil(s, now) {
+  let any = false;
+  for (const it of s.items) {
+    if (!it.off && goneOff(it, now)) {
+      it.off = true;
+      any = true;
+    }
+  }
+  return any;
+}
 
 // Actions that only look.
 const READ_ONLY = new Set(['hello', 'near']);
@@ -238,8 +330,15 @@ export async function apply(state, action, ctx) {
   const fn = action && typeof action.type === 'string' && Object.hasOwn(ACTIONS, action.type) ? ACTIONS[action.type] : null;
   if (!fn) return { state, reply: fail('unknown action') };
   const s = structuredClone(state);
+  const spoiled = spoil(s, ctx.now);
   const reply = await fn(s, action, ctx);
-  if (!reply.ok || READ_ONLY.has(action.type)) return { state, reply };
+  if (!reply.ok || READ_ONLY.has(action.type)) {
+    if (!spoiled) return { state, reply };
+    // Nothing done, but something in the hold has gone off meanwhile.
+    const kept = structuredClone(state);
+    spoil(kept, ctx.now);
+    return { state: kept, reply };
+  }
   return { state: s, reply };
 }
 

@@ -206,8 +206,20 @@ export class Player {
     // Horizontal velocity, relative to whatever we're standing on.
     const accel = this.startleT > 0 ? 0 : this.grounded ? 16 : 5;
     const k = 1 - Math.exp(-dt * accel);
-    this.vel.x += (wish.x * speed - this.vel.x) * k;
-    this.vel.z += (wish.z * speed - this.vel.z) * k;
+    // A deck heeling hard pushes you toward the low side, unless you've
+    // eaten well and are steady on your feet.
+    let dx = 0;
+    let dz = 0;
+    if (this.platform?.matrix && this.deckUp && this.grounded) {
+      const lean = Math.hypot(this.deckUp.x, this.deckUp.z);
+      const push = Math.max(0, lean - 0.09) * (this.steady ? 0.6 : 4);
+      if (push > 0) {
+        dx = (this.deckUp.x / lean) * push;
+        dz = (this.deckUp.z / lean) * push;
+      }
+    }
+    this.vel.x += (wish.x * speed + dx - this.vel.x) * k;
+    this.vel.z += (wish.z * speed + dz - this.vel.z) * k;
     this.#face(wish.x, wish.z, dt);
 
     if (input.pressed('Space')) this.jumpBuffer = BUFFER;
@@ -370,7 +382,8 @@ export class Player {
     const water = this.#waterAt(ctx);
     const wish = this.#wish(input, ctx);
     const fast = input.held('ShiftLeft', 'ShiftRight');
-    const speed = this.carrying ? SPEED.carrySwim : fast ? SPEED.swimFast : SPEED.swim;
+    // Something good to eat (a fish stew) makes for a stronger swimmer for a while.
+    const speed = (this.carrying ? SPEED.carrySwim : fast ? SPEED.swimFast : SPEED.swim) * (this.swimBoost ?? 1);
     const k = 1 - Math.exp(-dt * 3.5);
     // Just swept off a ledge: the sea has you for a moment.
     this.washT = Math.max(0, (this.washT ?? 0) - dt);

@@ -160,6 +160,50 @@ export class OceanAudio {
     }
   }
 
+  /**
+   * Cooking, all 0..1: sizzle (a pan with something in it), crackle (it's
+   * catching), bubble (a pot on the boil). Called every frame.
+   */
+  cook(dt, { sizzle = 0, crackle = 0, bubble = 0 }) {
+    if (!this.ctx || this.ctx.state !== 'running' || !this.noise) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    if (!this.sizzle) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise;
+      src.loop = true;
+      src.playbackRate.value = 2.6;
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2600;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      src.connect(hp).connect(g).connect(this.master);
+      src.start();
+      this.sizzle = { g, hp };
+    }
+    // A sizzle is never steady: it spits.
+    const level = sizzle * (0.7 + 0.3 * Math.random());
+    this.sizzle.g.gain.setTargetAtTime(0.16 * level, now, 0.05);
+    this.sizzle.hp.frequency.setTargetAtTime(2600 - 900 * crackle, now, 0.2);
+    // Pops when it's catching.
+    if (Math.random() < crackle * dt * 9) this.splash(0.12 + 0.2 * Math.random(), 1800 + Math.random() * 2500, 0.04 + Math.random() * 0.05);
+    // Blips from a pot.
+    if (Math.random() < bubble * dt * 6) {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      const f0 = 220 + Math.random() * 160;
+      o.frequency.setValueAtTime(f0, now);
+      o.frequency.exponentialRampToValueAtTime(f0 * 0.6, now + 0.07);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.06 * bubble, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      o.connect(g).connect(this.master);
+      o.start(now);
+      o.stop(now + 0.1);
+    }
+  }
+
   splash(gain = 0.5, freq = 900, len = 0.7) {
     if (!this.ctx || this.ctx.state !== 'running' || !this.noise) return;
     const ctx = this.ctx;

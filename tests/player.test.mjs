@@ -75,7 +75,8 @@ test('unknown actions and odd input are turned away', async () => {
 import { TALK, openingFor, repliesAt, lineText } from '../shared/talk.js';
 import { QUESTS } from '../shared/quests.js';
 import { ITEMS } from '../shared/items.js';
-import { RECIPES } from '../shared/food.js';
+import { RECIPES, EFFECTS } from '../shared/food.js';
+import { UPGRADES } from '../shared/upgrades.js';
 
 /** Talk to someone: pick replies by number, one after another, as a player would. */
 async function talk(s, who, picks, h = 12) {
@@ -176,6 +177,9 @@ test('the writing: short lines, no stock phrases, no shouting', () => {
     }
   }
   for (const q of Object.values(QUESTS)) for (const st of Object.values(q.steps)) texts.push(st.say, ...st.do.filter((d) => d[0] === 'note').map((d) => d[2]));
+  for (const r of Object.values(RECIPES)) texts.push(r.name, r.note);
+  for (const e of Object.values(EFFECTS)) texts.push(e.feel);
+  for (const u of Object.values(UPGRADES)) texts.push(u.say);
   const banned = /greetings|traveller|traveler|ahoy|matey|adventurer|brave|quest|objective|ancient|legendary|epic|mysterious|\d+\s*\/\s*\d+/i;
   for (const t of texts) {
     assert.ok(!t.includes('!'), `no exclamation marks: ${t}`);
@@ -211,4 +215,67 @@ test("Ned doubles her planking for the copper and something for his time", async
   assert.deepEqual(s.items.map((i) => i.kind), ['ring'], 'the copper and the first valuable went');
   assert.ok(s.quests.hull.done);
   assert.match(lineText(openingFor('ned', s, 14).lines[0], s, 14), /shrug it off/);
+});
+
+// --- Food ---
+import { GATHER, gatherWorld } from '../shared/gather.js';
+import { describe as describeItem } from '../shared/food.js';
+
+const withItems = (s, ...kinds) => ({ ...s, items: [...s.items, ...kinds.map((kind, i) => ({ id: `t${i}`, kind, got: 0, where: 'hold' }))] });
+
+test('fruit comes off the trees, then takes a while to grow back', async () => {
+  const s = freshState(0);
+  const p = gatherWorld('saddle-lime-1');
+  assert.equal((await apply(s, { type: 'gather', id: 'saddle-lime-1', x: p.x + 50, z: p.z }, ctx(100))).reply.ok, false, 'not from a distance');
+  const r = await apply(s, { type: 'gather', id: 'saddle-lime-1', x: p.x + 1, z: p.z }, ctx(100));
+  assert.ok(r.reply.ok && r.state.items[0].kind === 'lime');
+  assert.equal((await apply(r.state, { type: 'gather', id: 'saddle-lime-1', x: p.x, z: p.z }, ctx(200))).reply.ok, false, 'none left yet');
+  const later = 100 + GATHER['saddle-lime-1'].regrow * 1440 + 1;
+  assert.ok((await apply(r.state, { type: 'gather', id: 'saddle-lime-1', x: p.x, z: p.z }, ctx(later))).reply.ok);
+});
+
+test('the pan: raw, done or burnt, by how long it was on', async () => {
+  const base = withItems(freshState(0), 'pollock');
+  const put = await apply(base, { type: 'cookPut', where: 'galley', vessel: 'pan', item: 't0' }, ctx(1000));
+  assert.ok(put.reply.ok && put.state.items.length === 0);
+  let r = await apply(put.state, { type: 'cookTake', where: 'galley', vessel: 'pan' }, ctx(1005));
+  assert.equal(r.reply.result, 'raw');
+  assert.ok(!r.state.items[0].cooked, 'back in the hold as it was');
+  r = await apply(put.state, { type: 'cookTake', where: 'galley', vessel: 'pan' }, ctx(1020));
+  assert.equal(r.reply.result, 'done');
+  assert.equal(describeItem(r.state.items[0]), 'a fried pollock');
+  r = await apply(put.state, { type: 'cookTake', where: 'galley', vessel: 'pan' }, ctx(1060));
+  assert.equal(r.reply.result, 'burnt');
+  // No pot at a fire; only food goes in; the pan only holds two.
+  assert.equal((await apply(base, { type: 'cookPut', where: 'fire:cove', vessel: 'pot', item: 't0' }, ctx())).reply.ok, false);
+  const copper = withItems(freshState(0), 'copper');
+  assert.equal((await apply(copper, { type: 'cookPut', where: 'galley', vessel: 'pan', item: 't0' }, ctx())).reply.ok, false);
+});
+
+test('the right things together make a dish, and then you know it', async () => {
+  let s = withItems(freshState(0), 'bass', 'coconut', 'lime');
+  for (const item of ['t0', 't1', 't2']) s = (await apply(s, { type: 'cookPut', where: 'galley', vessel: 'pot', item }, ctx(1000))).state;
+  const r = await apply(s, { type: 'cookTake', where: 'galley', vessel: 'pot' }, ctx(1060));
+  assert.equal(r.reply.recipe, 'fish-stew');
+  assert.ok(r.reply.learned && r.state.recipes.includes('fish-stew'));
+  const eat = await apply(r.state, { type: 'eat', item: r.reply.item }, ctx(1100));
+  assert.equal(eat.reply.effect, 'swim');
+  assert.ok(eat.state.fed.until > 1100);
+  // Wrong things: a pot of something, and nothing learned.
+  let w = withItems(freshState(0), 'bass', 'lime');
+  for (const item of ['t0', 't1']) w = (await apply(w, { type: 'cookPut', where: 'galley', vessel: 'pot', item }, ctx(1000))).state;
+  const r2 = await apply(w, { type: 'cookTake', where: 'galley', vessel: 'pot' }, ctx(1060));
+  assert.equal(r2.reply.kind, 'potful');
+  assert.equal(r2.state.recipes.length, 0);
+});
+
+test('raw fish goes off after a couple of days; you can throw it out but not eat it raw', async () => {
+  const s = withItems(freshState(0), 'mackerel', 'saltfish');
+  assert.equal((await apply(s, { type: 'eat', item: 't0' }, ctx(10))).reply.why, 'raw');
+  const r = await apply(s, { type: 'hello' }, ctx(3 * 1440));
+  assert.ok(r.state.items[0].off, 'gone off');
+  assert.ok(!r.state.items[1].off, 'salt fish keeps');
+  const out = await apply(r.state, { type: 'eat', item: 't0' }, ctx(3 * 1440));
+  assert.equal(out.reply.result, 'off');
+  assert.equal(out.state.items.length, 1);
 });

@@ -618,6 +618,7 @@ class Fire {
   }
 
   update(t, lit, night) {
+    this.lit = lit;
     for (const [i, f] of this.flames.entries()) {
       f.visible = lit;
       const k = 0.8 + 0.25 * Math.sin(t * (9 + i * 3) + i) + 0.1 * Math.sin(t * 23 + i * 2);
@@ -835,6 +836,7 @@ export class Villages {
         b.parts.push(paint(segment(V(ox - Math.cos(a) * 0.6, groundAt(ox, oz) + 0.16, oz - Math.sin(a) * 0.6), V(ox + Math.cos(a) * 0.6, groundAt(ox, oz) + 0.16, oz + Math.sin(a) * 0.6), 0.17, 0.16, 7), '#6b5440'));
       }
       const fire = new Fire(fp, fy);
+      fire.village = id;
       this.fires.push(fire);
       this.group.add(fire.group);
     }

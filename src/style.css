@@ -430,3 +430,6 @@ html, body {
   .journal .page { overflow: visible; }
   .journal .page + .page { border-left: 0; box-shadow: none; border-top: 1px solid rgba(70, 58, 42, 0.28); }
 }
+
+/* The cooking card sits to one side so you can watch the pan. */
+.talk.cook { left: 24px; transform: none; bottom: 16%; width: min(380px, calc(100vw - 48px)); }

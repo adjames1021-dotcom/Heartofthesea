@@ -3,9 +3,9 @@
 // right, what's in the hold and the dishes you know. All of it comes from
 // your saved state on the server; nothing here is counted or scored.
 
-import { ITEMS, FIND_IDS, countOf } from '../shared/items.js';
+import { ITEMS, FIND_IDS } from '../shared/items.js';
 import { QUESTS } from '../shared/quests.js';
-import { RECIPES } from '../shared/food.js';
+import { RECIPES, describe, sameKey } from '../shared/food.js';
 import { UPGRADES } from '../shared/upgrades.js';
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -60,14 +60,16 @@ export class Journal {
     return [g.notes[0], g.notes[g.notes.length - 1]];
   }
 
-  /** What's aboard, in words: "three mackerel", "a sheet of copper". */
+  /** What's aboard, in words: "three mackerel", "a burnt pollock", "a sheet of copper". */
   #hold(s) {
-    const counts = new Map();
+    const groups = new Map();
     for (const it of s.items ?? []) {
       if (FIND_IDS.includes(it.kind) || !ITEMS[it.kind]) continue;
-      counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
+      const key = sameKey(it);
+      if (!groups.has(key)) groups.set(key, { it, n: 0 });
+      groups.get(key).n++;
     }
-    return [...counts].map(([kind, n]) => countOf(kind, n));
+    return [...groups.values()].map((g) => describe(g.it, g.n));
   }
 
   #render() {

@@ -75,7 +75,7 @@ export function rodModel() {
   return m;
 }
 
-function fishModel(f, kg) {
+export function fishModel(f, kg) {
   const parts = [];
   const len = 0.25 + Math.cbrt(kg) * 0.22;
   if (f.squid) {
@@ -174,12 +174,6 @@ export class Fishing {
   /** Fish you've got that are still uncooked. */
   get kept() {
     return (this.progress.state?.items ?? []).filter((i) => FISH[i.kind] && !FISH[i.kind].junk).length;
-  }
-
-  cookOne() {
-    if (this.kept <= 0) return false;
-    this.progress.act('cookOne').catch(() => {});
-    return true;
   }
 
   /** Lines for the catch log on the chart, as you'd jot them down. */

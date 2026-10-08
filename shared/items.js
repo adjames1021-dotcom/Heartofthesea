@@ -6,23 +6,37 @@
 // (things picked up on the islands), junk.
 
 export const ITEMS = {
-  // --- Fish (see src/fishing.js for where each lives) ---
-  mackerel: { kind: 'fish', name: 'mackerel', plural: 'mackerel', kg: [0.3, 0.9] },
-  pollock: { kind: 'fish', name: 'pollock', plural: 'pollock', kg: [0.8, 4] },
-  bass: { kind: 'fish', name: 'sea bass', plural: 'sea bass', kg: [0.6, 3.5] },
-  plaice: { kind: 'fish', name: 'plaice', plural: 'plaice', kg: [0.3, 1.6] },
-  mullet: { kind: 'fish', name: 'grey mullet', plural: 'grey mullet', kg: [0.5, 2.5] },
-  wrasse: { kind: 'fish', name: 'ballan wrasse', plural: 'ballan wrasse', kg: [0.4, 2] },
-  parrotfish: { kind: 'fish', name: 'parrotfish', plural: 'parrotfish', kg: [0.6, 3] },
-  grouper: { kind: 'fish', name: 'grouper', plural: 'grouper', kg: [3, 14] },
-  squid: { kind: 'fish', name: 'squid', plural: 'squid', kg: [0.2, 0.8] },
+  // --- Fish (see src/fishing.js for where each lives). `cooked`: what it's called once it's done. ---
+  mackerel: { kind: 'fish', name: 'mackerel', plural: 'mackerel', kg: [0.3, 0.9], cooked: 'fried mackerel' },
+  pollock: { kind: 'fish', name: 'pollock', plural: 'pollock', kg: [0.8, 4], cooked: 'fried pollock' },
+  bass: { kind: 'fish', name: 'sea bass', plural: 'sea bass', kg: [0.6, 3.5], cooked: 'fried sea bass' },
+  plaice: { kind: 'fish', name: 'plaice', plural: 'plaice', kg: [0.3, 1.6], cooked: 'fried plaice' },
+  mullet: { kind: 'fish', name: 'grey mullet', plural: 'grey mullet', kg: [0.5, 2.5], cooked: 'fried mullet' },
+  wrasse: { kind: 'fish', name: 'ballan wrasse', plural: 'ballan wrasse', kg: [0.4, 2], cooked: 'fried wrasse' },
+  parrotfish: { kind: 'fish', name: 'parrotfish', plural: 'parrotfish', kg: [0.6, 3], cooked: 'fried parrotfish' },
+  grouper: { kind: 'fish', name: 'grouper', plural: 'grouper', kg: [3, 14], cooked: 'fried grouper' },
+  squid: { kind: 'fish', name: 'squid', plural: 'squid', kg: [0.2, 0.8], cooked: 'fried squid' },
   boot: { kind: 'junk', name: 'old boot', kg: [0.6, 0.6] },
 
   // --- Materials, things to hand over, things given ---
   copper: { kind: 'material', name: 'sheet of copper', plural: 'sheets of copper' },
   corkfloat: { kind: 'find', name: "cork float from Oda's nets", plural: 'cork floats' },
   knife: { kind: 'errand', name: "Gwen's gutting knife" },
-  saltfish: { kind: 'food', name: 'salt fish', plural: 'salt fish' },
+  saltfish: { kind: 'food', name: 'salt fish', plural: 'salt fish', cooked: 'fried salt fish' },
+
+  // --- Fruit, off the trees (shared/gather.js) ---
+  lime: { kind: 'fruit', name: 'lime', cooked: 'grilled lime' },
+  coconut: { kind: 'fruit', name: 'coconut', cooked: 'toasted coconut' },
+  plantain: { kind: 'fruit', name: 'plantain', cooked: 'fried plantain' },
+
+  // --- Dishes (shared/food.js) ---
+  'mackerel-lime': { kind: 'dish', name: 'mackerel with lime', plural: 'plates of mackerel with lime' },
+  'grilled-plantain': { kind: 'dish', name: 'grilled plantain', plural: 'grilled plantains' },
+  'fish-stew': { kind: 'dish', name: 'bowl of fish stew', plural: 'bowls of fish stew' },
+  'saltfish-plantain': { kind: 'dish', name: 'bowl of salt fish and plantain', plural: 'bowls of salt fish and plantain' },
+  'squid-coconut': { kind: 'dish', name: 'bowl of squid in coconut', plural: 'bowls of squid in coconut' },
+  fryup: { kind: 'dish', name: 'fry-up', plural: 'fry-ups' },
+  potful: { kind: 'dish', name: 'pot of something', plural: 'pots of something' },
 
   // --- Things of value, from the chests (what the shipwright takes for his time) ---
   shillings: { kind: 'valuable', name: 'purse of silver shillings', plural: 'purses of silver shillings' },

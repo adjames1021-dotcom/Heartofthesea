@@ -33,6 +33,9 @@ import { IslandLife } from './islandlife.js';
 import { Villages } from './village.js';
 import { Talk } from './talk.js';
 import { Journal } from './journal.js';
+import { Gathering } from './gather.js';
+import { Cooking } from './cooking.js';
+import { describe } from '../shared/food.js';
 import { QuestWorld } from './questworld.js';
 import { WANTS } from '../shared/talk.js';
 import { Finds, keepsake } from './finds.js';
@@ -140,6 +143,7 @@ let hoursNow = 12;
 const talk = new Talk({ progress, hours: () => hoursNow });
 const journal = new Journal({ progress });
 const questWorld = new QuestWorld({ scene, progress });
+const gathering = new Gathering({ scene, world, progress });
 const stormFx = new Storm({ scene, audio });
 if (dev.storm !== null) forceStorm(dev.storm);
 const weather = { warned: false, wild: false };
@@ -147,6 +151,7 @@ await progressReady;
 const treasure = new Treasure({ scene, world, hud, progress });
 const screens = new Screens();
 const interior = new Interior({ scene, world });
+const cooking = new Cooking({ progress, hud, audio, interior, villages });
 interior.showFinds(finds.found, keepsake);
 boat.setUpgrades(progress.state?.upgrades);
 progress.onChange((st) => {
@@ -306,10 +311,12 @@ function onBoat(p) {
 function findInteraction() {
   if (player.mode === 'station' || player.mode === 'dig' || player.flopT > 0 || player.clinging) return null;
   if (interior.inside) {
+    // The stove's right by the steps: whichever you're nearer.
+    const stove = interior.stove.clone().add(interior.group.position);
+    const ladder = interior.arrival;
+    const atStove = interior.nearStove(player.pos) && Math.hypot(stove.x - player.pos.x, stove.z - player.pos.z) < Math.hypot(ladder.x - player.pos.x, ladder.z - player.pos.z);
+    if (atStove) return cooking.open ? null : { key: 'E', label: 'Cook', act: () => cooking.begin('galley') };
     if (interior.nearLadder(player.pos)) return { key: 'E', label: 'Go up on deck', act: goUp };
-    if (interior.nearStove(player.pos) && fishing.kept > 0) {
-      return { key: 'E', label: 'Cook a fish', act: () => fishing.cookOne() && hud.say('Fried it in butter. Smells good.', 3) };
-    }
     if (interior.nearChartTable(player.pos)) {
       // A spare treasure map is always here if you've run out.
       if (!treasure.state.maps.length) {
@@ -358,6 +365,10 @@ function findInteraction() {
       },
     };
   }
+  // Right up at the fire in the cove, once it's lit (people sit round it, so
+  // standing close means you want the fire, not them).
+  const fire = player.mode === 'swim' ? null : cooking.placeAt(player.pos, false);
+  if (fire && cooking.near(player.pos, fire) < 1.7) return cooking.open ? null : { key: 'E', label: 'Cook on the fire', act: () => cooking.begin(fire) };
   // Someone to talk to? (Not when they're asleep.)
   const who = player.mode === 'swim' ? null : villages.nearest(player.pos);
   if (who) {
@@ -365,6 +376,19 @@ function findInteraction() {
     if (!who.awakeNow) return { key: '', label: 'Asleep.' };
     if (talk.open) return null;
     return { key: 'E', label: `Talk to ${first}`, act: () => talk.begin(who) };
+  }
+  if (fire) return cooking.open ? null : { key: 'E', label: 'Cook on the fire', act: () => cooking.begin(fire) };
+  // Fruit on a tree.
+  const tree = player.mode === 'swim' ? null : gathering.near(player.pos);
+  if (tree) {
+    return {
+      key: 'E',
+      label: tree.label,
+      act: async () => {
+        const r = await gathering.pick(tree, player.pos);
+        if (r?.ok) hud.say(`${describe({ kind: r.kind }).replace(/^./, (c) => c.toUpperCase())}.`, 2);
+      },
+    };
   }
   const find = player.mode === 'swim' ? null : finds.near(player.pos);
   if (find) {
@@ -487,6 +511,14 @@ function frame(now) {
   for (const p of villages.people) p.wantsToTalk = !!WANTS[p.id]?.(progress.state);
   villages.update(dt, { t, hours: hoursNow, player, night: atmosphere.uniforms.uNight.value });
   talk.update(input, player);
+  gathering.update(dt);
+  cooking.update(dt, { input, player, inside: interior.inside });
+  // What you last ate, while it lasts: a stronger swimmer, steadier on deck, or better eyes at night.
+  const fed = progress.state?.fed;
+  const eff = fed && worldTime() < fed.until ? fed.effect : null;
+  player.swimBoost = eff === 'swim' ? 1.3 : 1;
+  player.steady = eff === 'steady';
+  renderer.toneMappingExposure = 0.88 * (eff === 'night' ? 1 + 0.7 * atmosphere.uniforms.uNight.value : 1);
   wildlife.writeShoals(ocean.uniforms.uShoals.value);
 
   // Boat physics at a fixed rate.
@@ -609,6 +641,11 @@ function frame(now) {
   // Camera.
   if (controls) {
     controls.update();
+  } else if (cooking.open) {
+    // Cooking: look down into the pan from beside the stove.
+    const v = cooking.view(player);
+    camera.position.lerp(v.eye, 1 - Math.exp(-dt * 6));
+    camera.lookAt(v.target);
   } else {
     const onBoat = player.platform === boat.body || player.mode === 'station';
     const yawDelta = onBoat ? -(boat.body.yaw - boat.body.prevYaw) : 0;
@@ -631,7 +668,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {

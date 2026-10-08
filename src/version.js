@@ -2,7 +2,7 @@
 // "version" in package.json) with every update, newest first.
 
 export const CHANGES = [
-  ['0.12', 'Your progress is kept on the server (with a save code), a fishing village at Head Cove on Old Head, people who need a hand, a journal (J), and a boatyard on Saddle Island'],
+  ['0.12', 'Your progress is kept on the server (with a save code), a fishing village at Head Cove on Old Head, people who need a hand, a journal (J), a boatyard on Saddle Island, fruit trees, and cooking'],
   ['0.11', 'The bear leans with the boat, steadier walking on deck, a smaller, cosier cabin, more life on the islands, version numbers'],
   ['0.10', 'Four new islands further out, storms with lightning, faster and wilder sailing in a blow'],
   ['0.9', 'Birds, dolphins, turtles, seals and shoals; things to find on the islands; turned earth over buried chests'],
