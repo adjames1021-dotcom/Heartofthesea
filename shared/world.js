@@ -1,5 +1,5 @@
-// The world map: Saddle Island in the middle and a loose ring of six smaller
-// islands, placed from a fixed seed.
+// The world map: Saddle Island in the middle, a loose ring of six smaller
+// islands placed from a fixed seed, and four more further out.
 //
 // Plain JS with no dependencies so the server builds exactly the same map as
 // every player: nothing about the islands is ever sent over the wire.
@@ -336,6 +336,123 @@ function burntIsland() {
   };
 }
 
+// --- The outer islands --------------------------------------------------
+
+/** A whaleback of rock: sheer cliffs at the seaward end under the lighthouse,
+ *  falling away to a grassy back and a little cove beach. */
+function headIsland() {
+  const LIGHT = { x: 58, z: 2 };
+  const COVE = { x: -66, z: 22, r: 24 };
+  return {
+    name: 'Old Head',
+    land: 120,
+    bound: 270,
+    cell: 2.5,
+    features: {
+      light: LIGHT,
+      cove: COVE,
+      rocks: [{ x: -20, z: -30, s: 2.4 }, { x: 10, z: 32, s: 2.0 }],
+      shrubs: [{ x: -38, z: -12 }, { x: -30, z: 10 }, { x: 8, z: -14 }],
+    },
+    height(lx, lz) {
+      const wob = (fbm(lx * 0.03 + 11, lz * 0.03, 81, 3) - 0.5) * 14;
+      let sdf = Math.hypot(lx / 1.9, lz) - 50 + wob;
+      sdf = Math.max(sdf, COVE.r - Math.hypot(lx - COVE.x, lz - COVE.z));
+      const head = sstep(-10, 50, lx);
+      if (sdf > 0) return shelf(sdf, lerp(1.1, 4, head));
+      const d = -sdf;
+      const top = 5 + 27 * head + (fbm(lx * 0.06, lz * 0.06, 83, 2) - 0.5) * 4 * (1 - sstep(8, 0, Math.hypot(lx - LIGHT.x, lz - LIGHT.z)));
+      return Math.max(beach(d, 2.0, 12), top * sstep(0, lerp(28, 2.5, head), d));
+    },
+  };
+}
+
+/** An old volcano: black sand, steep flanks and a shallow lake in the crater,
+ *  with a notch in the rim on the side toward Saddle. */
+function kettleIsland() {
+  const LAKE = { y: 22.3, r: 27 };
+  const NOTCH = Math.PI; // local −x, which faces Saddle
+  return {
+    name: 'Kettle Island',
+    land: 125,
+    bound: 280,
+    cell: 2.5,
+    features: {
+      lake: LAKE,
+      notch: NOTCH,
+      palms: [{ x: 86, z: 30, height: 7, lean: 0.5 }, { x: 70, z: -60, height: 6.5, lean: 0.6 }, { x: -20, z: 98, height: 7.5, lean: 0.35 }],
+      rocks: [{ x: 60, z: 70, s: 2.6 }, { x: -90, z: -40, s: 2.2 }],
+    },
+    height(lx, lz) {
+      const r = Math.hypot(lx, lz);
+      const a = Math.atan2(lz, lx);
+      const wob = (fbm(lx * 0.025 + 3, lz * 0.025, 91, 3) - 0.5) * 16;
+      const sdf = r - 108 + wob;
+      if (sdf > 0) return shelf(sdf, 1.6);
+      const d = -sdf;
+      // The rim dips to 31 m at the notch, 38 m elsewhere.
+      const dn = Math.abs(Math.atan2(Math.sin(a - NOTCH), Math.cos(a - NOTCH)));
+      const rim = 38 - 7 * sstep(0.45, 0.05, dn);
+      const flank = rim * Math.pow(sstep(108, 42, r), 1.35) + (fbm(lx * 0.08, lz * 0.08, 93, 2) - 0.5) * 2.5 * sstep(4, 20, d);
+      const crater = lerp(LAKE.y - 0.3, rim, sstep(27, 42, r));
+      const h = r < 42 ? crater : flank;
+      return Math.max(beach(d, 2.0, 10), h);
+    },
+  };
+}
+
+/** Two towers of rock with a deep channel between them, and a shingle beach
+ *  at the foot of the bigger one. */
+function brothersIsland() {
+  const BIG = { x: -24, z: 0, r: 17, h: 34 };
+  const SMALL = { x: 22, z: 4, r: 13, h: 25 };
+  return {
+    name: 'The Brothers',
+    land: 60,
+    bound: 230,
+    cell: 2,
+    features: { big: BIG, small: SMALL, beach: { x: -45, z: 6 } },
+    height(lx, lz) {
+      let best = -Infinity;
+      for (const b of [BIG, SMALL]) {
+        const dist = Math.hypot(lx - b.x, lz - b.z) + (fbm(lx * 0.08 + b.x, lz * 0.08, 97, 3) - 0.5) * 5;
+        const sdf = dist - b.r;
+        let h;
+        if (sdf > 0) h = shelf(sdf, 4);
+        else h = b.h * sstep(0, 5, -sdf) + (fbm(lx * 0.15, lz * 0.15, 99, 2) - 0.5) * 3 * sstep(2, 8, -sdf);
+        best = Math.max(best, h);
+      }
+      // The shingle beach: a low fan on the big brother's outer side.
+      const bd = Math.hypot((lx + 45) / 1.6, lz - 6);
+      if (bd < 14) best = Math.max(best, 1.3 * sstep(14, 6, bd));
+      return best;
+    },
+  };
+}
+
+/** Low and wooded to the water's edge, a white beach all round, and one big
+ *  old tree in a clearing in the middle. */
+function greenIsland() {
+  return {
+    name: 'Green Island',
+    land: 90,
+    bound: 240,
+    cell: 2.5,
+    features: {
+      bigTree: { x: 4, z: -6 },
+      palms: [{ x: 66, z: 12, height: 7.5, lean: 0.55 }, { x: -60, z: -30, height: 7, lean: 0.5 }],
+    },
+    height(lx, lz) {
+      const r = Math.hypot(lx, lz);
+      const wob = (fbm(lx * 0.03 + 21, lz * 0.03, 101, 3) - 0.5) * 18;
+      const sdf = r - 72 + wob;
+      if (sdf > 0) return shelf(sdf, 0.9);
+      const d = -sdf;
+      return beach(d, 2.3, 14) + 5.5 * sstep(12, 55, d) + (fbm(lx * 0.05, lz * 0.05, 103, 2) - 0.5) * 2 * sstep(12, 30, d);
+    },
+  };
+}
+
 const KINDS = {
   saddle: saddleIsland,
   stack: stackIsland,
@@ -344,7 +461,19 @@ const KINDS = {
   reef: reefIsland,
   sow: sowIsland,
   burnt: burntIsland,
+  head: headIsland,
+  kettle: kettleIsland,
+  brothers: brothersIsland,
+  green: greenIsland,
 };
+
+/** Further out: [kind, bearing from Saddle in degrees (0 = +x), distance, turn]. */
+const OUTER = [
+  ['head', 30, 900, 0],
+  ['kettle', 152, 880, 0],
+  ['brothers', 212, 860, Math.PI / 2],
+  ['green', 328, 900, 0.4],
+];
 
 // ---------------------------------------------------------------------------
 // Layout
@@ -367,6 +496,12 @@ function layout() {
     const r = 480 + rand() * 130;
     placed.push({ kind, x: Math.cos(ang) * r, z: Math.sin(ang) * r, rot: rand() * TAU });
   });
+  // The outer ring came later; it's added after the shuffle so the first
+  // seven islands stay exactly where they always were.
+  for (const [kind, deg, r, turn] of OUTER) {
+    const ang = (deg * Math.PI) / 180;
+    placed.push({ kind, x: Math.cos(ang) * r, z: Math.sin(ang) * r, rot: ang + turn });
+  }
   for (const p of placed) {
     if (p.kind !== 'bar') continue;
     const sun = sunDirection(17);
@@ -440,8 +575,8 @@ export function islandNear(x, z, margin = 0) {
 // the same numbers as a texture, so CPU and GPU waves agree near the shore.
 // ---------------------------------------------------------------------------
 
-export const BAKE_SIZE = 1024;
-export const BAKE_HALF = 1024;
+export const BAKE_SIZE = 1300;
+export const BAKE_HALF = 1300;
 
 let bake = null;
 

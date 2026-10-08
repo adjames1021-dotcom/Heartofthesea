@@ -5,6 +5,7 @@ import { buildTerrain } from './terrain.js';
 import { palm, shrub, rock, stump, rockColumn, paint, mergeParts } from './props.js';
 import { buildWreck } from './wreck.js';
 import { buildVegetation } from './vegetation.js';
+import { Lighthouse, craterLake, bigTree } from './lighthouse.js';
 import { deepenShadows } from './atmosphere.js';
 
 // Puts the islands in the scene: terrain plus a deliberately small number of
@@ -101,6 +102,13 @@ export class Islands {
     if (f.piglets) this.#piglets(isl, parts);
     if (isl.id === 'horseshoe') this.#horseshoeRocks(isl, parts);
     if (f.wreck) this.#wreck(isl);
+    if (f.light) {
+      this.lighthouse = new Lighthouse(isl, this.colliders);
+      this.group.add(this.lighthouse.group);
+      this.landmarks.lighthouse = { ...toWorld(isl, f.light.x, f.light.z), island: isl.id };
+    }
+    if (f.lake) this.group.add(craterLake(isl));
+    if (f.bigTree) this.group.add(bigTree(isl, this.colliders));
 
     if (parts.length) {
       const mesh = new THREE.Mesh(mergeParts(parts), this.propMat);

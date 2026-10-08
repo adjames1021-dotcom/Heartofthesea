@@ -7,7 +7,8 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 import { heightAt, setWaveDamping } from '../shared/waves.js';
 import { dampingAt, groundAt, ISLAND_BY_ID, toWorld, gannetNest } from '../shared/world.js';
-import { hoursAt, swellScaleAt, cloudCoverAt, windAt } from '../shared/environment.js';
+import { hoursAt, swellScaleAt, cloudCoverAt, windAt, stormAt, nextStormIn, forceStorm } from '../shared/environment.js';
+import { Storm } from './storm.js';
 import { BOAT } from '../shared/boat.js';
 import { Atmosphere } from './atmosphere.js';
 import { Ocean } from './ocean.js';
@@ -48,6 +49,7 @@ const dev = {
   clouds: num('clouds'),
   fog: num('fog'),
   wind: num('wind'),
+  storm: num('storm'),
 };
 
 // ---------- World data ----------
@@ -97,7 +99,15 @@ boat.body.climbFromWater = true;
   a.z = bay.z;
 }
 
-const env = { wind: {}, ground: groundAt };
+const env = { wind: {}, ground: groundAt, storm: 0, kick: 0 };
+// The slope of the water under a point, for surfing down the face of a wave.
+const waveNow = { t: 0, swell: 0.62 };
+env.waveGrad = (x, z, out = {}) => {
+  const e = 0.9;
+  out.x = (heightAt(x + e, z, waveNow.t, waveNow.swell) - heightAt(x - e, z, waveNow.t, waveNow.swell)) / (2 * e);
+  out.z = (heightAt(x, z + e, waveNow.t, waveNow.swell) - heightAt(x, z - e, waveNow.t, waveNow.swell)) / (2 * e);
+  return out;
+};
 
 // ---------- Player ----------
 const player = new Player(world, params.get('look') ?? 'brown');
@@ -111,6 +121,9 @@ const finds = new Finds({ scene, world, hud });
 const audio = new OceanAudio();
 const fishing = new Fishing({ scene, hud, player, audio });
 const wildlife = new Wildlife({ scene, audio });
+const stormFx = new Storm({ scene, audio });
+if (dev.storm !== null) forceStorm(dev.storm);
+const weather = { warned: false, wild: false };
 const treasure = new Treasure({ scene, world, hud });
 const screens = new Screens();
 const interior = new Interior({ scene, world });
@@ -322,6 +335,39 @@ function climbAboard() {
   player.heading = Math.PI / 2 - boat.state.heading;
 }
 
+// Spray off the bow when she's driving hard into a sea.
+let sprayT = 0;
+const sprayDrift = {};
+function bowSpray(dt, t, swell, storm) {
+  sprayT -= dt;
+  const b = boat.state;
+  if (sprayT > 0 || b.sog < 2.5 || storm < 0.2) return;
+  sprayT = 0.2 + Math.random() * 0.3;
+  const bow = boat.toWorld(tmpV.set(4.8, 1.1, 0));
+  const water = heightAt(bow.x, bow.z, t, swell);
+  const into = water - (bow.y - 1.3); // how far the bow has buried itself
+  if (into > 0 || Math.random() < storm * 0.35) {
+    sprayDrift.x = env.wind.x * env.wind.speed * 0.6;
+    sprayDrift.z = env.wind.z * env.wind.speed * 0.6;
+    wildlife.splashes.spawn(bow.x, Math.max(water, bow.y - 0.7), bow.z, 8 + Math.round(12 * storm), 0.9 + storm, sprayDrift);
+  }
+}
+
+// A word before a storm, and when it's over.
+function stormNotices(t, storm) {
+  const soon = nextStormIn(t);
+  if (soon > 0 && soon < 50 && !weather.warned) {
+    weather.warned = true;
+    hud.say('The glass is falling. Storm coming.', 5);
+  }
+  if (storm > 0.6) weather.wild = true;
+  if (weather.wild && storm < 0.25) {
+    weather.wild = false;
+    weather.warned = false;
+    hud.say("The storm's passing.", 4);
+  }
+}
+
 // Short, flat notices for things you can't see from where you're standing.
 const watch = { set: true, dragging: false, aground: false, deep: false };
 function boatNotices() {
@@ -359,18 +405,33 @@ function frame(now) {
 
   atmosphere.setTimeOfDay(dev.hours ?? hoursAt(t));
   atmosphere.uniforms.uTime.value = t % 3600;
-  atmosphere.uniforms.uCloudCover.value = dev.clouds ?? cloudCoverAt(t);
+  // Past 1 the cloud closes up completely: a storm sky.
+  atmosphere.uniforms.uCloudCover.value = dev.clouds ?? cloudCoverAt(t) + 0.7 * stormAt(t);
   if (dev.fog !== null) atmosphere.fog.density = dev.fog;
   ocean.setWaveScale(swell);
   ocean.update(t, camera);
   flotsam.update(t, dt, swell, atmosphere.uniforms.uNight.value);
-  islands.update(t);
+  const storm = stormAt(t);
+  islands.update(t, 1 + 3 * storm);
   wildlife.update(dt, { t, waveScale: swell, camera, player, boat });
   wildlife.writeShoals(ocean.uniforms.uShoals.value);
 
   // Boat physics at a fixed rate.
   windAt(t, env.wind);
   if (dev.wind !== null) env.wind.speed = dev.wind;
+  waveNow.t = t;
+  waveNow.swell = swell;
+  env.storm = storm;
+  // Gusts knock her head about in a gale.
+  env.kick = storm * (0.6 * Math.sin(t * 0.83) + 0.4 * Math.sin(t * 2.1 + 1.3));
+
+  // The storm itself: rain, lightning, a dark sea, the wind howling.
+  const flash = stormFx.update(dt, { storm, camera, wind: env.wind, inside: interior.inside, night: atmosphere.uniforms.uNight.value });
+  atmosphere.setWeather(storm, flash);
+  ocean.uniforms.uStorm.value = storm;
+  audio.setWeather(storm, env.wind.speed);
+  islands.lighthouse?.update(dt, Math.max(atmosphere.uniforms.uNight.value, storm * 0.9));
+  stormNotices(t, storm);
   acc += dt;
   while (acc >= STEP) {
     boat.step(STEP, env);
@@ -378,6 +439,7 @@ function frame(now) {
   }
   boat.update(dt, t, swell);
   boat.body.setMatrix(boat.matrix, boat.prevMatrix);
+  bowSpray(dt, t, swell, storm);
   if (!started) {
     player.place(boat.toWorld(new THREE.Vector3(-2.7, LAYOUT.cockpit.sole + 0.02, 0.45)), boat.body);
     player.heading = Math.PI / 2 - boat.state.heading;
@@ -475,7 +537,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, finds, ocean, controls, THREE };
+  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, finds, ocean, controls, stormFx, atmosphere, env, THREE };
 }
 
 syncClock().finally(() => {

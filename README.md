@@ -22,6 +22,26 @@ shared clock (`GET /api/time`, 24-minute days).
 | Molly Ann Reef | A reef with a sand cay and the wreck of a two-master. |
 | Sow and Piglets | A round rock with a string of smaller ones off it. |
 | Burnt Island | Scorched hills, dead palms and black stumps. |
+| Old Head | Further out. A whaleback of rock with cliffs at the seaward end, a lighthouse on top, and a cove. |
+| Kettle Island | An old volcano: black sand, steep green flanks and a lake in the crater. |
+| The Brothers | Two towers of rock with a deep channel between them you can sail through. |
+| Green Island | Low and wooded to the water, a white beach all round, one big old tree in the middle. |
+
+## Weather
+
+The weather runs on the shared clock like everything else, so a storm hits
+everyone at once. About half the time there's one somewhere in each
+12-minute stretch, blowing for two and a half to four and a half minutes.
+"The glass is falling" is your warning, a minute ahead. Then the wind gets up to 30–45 knots
+and swings about, the sea builds to big breaking swells, the sky closes
+over, rain drives across, and lightning comes down onto the sea, with the
+thunder arriving later the further away it struck. The lighthouse on Old
+Head lights up at night and in storms.
+
+Sailing in a storm is fast and wild: she gets up and planes at 15–20 knots,
+surfs down the faces of the seas, heels hard, gets slewed about by gusts
+and seas on the quarter, and throws spray over the bow. (Fair-weather
+sailing is around 8–10 knots.) `?dev&storm=1` forces a storm for testing.
 
 There's life about: gulls wheel over the islands and keep the boat company
 (and sit on the water until you get too close), gannets fold up and plunge
@@ -98,7 +118,8 @@ platform at the stern is where you climb back aboard.
 
 ## Treasure
 
-- You start with one map (press M to look at it). A map is a drawing of an island's real coastline
+- You start with one map (press M to look at it). Maps can send you to the
+  outer islands too. A map is a drawing of an island's real coastline
   and landmarks, an X put down by hand (so it's a little off), and a note.
 - Dig (F) where you think it is. A wrong hole is empty, or has a crab in it.
   The right one gives up a chest.
@@ -201,6 +222,8 @@ src/boat.js            the sloop's model, stations, lights and colliders
 src/collision.js       collision world: statics, moving bodies, ground probes
 src/islands.js         island props; src/terrain.js island meshes; src/vegetation.js grass and trees
 src/fishing.js         rod, float, bites and the catch log
+src/storm.js           rain, lightning and the flash; the storm's strength is shared/environment.js
+src/lighthouse.js      the lighthouse, the crater lake and the big tree
 src/wildlife.js        birds, dolphins, turtles, seals, shoals (the shoals are drawn in src/ocean.js)
 src/finds.js           the hut, cairn, ruin, dinghy, anchor and the things to find
 src/interior.js        the cabin below; src/screens.js the controls and chart screens

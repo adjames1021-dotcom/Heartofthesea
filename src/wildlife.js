@@ -227,7 +227,7 @@ function smallFishModel() {
 
 class Splashes {
   constructor(scene) {
-    this.max = 160;
+    this.max = 260;
     this.mesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.06, 0), new THREE.MeshLambertMaterial({ color: '#f4f8f8' }), this.max);
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
@@ -236,11 +236,13 @@ class Splashes {
     scene.add(this.mesh);
   }
 
-  spawn(x, y, z, n = 10, power = 1) {
+  /** drift: { x, z } m/s added to every drop (spray carried off on the wind). */
+  spawn(x, y, z, n = 10, power = 1, drift = null) {
     for (let i = 0; i < n && this.drops.length < this.max; i++) {
       const a = Math.random() * TAU;
       const s = (0.6 + Math.random()) * power;
-      this.drops.push({ p: V(x, y, z), v: V(Math.cos(a) * s, (2 + Math.random() * 2.5) * power, Math.sin(a) * s), life: 0, size: 0.6 + Math.random() * 0.8 });
+      const v = V(Math.cos(a) * s + (drift?.x ?? 0) * Math.random(), (2 + Math.random() * 2.5) * power, Math.sin(a) * s + (drift?.z ?? 0) * Math.random());
+      this.drops.push({ p: V(x, y, z), v, life: 0, size: 0.6 + Math.random() * 0.8 });
     }
   }
 
@@ -276,6 +278,7 @@ const SHOAL_HOMES = [
 const GULL_ROOSTS = [
   ['saddle', 25, 215, 16, 30, 2], ['saddle', -70, -30, 118, 45, 1], ['horseshoe', 0, 0, 34, 60, 2],
   ['bar', 0, 0, 14, 40, 2], ['reef', -30, 18, 12, 35, 2], ['burnt', 0, 0, 48, 60, 1], ['sow', 0, 0, 40, 40, 2],
+  ['head', 40, 0, 48, 45, 2], ['kettle', 0, 0, 52, 55, 1], ['brothers', 0, 0, 44, 35, 3], ['green', 0, 0, 22, 45, 2],
 ];
 
 /** Gulls sitting on the water. */

@@ -207,6 +207,56 @@ function glyphs(ctx, isl, P, rand) {
     ctx.lineWidth = 1.6;
   };
   if (f.spire) stack(f.spire, 34, 9);
+  if (f.big) stack(f.big, 30, 10);
+  if (f.small) stack(f.small, 22, 8);
+  if (f.light) {
+    // The lighthouse: a tapering tower, a lantern, a cap.
+    const { x, y } = at(f.light);
+    ctx.beginPath();
+    ctx.moveTo(x - 4, y);
+    ctx.lineTo(x - 2.5, y - 20);
+    ctx.lineTo(x + 2.5, y - 20);
+    ctx.lineTo(x + 4, y);
+    ctx.moveTo(x - 3.2, y - 10);
+    ctx.lineTo(x + 3.2, y - 10);
+    ctx.stroke();
+    ctx.strokeRect(x - 2.5, y - 25, 5, 5);
+    ctx.beginPath();
+    ctx.moveTo(x - 3.5, y - 25);
+    ctx.lineTo(x, y - 29);
+    ctx.lineTo(x + 3.5, y - 25);
+    ctx.stroke();
+  }
+  if (f.bigTree) {
+    const { x, y } = at(f.bigTree);
+    ctx.beginPath();
+    ctx.moveTo(x - 1.5, y);
+    ctx.lineTo(x - 1, y - 9);
+    ctx.moveTo(x + 1.5, y);
+    ctx.lineTo(x + 1, y - 9);
+    ctx.stroke();
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI + (i / 5) * Math.PI;
+      ctx.arc(x + Math.cos(a) * 8, y - 14 + Math.sin(a) * 5, 4.5, a - 1.2, a + 1.2);
+    }
+    ctx.stroke();
+  }
+  if (f.lake) {
+    // The crater lake: a ring with a few ripples.
+    const { x, y } = at({ x: 0, z: 0 });
+    ctx.beginPath();
+    ctx.ellipse(x, y, 13, 9, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    for (const [dx, dy] of [[-5, -2], [3, 2]]) {
+      ctx.beginPath();
+      ctx.moveTo(x + dx - 3, y + dy);
+      ctx.quadraticCurveTo(x + dx, y + dy - 2, x + dx + 3, y + dy);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 1.6;
+  }
   if (f.rock) stack(f.rock, 16, 6);
   if (f.wreck) {
     const { x, y } = at(f.wreck);

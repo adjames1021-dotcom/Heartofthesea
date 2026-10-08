@@ -129,6 +129,7 @@ function applyRates(b, dt) {
 }
 
 const _p = {};
+const _g = {};
 
 /**
  * Advance the boat by dt seconds.
@@ -216,8 +217,12 @@ export function stepBoat(b, dt, env) {
   if (b.engine) Ff += b.throttle * (b.throttle >= 0 ? 2300 : 1400);
 
   // --- Hull ---
+  // Past hull speed the bow wave holds her back, hard. Arcade lets her go a
+  // bit quicker, and in a gale she gets up and planes.
+  const storm = env.storm ?? 0;
+  const hullSpeed = BOAT.arcade ? lerp(4.8, 9, storm) : 4.1;
   const au = Math.abs(b.u);
-  Ff -= Math.sign(b.u) * (60 * au + 78 * b.u * b.u * (1 + 2 * (au / 4.1) ** 4));
+  Ff -= Math.sign(b.u) * (60 * au + 78 * b.u * b.u * (1 + 2 * (au / hullSpeed) ** 4));
   Fs -= 4800 * b.v * (au + 0.2) + 4000 * b.v * Math.abs(b.v);
 
   // --- Yaw ---
@@ -253,6 +258,19 @@ export function stepBoat(b, dt, env) {
   pointForce(-0.8, 0, windage * (df * fx + ds * sx), windage * (df * fz + ds * sz));
 
   stepAnchor(b, dt, env, pointForce, pointVel);
+
+  // --- Waves: run down the face of one and she surfs; catch one on the
+  // quarter and it slews the stern round (worked out at bow and stern, so
+  // the difference turns her). Gusts in a gale knock her head about.
+  if (env.waveGrad) {
+    const k = BOAT.mass * 9.81 * (0.22 + 0.3 * storm);
+    for (const px of [3.2, -3.2]) {
+      boatPoint(b, px, 0, _p);
+      const g = env.waveGrad(_p.x, _p.z, _g);
+      pointForce(px, 0, -g.x * k, -g.z * k);
+    }
+  }
+  M += (env.kick ?? 0) * 16000;
 
   let aground = false;
   const vel = {};
@@ -299,7 +317,7 @@ export function stepBoat(b, dt, env) {
   b.z += (b.u * fz + b.v * sz) * dt;
 
   // --- Heel ---
-  const heelMoment = FsAero * heelK * BOAT.ceHeight * (BOAT.arcade ? 0.5 : 1);
+  const heelMoment = FsAero * heelK * BOAT.ceHeight * (BOAT.arcade ? lerp(0.5, 0.75, storm) : 1);
   const sh = Math.sin(b.heel);
   const righting = 42000 * sh * (1 + 0.6 * sh * sh);
   b.heelRate += ((heelMoment - righting - 18000 * b.heelRate) / BOAT.inertiaRoll) * dt;

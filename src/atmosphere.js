@@ -221,6 +221,44 @@ export class Atmosphere {
     this.fog.density = s.fog;
   }
 
+  /**
+   * Storm on top of the time of day (call after setTimeOfDay): slate sky,
+   * the sun gone behind the cloud, a darker sea and thick weather. flash
+   * (0..1) is lightning lighting everything up for an instant.
+   */
+  setWeather(storm, flash = 0) {
+    const s = this.state;
+    const u = this.uniforms;
+    if (storm > 0.001) {
+      const day = 1 - s.night * 0.85;
+      const k = storm * 0.88;
+      s.zenith.lerp(tmpA.set('#4b535d').multiplyScalar(day), k);
+      s.horizon.lerp(tmpA.set('#6b737b').multiplyScalar(day), k);
+      s.haze.multiplyScalar(1 - storm);
+      s.cloudLit.lerp(tmpA.set('#7c848c').multiplyScalar(day), k);
+      s.cloudShade.lerp(tmpA.set('#2b3138').multiplyScalar(day), k);
+      s.sun.multiplyScalar(1 - storm);
+      for (const f of ['deep', 'shallow', 'lagoon', 'scatter']) s[f].multiplyScalar(1 - 0.38 * storm);
+      const dim = 1 - 0.72 * storm;
+      u.uLightColor.value.multiplyScalar(dim);
+      this.light.intensity *= dim;
+      this.hemi.intensity *= 1 - 0.4 * storm;
+      this.hemi.color.copy(s.zenith).lerp(s.horizon, 0.5);
+      this.fog.color.copy(s.horizon);
+      this.fog.density = THREE.MathUtils.lerp(this.fog.density, 0.0032, storm);
+    }
+    if (flash > 0.001) {
+      // Cold white light from everywhere at once.
+      tmpA.setRGB(0.85, 0.88, 1.0);
+      s.zenith.lerp(tmpA, flash * 0.55);
+      s.horizon.lerp(tmpA, flash * 0.7);
+      s.cloudLit.lerp(tmpA.setRGB(1.6, 1.65, 1.8), flash * 0.8);
+      s.cloudShade.lerp(tmpA.setRGB(0.7, 0.72, 0.8), flash * 0.6);
+      this.hemi.intensity += 5 * flash;
+      this.fog.color.copy(s.horizon);
+    }
+  }
+
   /** Centre the shadow box on a point of interest (snapped to shadow texels to stop shimmer). */
   focusShadows(point) {
     const cam = this.light.shadow.camera;

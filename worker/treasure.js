@@ -26,6 +26,13 @@ const norm = (a) => {
 };
 const lerp2 = (a, b, t) => v(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t);
 
+/** World-space direction of the sunrise, turned into an island's frame. */
+function sunriseLocal(isl) {
+  const s = sunDirection(6);
+  const w = norm(v(s.x, s.z));
+  return v(isl.cos * w.x + isl.sin * w.z, -isl.sin * w.x + isl.cos * w.z);
+}
+
 /** World-space direction of the sunset, turned into an island's frame. */
 function sunsetLocal(isl) {
   const s = sunDirection(18);
@@ -134,10 +141,45 @@ function spots() {
       note: 'Sand island, the end facing the wreck. Above the wet sand.',
     },
   );
+  // --- The outer islands (maps signed as version 2; see verifyMap). ---
+  const head = ISLAND_BY_ID.head.features;
+  const door = v(head.light.x - 2.6, head.light.z);
+  out.push(
+    {
+      island: 'head',
+      at: add(door, norm(sub(head.cove, door)), 10 * PACE),
+      note: 'Old Head. Out of the lighthouse door, then 10 paces straight toward the cove.',
+    },
+    {
+      island: 'head',
+      at: add(v(head.cove.x, head.cove.z), norm(sub(v(0, 0), head.cove)), head.cove.r + 7),
+      note: 'Old Head, the cove. Back of the beach, right where the grass starts.',
+    },
+  );
+  const kettle = ISLAND_BY_ID.kettle.features;
+  out.push({
+    island: 'kettle',
+    at: v(Math.cos(kettle.notch) * 44, Math.sin(kettle.notch) * 44),
+    note: 'Kettle Island. Climb to the low place in the rim, on the side facing Saddle. Dig on the top of it.',
+  });
+  const bro = ISLAND_BY_ID.brothers.features;
+  out.push({
+    island: 'brothers',
+    at: v(bro.beach.x + 1, bro.beach.z - 1),
+    note: 'The Brothers. The shingle beach under the big brother. Right at the back, against the rock.',
+  });
+  const green = ISLAND_BY_ID.green.features;
+  out.push({
+    island: 'green',
+    at: add(green.bigTree, sunriseLocal(ISLAND_BY_ID.green), 6 * PACE + 1.5),
+    note: 'Green Island. The big tree in the middle. 6 paces from it toward the sunrise.',
+  });
   return out;
 }
 
 export const SPOTS = spots();
+// Maps from before the outer islands could only point at the first 14 spots.
+const SPOTS_V1 = SPOTS.slice(0, 14);
 
 const BEARINGS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 function bearingFromSaddle(isl) {
@@ -180,10 +222,13 @@ const u32 = (b, o = 0) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b
 export async function verifyMap(secret, id) {
   if (typeof id !== 'string' || !/^[0-9a-f]{16}\.[0-9a-f]{16}$/.test(id)) return null;
   const [nonce, sig] = id.split('.');
-  const want = hex(await hmac(secret, `map:${nonce}`), 8);
-  if (want !== sig) return null;
+  // Version 2 maps can lead anywhere; version 1 maps keep their old spots.
+  let list = null;
+  if (hex(await hmac(secret, `map2:${nonce}`), 8) === sig) list = SPOTS;
+  else if (hex(await hmac(secret, `map:${nonce}`), 8) === sig) list = SPOTS_V1;
+  if (!list) return null;
   const pick = await hmac(secret, `spot:${nonce}`);
-  return { nonce, spot: SPOTS[u32(pick) % SPOTS.length], bytes: pick };
+  return { nonce, spot: list[u32(pick) % list.length], bytes: pick };
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +239,7 @@ export async function verifyMap(secret, id) {
 export async function issueMap(secret, { not = [] } = {}) {
   for (let tries = 0; tries < 12; tries++) {
     const nonce = hex(crypto.getRandomValues(new Uint8Array(8)), 8);
-    const id = `${nonce}.${hex(await hmac(secret, `map:${nonce}`), 8)}`;
+    const id = `${nonce}.${hex(await hmac(secret, `map2:${nonce}`), 8)}`;
     const m = await verifyMap(secret, id);
     if (not.includes(m.spot.island) && tries < 11) continue;
     const isl = ISLAND_BY_ID[m.spot.island];

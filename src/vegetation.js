@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ISLANDS, groundAt } from '../shared/world.js';
+import { ISLANDS, groundAt, toWorld } from '../shared/world.js';
 import { mulberry32, fbm } from '../shared/noise.js';
 import { surfaceKind } from './terrain.js';
 import { palm, mergeParts, paint, segment } from './props.js';
@@ -8,9 +8,9 @@ import { clearings } from './finds.js';
 
 // Grass, flowers, bushes and trees, scattered from a fixed seed so everyone
 // sees the same islands. Grass and flowers grow everywhere they can. Bushes,
-// broadleaf trees and extra palms are only on Saddle Island: the other
-// islands' palms and bushes are landmarks the treasure maps refer to, so they
-// stay as they are.
+// broadleaf trees and extra palms are only on Saddle Island and the wooded
+// Green Island: the other islands' palms and bushes are landmarks the
+// treasure maps refer to, so they stay as they are.
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const UP = V(0, 1, 0);
@@ -102,14 +102,22 @@ export function buildVegetation({ colliders }) {
   const geo = { tuft: tuftGeometry(), flower: flowerGeometry(), bush: bushGeometry(), canopy: canopyGeometry() };
   // Leave the huts, ruins and cairns some room.
   const clear = clearings();
+  // ...and the lighthouse, the big tree and the crater lake.
+  for (const isl of ISLANDS) {
+    const f = isl.features;
+    if (f.light) clear.push({ ...toWorld(isl, f.light.x, f.light.z), r: 6 });
+    if (f.bigTree) clear.push({ ...toWorld(isl, f.bigTree.x, f.bigTree.z), r: 13 });
+    if (f.lake) clear.push({ ...toWorld(isl, 0, 0), r: f.lake.r + 2.5 });
+  }
   const cleared = (x, z) => clear.some((c) => (x - c.x) ** 2 + (z - c.z) ** 2 < c.r * c.r);
   const trunkGeo = paint(segment(V(0, 0, 0), V(0, 3.4, 0), 0.26, 0.17, 6), '#ffffff');
 
   for (const isl of ISLANDS) {
     const rand = mulberry32(5000 + isl.id.length * 977 + Math.round(isl.x));
     const R = isl.land * 1.05;
-    const lush = isl.id === 'saddle';
-    const bare = isl.id === 'stack' || isl.id === 'sow';
+    const lush = isl.id === 'saddle' || isl.id === 'green';
+    const woods = isl.id === 'green'; // wooded right down to the beach
+    const bare = isl.id === 'stack' || isl.id === 'sow' || isl.id === 'brothers';
     const burnt = isl.id === 'burnt';
     const tufts = [];
     const flowers = [];
@@ -140,13 +148,13 @@ export function buildVegetation({ colliders }) {
           const k = 0.9 + rand() * 0.6;
           flowers.push({ m: matrix(x, h - 0.01, z, rand() * 6.28, k), c });
         }
-        // Saddle Island only: bushes and small woods.
+        // Saddle and Green Island only: bushes and woods.
         if (lush && kind !== 'dune' && kind !== 'sand') {
           if (clump > 0.45 && rand() < 0.012) {
             const k = 0.8 + rand() * 1.1;
             bushes.push({ m: matrix(x, h - 0.15, z, rand() * 6.28, k, k * 0.9), c: pick(BUSH, rand()).clone() });
           }
-          if (kind === 'grass' && n.y > 0.8 && clump > 0.56 && h < 60 && rand() < 0.016 && trees.length < 260) {
+          if (kind === 'grass' && n.y > 0.8 && clump > (woods ? 0.3 : 0.56) && h < 60 && rand() < (woods ? 0.05 : 0.016) && trees.length < 260) {
             trees.push({ x, y: h, z, s: 1.0 + rand() * 0.8, yaw: rand() * 6.28, c: pick(LEAF, rand()) });
           }
         }

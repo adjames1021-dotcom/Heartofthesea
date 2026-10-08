@@ -29,13 +29,30 @@ const PALETTES = {
     sand: C('#ecdeb3'), wet: C('#d2c192'), grass: C('#86a654'), grass2: C('#779a49'),
     dirt: C('#b39a74'), rock: C('#a69a86'), rock2: C('#8e8372'), seabed: C('#d6c79c'),
   },
+  // Black volcanic sand and dark rock, green on the gentler flanks.
+  kettle: {
+    sand: C('#4f4a45'), wet: C('#3d3935'), grass: C('#76a04c'), grass2: C('#5c8640'),
+    dirt: C('#5e5148'), rock: C('#55504b'), rock2: C('#46423e'), seabed: C('#6e655b'),
+  },
+  brothers: {
+    sand: C('#9c968a'), wet: C('#7d776c'), grass: C('#8b8a62'), grass2: C('#7a7a55'),
+    dirt: C('#857b6c'), rock: C('#7f786e'), rock2: C('#6b655c'), seabed: C('#a99b80'),
+  },
+  head: {
+    sand: C('#e2d2a6'), wet: C('#c4ad80'), grass: C('#7aa653'), grass2: C('#5d8c44'),
+    dirt: C('#9a8566'), rock: C('#97928a'), rock2: C('#7f7b74'), seabed: C('#c8b78e'),
+  },
+  green: {
+    sand: C('#f1e4bb'), wet: C('#d6c393'), grass: C('#6fae47'), grass2: C('#4f8f3a'), grassLight: C('#8cc357'),
+    dirt: C('#9c8257'), rock: C('#a19b90'), rock2: C('#8a847b'), seabed: C('#d8c99f'),
+  },
 };
 for (const p of Object.values(PALETTES)) {
   p.grassLight ??= p.grass.clone().multiplyScalar(1.12);
   p.dry = p.grass.clone().lerp(p.sand, 0.5);
 }
 
-const SAND_TOP = { saddle: 2.7, horseshoe: 2.3, bar: 3, reef: 3, stack: 2.0, sow: 1.7, burnt: 2.3 };
+const SAND_TOP = { saddle: 2.7, horseshoe: 2.3, bar: 3, reef: 3, stack: 2.0, sow: 1.7, burnt: 2.3, head: 2.0, kettle: 2.0, brothers: 1.6, green: 2.4 };
 
 const SURF_ROCK = [C('#5f5c55'), C('#6b675f'), C('#545a4c')];
 const smooth = (a, b, x) => {
@@ -52,12 +69,12 @@ export function surfaceKind(isl, h, ny, x, z) {
   if (isl.id === 'reef' && h < 0.9) return 'coral';
   if (h < 0.6) return ny > 0.75 ? 'wet' : 'rock';
   // Bare rock only on real cliffs; steep hillsides elsewhere are scrub.
-  const bareIsle = isl.id === 'stack' || isl.id === 'sow' || isl.id === 'burnt';
+  const bareIsle = isl.id === 'stack' || isl.id === 'sow' || isl.id === 'burnt' || isl.id === 'brothers';
   if (ny < (bareIsle ? 0.64 : 0.52)) return 'rock';
   if (h < sandTop) return ny > 0.82 ? 'sand' : 'dirt';
   if (ny < 0.72) return bareIsle ? 'dirt' : 'scrub';
   const patch = fbm(x * 0.025, z * 0.025, 13, 3);
-  const bare = isl.id === 'burnt' ? 0.46 : isl.id === 'saddle' ? 0.17 : 0.26;
+  const bare = isl.id === 'burnt' ? 0.46 : isl.id === 'saddle' || isl.id === 'green' ? 0.17 : 0.26;
   if (patch < bare || (ny < 0.8 && patch < bare + 0.1)) return 'dirt';
   if (h < sandTop + 1.4) return 'dune';
   return 'grass';

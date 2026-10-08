@@ -111,6 +111,7 @@ uniform float uFogDensity;
 uniform float uMaxHeight;
 uniform vec3 uLanternPos;
 uniform vec4 uShoals[8];   // x, z, heading, radius (radius 0: none)
+uniform float uStorm;      // 0 fair … 1 gale: whitecaps everywhere
 uniform vec3 uLanternColor;
 uniform vec3 uLagoon;
 uniform vec3 uSandbed;
@@ -236,7 +237,7 @@ void main() {
   vec3 H = normalize(L + V);
   float spec = pow(max(dot(N, H), 0.0), 900.0);
   spec = smoothstep(0.1, 0.55, spec) * 0.8 + spec * 0.4;
-  float glint = mix(1.8, 0.6, uNight);
+  float glint = mix(1.8, 0.6, uNight) * (1.0 - 0.95 * uStorm); // no sun under storm cloud
   vec3 broad = uLightColor * pow(max(dot(N, H), 0.0), 60.0) * 0.035;
   col += uLightColor * spec * glint + broad;
 
@@ -248,11 +249,12 @@ void main() {
   float bubbles = smoothstep(0.08, 0.38, wl.x);   // 0 inside the bubble holes
   float foamTex = patchN * 0.75 + bubbles * 0.3;
 
-  float crest = smoothstep(0.8, 0.45, jacobian) * smoothstep(0.54, 0.8, h01);
-  crest = clamp(crest * 1.4, 0.0, 1.0);
+  float crest = smoothstep(0.8 + 0.06 * uStorm, 0.45, jacobian) * smoothstep(0.54 - 0.06 * uStorm, 0.8, h01);
+  crest = clamp(crest * (1.4 + 0.3 * uStorm), 0.0, 1.0);
   // Faint marbling on the open sea, like leftover foam from old breakers.
-  float vein = 1.0 - smoothstep(0.0, 0.028, abs(fbm(p * 0.05 + drift * 0.15) - 0.5));
-  float amount = max(crest, vein * 0.38 * foamFade * damp);
+  // In a gale it's streaked across the whole sea.
+  float vein = 1.0 - smoothstep(0.0, 0.028 + 0.02 * uStorm, abs(fbm(p * 0.05 + drift * 0.15) - 0.5));
+  float amount = max(crest, vein * (0.38 + 0.3 * uStorm) * foamFade * damp);
   float foam = smoothstep(1.0 - amount, 1.08 - amount, foamTex);
   // Far away, swap the pattern for its average so it doesn't shimmer.
   foam = mix(crest * 0.45, foam, foamFade);
@@ -313,6 +315,7 @@ export class Ocean {
       uWorld: { value: world.texture },
       uWorldRect: { value: world.rect },
       uShoals: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, 0, 0, 0)) },
+      uStorm: { value: 0 },
     };
     this.maxHeightUnit = maxHeight;
 

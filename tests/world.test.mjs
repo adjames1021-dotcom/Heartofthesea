@@ -7,10 +7,30 @@ import { SPOTS, spotWorld, PUZZLES, COURSES, issueMap, verifyMap, dig, near, cla
 
 const SECRET = 'test-secret';
 
-test('seven islands, the big one in the middle', () => {
-  assert.equal(ISLANDS.length, 7);
+test('eleven islands, the big one in the middle, the first seven where they always were', () => {
+  assert.equal(ISLANDS.length, 11);
   const saddle = ISLANDS.find((i) => i.id === 'saddle');
   assert.deepEqual([saddle.x, saddle.z], [0, 0]);
+  // Moving these would move every chest, note and puzzle on them.
+  const was = { horseshoe: [138, 490], stack: [-342, 445], burnt: [-603, 7], sow: [-243, -479], reef: [243, -429], bar: [541, -42] };
+  for (const [id, [x, z]] of Object.entries(was)) {
+    assert.ok(Math.hypot(ISLAND_BY_ID[id].x - x, ISLAND_BY_ID[id].z - z) < 1, id);
+  }
+  // Nothing overlaps.
+  for (const a of ISLANDS) for (const b of ISLANDS) if (a !== b) assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > a.land + b.land + 60, `${a.id} / ${b.id}`);
+});
+
+test('old maps still lead where they always did', async () => {
+  const { createHmac, randomBytes } = await import('node:crypto');
+  const nonce = randomBytes(8).toString('hex');
+  const sig = createHmac('sha256', SECRET).update(`map:${nonce}`).digest('hex').slice(0, 16);
+  const old = await verifyMap(SECRET, `${nonce}.${sig}`);
+  const pick = createHmac('sha256', SECRET).update(`spot:${nonce}`).digest();
+  assert.equal(old.spot, SPOTS[pick.readUInt32BE(0) % 14]);
+  // New maps can lead to the outer islands too.
+  const seen = new Set();
+  for (let i = 0; i < 120; i++) seen.add((await verifyMap(SECRET, (await issueMap(SECRET)).id)).spot.island);
+  assert.ok(['head', 'kettle', 'brothers', 'green'].some((id) => seen.has(id)));
 });
 
 test('every map spot can be dug, and so can the ground round it', () => {

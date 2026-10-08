@@ -88,7 +88,7 @@ export class Screens {
     this.chart.appendChild(this.canvas);
     document.body.appendChild(this.chart);
     this.base = null;
-    this.R = 820; // metres from the centre to the chart edge
+    this.R = 1150; // metres from the centre to the chart edge
   }
 
   get open() {
@@ -145,7 +145,7 @@ export class Screens {
     ctx.textAlign = 'center';
     for (const isl of ISLANDS) {
       const [x, y] = this.#toPx(isl.x, isl.z);
-      const below = isl.id === 'saddle' ? 0 : isl.land * (c.width / (2 * this.R)) * 0.75 + 18;
+      const below = isl.id === 'saddle' ? 0 : Math.min(isl.land, 90) * (c.width / (2 * this.R)) * 0.75 + 18;
       ctx.fillText(isl.name, x, y + below);
     }
     // Frame and north arrow.

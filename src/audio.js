@@ -71,6 +71,69 @@ export class OceanAudio {
     }
   }
 
+  /** Wind and rain follow the weather: storm 0..1, wind speed in m/s. */
+  setWeather(storm, windSpeed) {
+    if (!this.ctx || this.ctx.state !== 'running' || !this.wind) return;
+    const now = this.ctx.currentTime;
+    this.wind.gain.gain.setTargetAtTime(0.05 + 0.006 * windSpeed + 0.22 * storm, now, 0.8);
+    this.wind.bp.frequency.setTargetAtTime(600 + 30 * windSpeed + 500 * storm, now, 0.8);
+    if (!this.rainGain && storm > 0) {
+      // Rain: a hiss of high noise.
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.noise;
+      src.loop = true;
+      src.playbackRate.value = 3.1;
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2400;
+      this.rainGain = this.ctx.createGain();
+      this.rainGain.gain.value = 0;
+      src.connect(hp).connect(this.rainGain).connect(this.master);
+      src.start();
+    }
+    this.rainGain?.gain.setTargetAtTime(storm > 0.25 ? 0.12 * Math.min(1, (storm - 0.25) / 0.6) : 0, now, 1.2);
+  }
+
+  /** Thunder from dist metres away: a crack if it's close, then the long rumble. */
+  thunder(dist, muffled = false) {
+    if (!this.ctx || this.ctx.state !== 'running' || !this.noise) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const near = Math.max(0, 1 - dist / 700);
+    const loud = (0.35 + 0.5 * near) * (muffled ? 0.6 : 1);
+    const rumble = ctx.createBufferSource();
+    rumble.buffer = this.noise;
+    rumble.playbackRate.value = 0.35;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = muffled ? 160 : 260 + 300 * near;
+    const g = ctx.createGain();
+    const len = 3 + 3 * (1 - near) + Math.random() * 2;
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(loud, now + 0.05 + 0.4 * (1 - near));
+    // Rolls: a few swells as it echoes off the cloud.
+    for (let i = 1; i < 4; i++) g.gain.linearRampToValueAtTime(loud * (0.5 + 0.5 * Math.random()) * (1 - i / 5), now + (i * len) / 4);
+    g.gain.exponentialRampToValueAtTime(0.001, now + len);
+    rumble.connect(lp).connect(g).connect(this.master);
+    rumble.start(now, Math.random() * 2);
+    rumble.stop(now + len + 0.1);
+    if (near > 0.4 && !muffled) {
+      // A close one cracks first.
+      const crack = ctx.createBufferSource();
+      crack.buffer = this.noise;
+      crack.playbackRate.value = 2.5;
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 900;
+      const cg = ctx.createGain();
+      cg.gain.setValueAtTime(0.6 * near, now);
+      cg.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      crack.connect(hp).connect(cg).connect(this.master);
+      crack.start(now);
+      crack.stop(now + 0.4);
+    }
+  }
+
   /** A herring gull: two or three falling, slightly nasal calls. */
   gull() {
     if (!this.ctx || this.ctx.state !== 'running') return;
@@ -185,5 +248,6 @@ export class OceanAudio {
     wg.gain.value = 0.06;
     wind.connect(bp).connect(wg).connect(this.master);
     wind.start();
+    this.wind = { gain: wg, bp };
   }
 }
