@@ -159,7 +159,8 @@ export class Cooking {
     const v = place.vessels[this.vessel] ?? place.vessels.pan;
     const target = v.mesh.getWorldPosition(new THREE.Vector3());
     let eye;
-    if (this.at === 'galley') eye = target.clone().add(new THREE.Vector3(0.62, 0.58, 0.22));
+    // At the galley, from above the stove, past your shoulder (the cabin moves with the boat).
+    if (this.at === 'galley') eye = this.interior.toWorld(v.mesh.position.clone().add(new THREE.Vector3(0.35, 0.95, -0.1)));
     else {
       const d = new THREE.Vector3(player.pos.x - target.x, 0, player.pos.z - target.z).normalize();
       eye = target.clone().addScaledVector(d, 0.75).add(new THREE.Vector3(0, 1.25, 0));
@@ -322,7 +323,7 @@ export class Cooking {
     if (!this.at) return;
     for (let i = 0; i < 9; i++) if (input.pressed(`Digit${i + 1}`, `Numpad${i + 1}`)) this.choose(i);
     if (input.pressed('Escape')) this.close();
-    else if (this.placeAt(player.pos, inside) !== this.at) this.close();
+    else if (this.at === 'galley' ? !inside || this.interior.dist(player.pos, this.interior.stove) > 1.3 : this.placeAt(player.pos, inside) !== this.at) this.close();
   }
 
   /** Food in the pans and pots as it cooks, the smoke, and the sizzle. */

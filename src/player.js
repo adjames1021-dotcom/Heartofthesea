@@ -212,7 +212,8 @@ export class Player {
     let dz = 0;
     if (this.platform?.matrix && this.deckUp && this.grounded) {
       const lean = Math.hypot(this.deckUp.x, this.deckUp.z);
-      const push = Math.max(0, lean - 0.09) * (this.steady ? 0.6 : 4);
+      // (Below decks there's always something to hold on to.)
+      const push = Math.max(0, lean - 0.09) * (this.steady ? 0.6 : 4) * (this.sheltered ? 0.1 : 1);
       if (push > 0) {
         dx = (this.deckUp.x / lean) * push;
         dz = (this.deckUp.z / lean) * push;

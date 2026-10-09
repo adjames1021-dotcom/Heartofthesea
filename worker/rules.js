@@ -8,7 +8,7 @@ import { issueMap, dig, near, claim } from './treasure.js';
 import { ITEMS, FIND_IDS, VALUABLE_IDS } from '../shared/items.js';
 import { TALK, repliesAt, firstValuable, count } from '../shared/talk.js';
 import { UPGRADES, HOLD } from '../shared/upgrades.js';
-import { decorable, inCabin, MAX_DECOR } from '../shared/decor.js';
+import { decorable, inCabin, MAX_DECOR, LAYOUT_V } from '../shared/decor.js';
 import { VILLAGERS } from '../shared/villages.js';
 import { QUESTS } from '../shared/quests.js';
 import { hoursAt, DAY_LENGTH } from '../shared/environment.js';
@@ -38,6 +38,7 @@ export function freshState(now) {
     cooking: {}, // what's on the heat: { 'galley/pan': { since, items } }
     fed: null, // what you last ate is doing for you: { effect, until }
     decor: [], // things put about the cabin: { item, kind, at: [x, y, z], yaw, wall }
+    decorV: LAYOUT_V, // which cabin those positions are for (shared/decor.js)
     stowed: [], // finds put away in the locker rather than out on show
     nextId: 1,
   };
@@ -290,6 +291,18 @@ function spoil(s, now) {
   return any;
 }
 
+/**
+ * The cabin's been rebuilt (shared/decor.js LAYOUT_V): what was put about
+ * the old one goes back to its first place, once. (Things with no first
+ * place are in the locker.) Returns whether anything changed.
+ */
+export function settle(s) {
+  if ((s.decorV ?? 1) >= LAYOUT_V) return false;
+  s.decor = [];
+  s.decorV = LAYOUT_V;
+  return true;
+}
+
 // Actions that only look.
 const READ_ONLY = new Set(['hello', 'near']);
 
@@ -372,12 +385,14 @@ export async function apply(state, action, ctx) {
   if (!fn) return { state, reply: fail('unknown action') };
   const s = structuredClone(state);
   const spoiled = spoil(s, ctx.now);
+  const moved = settle(s);
   const reply = await fn(s, action, ctx);
   if (!reply.ok || READ_ONLY.has(action.type)) {
-    if (!spoiled) return { state, reply };
-    // Nothing done, but something in the hold has gone off meanwhile.
+    if (!spoiled && !moved) return { state, reply };
+    // Nothing done, but something in the hold has gone off meanwhile (or the cabin's new).
     const kept = structuredClone(state);
     spoil(kept, ctx.now);
+    settle(kept);
     return { state: kept, reply };
   }
   return { state: s, reply };

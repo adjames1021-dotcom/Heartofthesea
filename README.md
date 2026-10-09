@@ -105,11 +105,15 @@ forgiving. Settings → Sailing switches to realistic, where you trim the
 main and jib sheets yourself (↑↓ and ←→ at the helm). The halyard and
 windlass stations still work in both.
 
-The steps at the front of the cockpit (E) go below, into a cabin about the
-size a real 37-footer has: galley to port, chart table to starboard, a saloon
-with settees and a drop-leaf table, and a V-berth in the bow. Below decks
-the camera looks down into the cabin from above, like a cutaway. There's always a spare treasure map on the
-chart table if you've run out, and the galley stove is for cooking (below).
+The companionway at the front of the cockpit is open: walk forward and down
+the steps into the cabin, which is built inside her own hull and moves with
+her. Galley to port at the foot of the steps, chart table to starboard, a
+saloon with a dinette round the mast to port and a settee to starboard, and
+through the bulkhead door a V-berth in the bow. While you're below, the decks
+over you are cut away and the camera looks in from above, with the sea going
+by outside. It's dim by day (the deck's shadow is real) and lamplit at night.
+Walk back up the steps to come out. There's always a spare treasure map on
+the chart table if you've run out, and the galley stove is for cooking (below).
 
 There are eleven things to find on the islands, some in plain sight, some
 not: a fisherman's hut, a cairn on the summit, a burnt-out cottage, an
@@ -178,6 +182,8 @@ table, a shelf, the floor) or hangs it on a wall. Q or the wheel turns it, E
 or a click puts it down, Esc puts it back. The locker under the berth holds
 what isn't out. Things rock a little with the boat. Settings has a link for
 someone else to come aboard and look round your cabin as you've left it.
+(When the cabin moved into the hull, things you'd put about the old one went
+back to their first places, once; anything without one is in the locker.)
 
 ## Your progress
 
@@ -329,7 +335,7 @@ src/storm.js           rain, lightning and the flash; the storm's strength is sh
 src/lighthouse.js      the lighthouse, the crater lake and the big tree
 src/wildlife.js        birds, dolphins, turtles, seals, shoals (the shoals are drawn in src/ocean.js)
 src/finds.js           the hut, cairn, ruin, dinghy, anchor and the things to find
-src/interior.js        the cabin below; src/screens.js the controls and chart screens
+src/interior.js        the cabin below, inside the hull; src/screens.js the controls and chart screens
 src/treasure.js        maps, digging, chests, crabs, casks; src/mapview.js draws maps
 src/puzzles.js         notes and set pieces (Pell's Bar, the Horseshoe)
 src/hatch.js           the Molly Ann's hatch, yard, net and casks

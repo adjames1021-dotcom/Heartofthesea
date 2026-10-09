@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RIPPLES, SWELLS, DEFAULT_WAVE_SCALE, wavePhases } from '../shared/waves.js';
 import { noiseGLSL, skyGLSL, skyUniformsGLSL } from './glsl.js';
+import { HULL_GLSL } from './boat.js';
 
 const GRID = 420;          // vertices per side
 const RADIUS = 4500;       // metres from the camera to the mesh edge
@@ -115,12 +116,18 @@ uniform float uStorm;      // 0 fair … 1 gale: whitecaps everywhere
 uniform vec3 uLanternColor;
 uniform vec3 uLagoon;
 uniform vec3 uSandbed;
+uniform mat4 uHullInv;     // world → the boat's own frame
+${HULL_GLSL}
 
 varying vec3 vWorld;
 varying vec2 vGrid;
 varying float vHeight;
 
 void main() {
+  // No sea inside the boat (you can see down into her while you're below).
+  vec3 hl = (uHullInv * vec4(vWorld, 1.0)).xyz;
+  if (abs(hl.x) < 5.75 && abs(hl.z) < 2.0 && hl.y < 1.35 && abs(hl.z) < hullHalf(hl.x, hl.y) - 0.03) discard;
+
   vec2 p = vGrid;
   vec3 toCam = cameraPosition - vWorld;
   float dist = length(toCam);
@@ -316,6 +323,7 @@ export class Ocean {
       uWorldRect: { value: world.rect },
       uShoals: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, 0, 0, 0)) },
       uStorm: { value: 0 },
+      uHullInv: { value: new THREE.Matrix4().makeTranslation(0, -1e5, 0) },
     };
     this.maxHeightUnit = maxHeight;
 

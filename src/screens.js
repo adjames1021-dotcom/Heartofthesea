@@ -14,7 +14,6 @@ const ROWS = {
     ['Q', 'fish: cast, then Q again when the float dips'],
     ['M', 'treasure maps (← → to flip)'],
     ['L', 'boat lights, from anywhere aboard'],
-    ['E', 'at the steps in the cockpit: go below'],
     ['E', 'talk to someone (then 1 2 3 to answer)'],
     ['E', 'at the stove below, or a lit fire: cook (then 1 2 3)'],
     ['E', 'below decks: pick a thing up, then the mouse moves it, Q turns it, E or a click puts it down'],
@@ -54,7 +53,7 @@ const BOAT_SVG = `
   <g font-size="15" fill="#2b241d">
     <g class="mark"><circle cx="46" cy="100" r="9"/><text x="22" y="40">Helm</text><path d="M40 46 L46 88"/></g>
     <g class="mark"><circle cx="186" cy="80" r="9"/><text x="150" y="40">Halyards (mast)</text><path d="M186 46 L186 70"/></g>
-    <g class="mark"><circle cx="196" cy="108" r="9"/><text x="268" y="188">Steps below (cabin)</text><path d="M290 174 L204 114"/></g>
+    <g class="mark"><circle cx="196" cy="108" r="9"/><text x="268" y="188">Steps down to the cabin</text><path d="M290 174 L204 114"/></g>
     <g class="mark"><circle cx="430" cy="100" r="9"/><text x="396" y="40">Windlass (anchor)</text><path d="M440 46 L432 88"/></g>
     <g class="mark"><circle cx="22" cy="100" r="7"/><text x="4" y="188">Swim platform: climb aboard here</text><path d="M22 176 L22 110"/></g>
   </g>

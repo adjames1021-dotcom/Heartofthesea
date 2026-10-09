@@ -49,11 +49,12 @@ export class FollowCamera {
     this.smoothTarget.z += (target.z - this.smoothTarget.z) * k;
     this.smoothTarget.y += (target.y - this.smoothTarget.y) * ky;
 
-    // Below decks the camera looks down into the cabin from above, like a
-    // cutaway: the walls and deckhead between it and the bear are only drawn
-    // from the inside, so they drop out of the way.
+    // Below decks the camera looks down into the cabin from above, with the
+    // deck over it cut away. It swings up there as you go down the steps,
+    // and back down as you come up (you can still tip it further over).
     const cabin = context === 'cabin';
-    const pitch = cabin ? 0.92 : this.pitch;
+    this.cabinK = (this.cabinK ?? 0) + ((cabin ? 1 : 0) - (this.cabinK ?? 0)) * (1 - Math.exp(-dt * 3.5));
+    const pitch = this.pitch + (Math.max(this.pitch, 0.95) - this.pitch) * this.cabinK;
     const cp = Math.cos(pitch);
     const dir = new THREE.Vector3(Math.sin(this.yaw) * cp, Math.sin(pitch), Math.cos(this.yaw) * cp);
     // Pull in if a hill, a hull or a rock is in the way.

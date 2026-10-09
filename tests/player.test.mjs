@@ -300,6 +300,30 @@ test('finds go on show in the cabin; you can move them, hang them up or put them
   assert.equal((await apply(c, { type: 'place', item: 't0', at: [0, 0.73, 0], yaw: 0 }, ctx())).reply.ok, false);
 });
 
+test('the cabin rebuilt in the hull: things put about the old one go back to their first places, once', async () => {
+  let s = (await apply(freshState(0), { type: 'find', id: 'bell' }, ctx())).state;
+  s = withItems(s, 'candlesticks');
+  const bell = s.items[0].id;
+  const sticks = s.items[1].id;
+  // A save from before the rebuild: no layout version, things where the old cabin had them.
+  const { decorV, ...old } = s;
+  assert.equal(decorV, 2);
+  old.decor = [
+    { item: bell, kind: 'bell', at: [-3.64, 1.62, 0.62], yaw: 1.57, wall: true },
+    { item: sticks, kind: 'candlesticks', at: [-0.1, 0.73, 0], yaw: 0, wall: false },
+  ];
+  const r = await apply(old, { type: 'hello' }, ctx());
+  assert.equal(r.state.decorV, 2);
+  const shown = cabinLayout(r.state);
+  assert.deepEqual(shown.map((d) => d.kind), ['bell'], 'the bell back on its hook; the candlesticks in the locker');
+  assert.deepEqual(shown[0].at, [-1.13, 1.42, 0.7]);
+  // And only once: put it somewhere new and it stays.
+  const moved = await apply(r.state, { type: 'place', item: bell, at: [1.2, 0.745, -0.5], yaw: 0, wall: false }, ctx());
+  const again = await apply(moved.state, { type: 'hello' }, ctx());
+  assert.deepEqual(cabinLayout(again.state)[0].at, [1.2, 0.745, -0.5]);
+  assert.equal(again.state, moved.state, 'nothing to change');
+});
+
 test("Ned won't take the candlesticks off your shelf", async () => {
   let s = withItems(freshState(0), 'candlesticks', 'watch', 'copper');
   s = (await apply(s, { type: 'place', item: 't0', at: [0, 1.32, 1.4], yaw: 0 }, ctx())).state;

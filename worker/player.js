@@ -3,7 +3,7 @@
 // result is written to the object's own storage before the reply goes back.
 
 import { DurableObject } from 'cloudflare:workers';
-import { apply, freshState, publicState } from './rules.js';
+import { apply, freshState, publicState, settle } from './rules.js';
 import { cabinLayout } from '../shared/decor.js';
 
 export class Player extends DurableObject {
@@ -30,7 +30,8 @@ export class Player extends DurableObject {
 
   /** What a visitor sees when they come aboard: the cabin, not the rest. */
   async cabin() {
-    const s = await this.#load();
+    const s = structuredClone(await this.#load());
+    settle(s); // (if they've not been aboard since the cabin was rebuilt)
     return { decor: cabinLayout(s), upgrades: s.upgrades ?? [] };
   }
 }

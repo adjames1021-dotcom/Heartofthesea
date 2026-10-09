@@ -161,8 +161,7 @@ export class Decorating {
         this.putDown();
       }
     }, { capture: true });
-    // The locker under the berth, and its card.
-    this.locker = V(1.95, 0, 0);
+    // The locker under the berth (src/interior.js), and its card.
     this.card = document.createElement('div');
     this.card.className = 'talk cook';
     this.card.addEventListener('click', (e) => {
@@ -214,7 +213,7 @@ export class Decorating {
   /** Something on show close enough to pick up (cabin-local positions). */
   near(pos) {
     if (this.visiting || this.holding) return null;
-    const p = pos.clone().sub(this.interior.group.position);
+    const p = this.interior.toLocal(pos);
     let best = null;
     let bd = 1.45;
     for (const [id, o] of this.objects) {
@@ -230,8 +229,7 @@ export class Decorating {
 
   nearLocker(pos) {
     if (this.visiting) return false;
-    const p = pos.clone().sub(this.interior.group.position);
-    return Math.hypot(p.x - this.locker.x, p.z - this.locker.z) < 0.75;
+    return this.interior.nearLocker(pos);
   }
 
   /** Pick something up off its place (or out of the locker). */
@@ -323,17 +321,24 @@ export class Decorating {
     this.ray.setFromCamera(this.mouse, this.camera);
     const hit = this.ray.intersectObject(this.interior.mesh, false)[0];
     if (!hit || !hit.face) return;
-    let n = hit.face.normal; // the cabin mesh isn't turned, so this is cabin-local
-    let p = hit.point.clone().sub(this.interior.group.position);
+    // In the cabin's own frame (the mesh isn't turned within it), facing the camera.
+    const toward = (h, from) => (h.face.normal.dot(from) > 0 ? h.face.normal.clone().negate() : h.face.normal.clone());
+    let p = this.interior.toLocal(hit.point);
+    let n = toward(hit, p.clone().sub(this.interior.toLocal(this.ray.ray.origin)));
     if (Math.abs(n.y) < 0.35) {
       // The lip of a shelf or a fiddle rail: if there's a top just behind it, use that.
       this.down ??= new THREE.Raycaster();
-      this.down.set(hit.point.clone().addScaledVector(n, -0.09).add(V(0, 0.2, 0)), V(0, -1, 0));
+      const from = this.interior.toWorld(p.clone().addScaledVector(n, -0.09).add(V(0, 0.2, 0)));
+      const below = this.interior.toWorld(p.clone().addScaledVector(n, -0.09).add(V(0, -0.2, 0))).sub(from).normalize();
+      this.down.set(from, below);
       this.down.far = 0.4;
       const top = this.down.intersectObject(this.interior.mesh, false)[0];
-      if (top?.face && top.face.normal.y > 0.6) {
-        n = top.face.normal;
-        p = top.point.clone().sub(this.interior.group.position);
+      if (top?.face) {
+        const tn = toward(top, V(0, -1, 0));
+        if (tn.y > 0.6) {
+          n = tn;
+          p = this.interior.toLocal(top.point);
+        }
       }
     }
     if (n.y > 0.6) {

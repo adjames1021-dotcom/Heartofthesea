@@ -151,7 +151,7 @@ const weather = { warned: false, wild: false };
 await progressReady;
 const treasure = new Treasure({ scene, world, hud, progress });
 const screens = new Screens();
-const interior = new Interior({ scene, world });
+const interior = new Interior({ boat });
 const cooking = new Cooking({ progress, hud, audio, interior, villages });
 const decorating = new Decorating({ interior, progress, hud, camera, canvas: renderer.domElement });
 // Visiting someone's boat (?visit=<their id>): their cabin and what the yard's done to her.
@@ -332,24 +332,6 @@ function putDown() {
   player.carrying = null;
 }
 
-// The companionway: steps down into the cabin, in the front of the cockpit.
-const COMPANIONWAY = new THREE.Vector3(-1.35, LAYOUT.cockpit.sole, 0);
-
-function goBelow() {
-  interior.inside = true;
-  if (player.carrying) player.carrying = null;
-  player.place(interior.arrival, null);
-  player.heading = Math.PI / 2;
-  follow.yaw = player.heading + Math.PI;
-  follow.pitch = 0.25;
-}
-
-function goUp() {
-  interior.inside = false;
-  player.place(boat.toWorld(COMPANIONWAY.clone().add(new THREE.Vector3(-0.5, 0.02, 0))), boat.body);
-  player.heading = -Math.PI / 2 - boat.state.heading;
-}
-
 /** Is (x, z) over the boat? (So a cast clears her.) */
 const boatInv = new THREE.Matrix4();
 function onBoat(p) {
@@ -361,23 +343,17 @@ function onBoat(p) {
 function findInteraction() {
   if (player.mode === 'station' || player.mode === 'dig' || player.flopT > 0 || player.clinging) return null;
   if (interior.inside) {
-    // The stove's right by the steps: whichever you're nearer.
-    const stove = interior.stove.clone().add(interior.group.position);
-    const ladder = interior.arrival;
-    const atStove = interior.nearStove(player.pos) && Math.hypot(stove.x - player.pos.x, stove.z - player.pos.z) < Math.hypot(ladder.x - player.pos.x, ladder.z - player.pos.z);
-    if (atStove) return cooking.open ? null : { key: 'E', label: 'Cook', act: () => cooking.begin('galley') };
     // Something you're carrying about the cabin to put somewhere.
     if (decorating.holding) {
       if (decorating.nearLocker(player.pos)) return { key: 'E', label: 'Put it in the locker', act: () => decorating.stow() };
       return { key: 'E', label: 'Put it down', act: () => decorating.putDown() };
     }
-    if (interior.nearLadder(player.pos)) return { key: 'E', label: 'Go up on deck', act: goUp };
+    if (interior.nearStove(player.pos)) return cooking.open ? null : { key: 'E', label: 'Cook', act: () => cooking.begin('galley') };
     // Things on show about the cabin: pick one up to move it (unless the
     // chart table's nearer, where the maps are).
     if (decorating.nearLocker(player.pos)) return decorating.lockerOpen ? null : { key: 'E', label: 'Open the locker', act: () => decorating.openLocker() };
     const thing = decorating.near(player.pos);
-    const chart = interior.chartTable.clone().add(interior.group.position);
-    const chartD = Math.hypot(chart.x - player.pos.x, chart.z - player.pos.z);
+    const chartD = interior.dist(player.pos, interior.chartTable);
     if (thing && (!interior.nearChartTable(player.pos) || thing.d < chartD)) return { key: 'E', label: thing.label, act: () => decorating.pickUp(thing.id) };
     if (interior.nearChartTable(player.pos)) {
       // A spare treasure map is always here if you've run out.
@@ -395,10 +371,6 @@ function findInteraction() {
       return { key: 'E', label: 'Look at your maps', act: () => treasure.toggleMap() };
     }
     return null;
-  }
-  if (player.platform === boat.body && !player.carrying) {
-    boat.toWorld(COMPANIONWAY, tmpV);
-    if (Math.hypot(tmpV.x - player.pos.x, tmpV.z - player.pos.z) < 0.6) return { key: 'E', label: 'Go below', act: goBelow };
   }
   if (player.carrying) return { key: 'E', label: 'Put down', act: putDown };
   const near = treasure.nearest(player.pos);
@@ -594,11 +566,9 @@ function frame(now) {
   // The storm itself: rain, lightning, a dark sea, the wind howling.
   const flash = stormFx.update(dt, { storm, camera, wind: env.wind, inside: interior.inside, night: atmosphere.uniforms.uNight.value });
   atmosphere.setWeather(storm, flash);
-  if (interior.inside) {
-    // Below decks the light is the lamps and what comes through the ports.
-    atmosphere.hemi.intensity *= 0.32;
-    atmosphere.light.intensity *= 0.25;
-  }
+  // Below decks: the deck over you keeps the sun off (its shadow does that)
+  // and much of the sky's light; the lamps and the companionway do the rest.
+  atmosphere.hemi.intensity *= 1 - 0.35 * interior.cutK;
   ocean.uniforms.uStorm.value = storm;
   audio.setWeather(storm, env.wind.speed);
   islands.lighthouse?.update(dt, Math.max(atmosphere.uniforms.uNight.value, storm * 0.9));
@@ -610,6 +580,7 @@ function frame(now) {
   }
   boat.update(dt, t, swell);
   boat.body.setMatrix(boat.matrix, boat.prevMatrix);
+  ocean.uniforms.uHullInv.value.copy(boat.matrix).invert();
   bowSpray(dt, t, swell, storm);
   if (!started) {
     player.place(boat.toWorld(new THREE.Vector3(-2.7, LAYOUT.cockpit.sole + 0.02, 0.45)), boat.body);
@@ -619,7 +590,9 @@ function frame(now) {
     started = true;
     // Come to visit: straight down to look round their cabin.
     if (visit) {
-      goBelow();
+      player.place(interior.toWorld(interior.foot), boat.body);
+      player.heading = Math.PI / 2 - boat.state.heading;
+      follow.yaw = Math.atan2(-Math.cos(boat.state.heading), -Math.sin(boat.state.heading)) + 0.5;
       hud.say("Someone else's boat. Have a look round.", 4);
     }
     // Your first map; and chests dug up last time but not got home are
@@ -686,6 +659,7 @@ function frame(now) {
     if (input.pressed('ArrowRight')) treasure.flip(1);
     if (input.pressed('ArrowLeft')) treasure.flip(-1);
   }
+  player.sheltered = interior.inside;
   player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis() });
   fishing.update(dt, { t, waveScale: swell, night: atmosphere.uniforms.uNight.value > 0.5, camYaw: follow.yaw });
   treasure.update(dt, { t, waveScale: swell, boatBody: boat.body, player });
@@ -698,7 +672,7 @@ function frame(now) {
 
   hud.setKeys(decorating.holding ? DECOR_KEYS : player.mode === 'station' ? STATION_KEYS[player.station === 'helm' && !BOAT.arcade ? 'helmRealistic' : player.station] : null);
   hud.setInstruments(player.station === 'helm' ? boat.state : null);
-  interior.update(atmosphere.uniforms.uNight.value, camera);
+  interior.update(dt, { night: atmosphere.uniforms.uNight.value, camera, player });
   const nearBoat = interior.inside || player.platform === boat.body || player.mode === 'station' || Math.hypot(player.pos.x - boat.state.x, player.pos.z - boat.state.z) < 30;
   hud.setAnchor(nearBoat ? boat.state : null);
   boatNotices();

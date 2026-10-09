@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { BOAT, createBoat, stepBoat } from '../shared/boat.js';
 import { heightAt } from '../shared/waves.js';
 import { smoothstep, clamp } from '../shared/noise.js';
@@ -23,8 +22,36 @@ const keelD = (u) => 0.55 * smoothstep(0, 0.16, u) * (1 - 0.5 * smoothstep(0.72,
 export const deckAt = (x) => sheerY(uOf(x));
 export const halfAt = (x) => hb(uOf(x));
 
+/** Half-breadth of the hull at x, at height y (on the lofted surface). */
+export function hullZ(x, y) {
+  const u = uOf(x);
+  const sh = sheerY(u);
+  const kd = keelD(u);
+  const e = 2 / 3.4;
+  const t = Math.min(1, Math.max(0, (sh - y) / (sh + kd)));
+  const sn = Math.pow(t, 1 / e);
+  const cs = Math.sqrt(Math.max(0, 1 - sn * sn));
+  return hb(u) * Math.pow(cs, e);
+}
+
+/** The same hull in GLSL (the sea uses it to keep out of the boat). Keep the two in step. */
+export const HULL_GLSL = `
+float hullHalf(float x, float y) {
+  float u = (${(L / 2).toFixed(4)} - x) / ${L.toFixed(4)};
+  float b = u < 0.55 ? 1.95 * pow(max(sin(u / 0.55 * 1.5707963), 1e-4), 0.62) : 1.95 * (1.0 - 0.11 * smoothstep(0.55, 1.0, u));
+  float sh = 1.27 - 0.27 * u + 0.06 * pow(1.0 - u, 3.0);
+  float kd = 0.55 * smoothstep(0.0, 0.16, u) * (1.0 - 0.5 * smoothstep(0.72, 1.0, u));
+  float t = clamp((sh - y) / (sh + kd), 0.0, 1.0);
+  float sn = pow(t, 1.7);
+  return b * pow(max(1.0 - sn * sn, 0.0), 0.5 * ${(2 / 3.4).toFixed(6)});
+}`;
+
 export const LAYOUT = {
   cabin: { x0: -1.2, x1: 2.3, w0: 0.98, w1: 0.78, h: 0.55 },
+  // Below decks: from the cockpit bulkhead to the chain locker, the cabin
+  // sole a little under the waterline, and the companionway (its door, and
+  // how far forward the hatch slides open).
+  below: { x0: -1.2, x1: 4.45, floor: -0.38, door: 0.38, hatchX: -0.55 },
   cockpit: { x0: -5.7, x1: -1.2, sole: 0.65, half: 1.4, benchX0: -3.2, benchIn: 0.9, benchTop: 1.0 },
   mast: { x: 1.4, top: 16.5, r: 0.11 },
   boom: { x: 1.27, y: 2.95, len: 4.6 },
@@ -32,6 +59,17 @@ export const LAYOUT = {
   platform: { x0: -6.35, x1: -5.7, half: 0.8, y: 0.3 },
   forestay: { tack: new THREE.Vector3(5.62, 1.35, 0), head: new THREE.Vector3(1.45, 16.35, 0) },
 };
+
+/** Half-width of the coachroof at its foot, at x. */
+export const cabinHalf = (x) => LAYOUT.cabin.w0 + ((x - LAYOUT.cabin.x0) / (LAYOUT.cabin.x1 - LAYOUT.cabin.x0)) * (LAYOUT.cabin.w1 - LAYOUT.cabin.w0);
+/** Height of the top of the coachroof at x. */
+export function roofTop(x) {
+  const c = LAYOUT.cabin;
+  const a = c.x0 + 0.1;
+  const b = c.x1 - 0.35;
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return deckAt(c.x0) + c.h + t * (deckAt(c.x1) - 0.06 - deckAt(c.x0));
+}
 
 /** Crew stations, boat-local. `stand` is where the bear stands, facing +x. */
 export const STATIONS = {
@@ -152,6 +190,46 @@ function quad(a, b, c, d) {
   return g;
 }
 
+/**
+ * The coachroof: sloped sides and ends, and an opening at the after end for
+ * the companionway (through the end and back across the top as far as the
+ * hatch slides). Drawn from both sides, so the trunk shows from inside it too.
+ */
+function coachroof() {
+  const c = LAYOUT.cabin;
+  const below = LAYOUT.below;
+  const d0 = deckAt(c.x0);
+  const d1 = deckAt(c.x1);
+  const ax = c.x0 + 0.1;
+  const fx = c.x1 - 0.35;
+  const hx = below.hatchX;
+  const dw = below.door;
+  const edge = (x) => c.w0 - 0.13 + ((x - ax) / (fx - ax)) * (c.w1 - c.w0);
+  const T = (x, z) => [x, roofTop(x), z];
+  const pos = [];
+  const quad4 = (a, b, cc, d) => pos.push(...a, ...b, ...cc, ...a, ...cc, ...d);
+  // Top: forward of the opening, then either side of it.
+  quad4(T(hx, -edge(hx)), T(hx, edge(hx)), T(fx, edge(fx)), T(fx, -edge(fx)));
+  for (const s of [-1, 1]) {
+    quad4(T(ax, s * dw), T(ax, s * edge(ax)), T(hx, s * edge(hx)), T(hx, s * dw));
+    // Sides.
+    quad4([c.x0, d0 - 0.05, s * c.w0], [ax, d0 + c.h, s * (c.w0 - 0.13)], [fx, d1 + c.h - 0.06, s * (c.w1 - 0.13)], [c.x1, d1 - 0.05, s * c.w1]);
+    // The after end, beside the opening.
+    const zb = (z) => [c.x0, d0 - 0.05, z];
+    const zt = (z) => [ax, d0 + c.h, z];
+    quad4(zb(s * dw), zb(s * c.w0), zt(s * (c.w0 - 0.13)), zt(s * dw));
+    // The sides of the opening.
+    quad4([c.x0, d0 - 0.05, s * dw], [ax, d0 + c.h, s * dw], [hx, roofTop(hx), s * dw], [hx, d0 - 0.05, s * dw]);
+  }
+  // The front, and the edge of the roof where the opening stops.
+  quad4([c.x1, d1 - 0.05, -c.w1], [c.x1, d1 - 0.05, c.w1], [fx, d1 + c.h - 0.06, c.w1 - 0.13], [fx, d1 + c.h - 0.06, -(c.w1 - 0.13)]);
+  quad4([hx, roofTop(hx) - 0.08, -dw], [hx, roofTop(hx) - 0.08, dw], [hx, roofTop(hx), dw], [hx, roofTop(hx), -dw]);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
 function buildStatic() {
   const t = textures();
   const group = new THREE.Group();
@@ -201,9 +279,17 @@ function buildStatic() {
   // Decks.
   const c = LAYOUT.cabin;
   const k = LAYOUT.cockpit;
-  add(loftDeck({ length: L, u0: 0, u1: uOf(c.x1), stations: 10, halfBreadth: hb, sheer: sheerY, camber: 0.03 }), teakMat);
-  const cabinHalf = (x) => c.w0 + ((x - c.x0) / (c.x1 - c.x0)) * (c.w1 - c.w0);
-  add(sideStrip(c.x0, c.x1, cabinHalf, halfAt, deckAt), teakMat);
+  const below = LAYOUT.below;
+  // The decks over the cabin are their own pieces with their own material:
+  // they're cut away (still throwing their shadow) while you're down there.
+  const teakCut = teakMat.clone();
+  const cut = (m) => {
+    m.userData.cut = true;
+    return m;
+  };
+  add(loftDeck({ length: L, u0: 0, u1: uOf(below.x1), stations: 4, halfBreadth: hb, sheer: sheerY, camber: 0.03 }), teakMat);
+  cut(add(loftDeck({ length: L, u0: uOf(below.x1), u1: uOf(c.x1), stations: 6, halfBreadth: hb, sheer: sheerY, camber: 0.03 }), teakCut));
+  cut(add(sideStrip(c.x0, c.x1, cabinHalf, halfAt, deckAt), teakCut));
   add(sideStrip(k.x0, k.x1, () => k.half, halfAt, deckAt), teakMat);
   // Cockpit sole and walls.
   add(quad([k.x0, k.sole, -k.half], [k.x0, k.sole, k.half], [k.x1, k.sole, k.half], [k.x1, k.sole, -k.half]), teakMat);
@@ -215,8 +301,12 @@ function buildStatic() {
       add(quad([xa, k.sole, side * k.half], [xb, k.sole, side * k.half], [xb, deckAt(xb), side * k.half], [xa, deckAt(xa), side * k.half]), whiteMat, false);
     }
   }
-  // Bulkhead under the companionway.
-  add(quad([k.x1, k.sole, -k.half], [k.x1, k.sole, k.half], [k.x1, deckAt(k.x1), k.half], [k.x1, deckAt(k.x1), -k.half]), whiteMat, false);
+  // Bulkhead under the companionway, open in the middle where the steps go down.
+  for (const side of [-1, 1]) {
+    const a = side * below.door;
+    const b = side * k.half;
+    add(quad([k.x1, k.sole, Math.min(a, b)], [k.x1, k.sole, Math.max(a, b)], [k.x1, deckAt(k.x1), Math.max(a, b)], [k.x1, deckAt(k.x1), Math.min(a, b)]), whiteMat, false);
+  }
   // Benches.
   for (const side of [-1, 1]) {
     const bench = new THREE.BoxGeometry(k.x1 - k.benchX0, k.benchTop - k.sole, k.half - k.benchIn);
@@ -229,16 +319,10 @@ function buildStatic() {
   plat.translate((p.x0 + p.x1) / 2, p.y - 0.05, 0);
   add(plat, teakMat);
 
-  // Coachroof.
+  // Coachroof, with the companionway open at its after end: the hatch slid
+  // forward and the washboards out, so you can walk down the steps.
   const d0 = deckAt(c.x0);
-  const d1 = deckAt(c.x1);
-  const roof = new ConvexGeometry([
-    new THREE.Vector3(c.x0, d0 - 0.05, -c.w0), new THREE.Vector3(c.x0, d0 - 0.05, c.w0),
-    new THREE.Vector3(c.x1, d1 - 0.05, -c.w1), new THREE.Vector3(c.x1, d1 - 0.05, c.w1),
-    new THREE.Vector3(c.x0 + 0.1, d0 + c.h, -(c.w0 - 0.13)), new THREE.Vector3(c.x0 + 0.1, d0 + c.h, c.w0 - 0.13),
-    new THREE.Vector3(c.x1 - 0.35, d1 + c.h - 0.06, -(c.w1 - 0.13)), new THREE.Vector3(c.x1 - 0.35, d1 + c.h - 0.06, c.w1 - 0.13),
-  ]);
-  add(roof, new THREE.MeshLambertMaterial({ color: WHITE, flatShading: true }));
+  cut(add(coachroof(), new THREE.MeshLambertMaterial({ color: WHITE, flatShading: true, side: THREE.DoubleSide })));
 
   // Fittings: keel, rudder, mast, spars, rails, winches... all one mesh.
   const parts = [];
@@ -281,10 +365,10 @@ function buildStatic() {
   const w = LAYOUT.wheel;
   parts.push(paint(segment(V(w.x - 0.08, k.sole, 0), V(w.x - 0.08, w.y - 0.05, 0), 0.07, 0.06, 8), DARK));
   // Winches: primaries on the coamings, halyard winches on the coachroof.
+  const roofParts = [];
   for (const side of [-1, 1]) {
-    for (const [x, y, z] of [[-3.55, deckAt(-3.55), side * 1.62], [-0.95, d0 + c.h, side * 0.72]]) {
-      parts.push(paint(segment(V(x, y, z), V(x, y + 0.17, z), 0.1, 0.08, 10), METAL));
-    }
+    parts.push(paint(segment(V(-3.55, deckAt(-3.55), side * 1.62), V(-3.55, deckAt(-3.55) + 0.17, side * 1.62), 0.1, 0.08, 10), METAL));
+    roofParts.push(paint(segment(V(-0.95, roofTop(-0.95), side * 0.72), V(-0.95, roofTop(-0.95) + 0.17, side * 0.72), 0.1, 0.08, 10), METAL));
   }
   // Windlass and the anchor in its bow roller.
   const wl = new THREE.BoxGeometry(0.35, 0.22, 0.3);
@@ -293,21 +377,50 @@ function buildStatic() {
   const anchor = new THREE.BoxGeometry(0.45, 0.12, 0.3);
   anchor.translate(5.75, 1.25, 0);
   parts.push(paint(anchor, '#7d8288'));
-  // Companionway hatch.
-  const hatch = new THREE.BoxGeometry(0.05, 0.42, 0.62);
-  hatch.translate(c.x0 - 0.01, (d0 + k.sole) / 2 + 0.12, 0);
-  parts.push(paint(hatch, '#33393f'));
+  // The companionway hatch, slid forward on its runners, and the teak
+  // handrails along the coachroof.
+  {
+    const hx = below.hatchX;
+    const top = (x) => roofTop(x);
+    const lid = new THREE.BoxGeometry(0.72, 0.06, 0.9);
+    lid.translate(hx - 0.04 + 0.36, top(hx + 0.32) + 0.05, 0);
+    roofParts.push(paint(lid, WHITE));
+    for (const side of [-1, 1]) {
+      const run = new THREE.BoxGeometry(1.32, 0.04, 0.05);
+      run.translate(c.x0 + 0.1 + 0.66, top(hx) + 0.02, side * (below.door + 0.06));
+      roofParts.push(paint(run, '#9a9690'));
+      roofParts.push(paint(segment(V(-0.75, top(-0.75) + 0.07, side * 0.62), V(1.6, top(1.6) + 0.07, side * 0.55), 0.022, 0.022, 5), '#9b6a3c'));
+      for (const x of [-0.75, 0.4, 1.6]) roofParts.push(paint(segment(V(x, top(x), side * (0.62 - (x + 0.75) * 0.03)), V(x, top(x) + 0.07, side * (0.62 - (x + 0.75) * 0.03)), 0.02, 0.02, 4), '#9b6a3c'));
+    }
+    // A hatch in the coachroof over the saloon table, and one in the foredeck over the forecabin.
+    const sh = new THREE.BoxGeometry(0.56, 0.06, 0.56);
+    sh.translate(0.875, top(0.875) + 0.03, 0);
+    roofParts.push(paint(sh, '#d9d8d2'));
+    const sg = new THREE.BoxGeometry(0.46, 0.02, 0.46);
+    sg.translate(0.875, top(0.875) + 0.065, 0);
+    roofParts.push(paint(sg, '#2a3036'));
+    const fh = new THREE.BoxGeometry(0.62, 0.08, 0.62);
+    fh.translate(3.4, deckAt(3.4) + 0.08, 0);
+    roofParts.push(paint(fh, '#d9d8d2'));
+    const glass = new THREE.BoxGeometry(0.5, 0.02, 0.5);
+    glass.translate(3.4, deckAt(3.4) + 0.125, 0);
+    roofParts.push(paint(glass, '#2a3036'));
+  }
   // Cabin windows.
   for (const side of [-1, 1]) {
     const win = new THREE.BoxGeometry(1.9, 0.13, 0.02);
     win.rotateX(-side * 0.21);
     win.translate((c.x0 + c.x1) / 2 - 0.15, d0 + 0.3, side * (c.w0 + c.w1) / 2 - side * 0.06);
-    parts.push(paint(win, '#20262c'));
+    roofParts.push(paint(win, '#20262c'));
   }
   const fittings = new THREE.Mesh(mergeParts(parts), fitMat);
   fittings.castShadow = true;
   fittings.receiveShadow = true;
   group.add(fittings);
+  const roofFit = new THREE.Mesh(mergeParts(roofParts), fitMat.clone());
+  roofFit.castShadow = true;
+  roofFit.receiveShadow = true;
+  group.add(cut(roofFit));
 
   // Rigging and lifelines as thin lines.
   const rig = [];
@@ -394,17 +507,6 @@ const REEF_LUFF = [1, 0.82, 0.66];
 // she has it.
 // ---------------------------------------------------------------------------
 
-/** Half-breadth of the hull at x, at height y (on the lofted surface). */
-function hullZ(x, y) {
-  const u = uOf(x);
-  const sh = sheerY(u);
-  const kd = keelD(u);
-  const e = 2 / 3.4;
-  const t = Math.min(1, Math.max(0, (sh - y) / (sh + kd)));
-  const sn = Math.pow(t, 1 / e);
-  const cs = Math.sqrt(Math.max(0, 1 - sn * sn));
-  return hb(u) * Math.pow(cs, e);
-}
 
 /** Doubled planking: oak strakes along the topsides, bolted, and copper on the stem and forefoot. */
 function doubledPlanking() {
@@ -517,6 +619,7 @@ function deckCrates() {
   const m = new THREE.Mesh(mergeParts(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
   m.castShadow = true;
   m.receiveShadow = true;
+  m.userData.cut = true;
   return m;
 }
 
@@ -531,7 +634,8 @@ export class Boat {
     this.upgrades = {};
 
     const t = textures();
-    const sailMat = new THREE.MeshLambertMaterial({ map: t.sail, side: THREE.DoubleSide, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.04 });
+    // (Sails and boom can fade, for looking down into the cabin past them.)
+    const sailMat = new THREE.MeshLambertMaterial({ map: t.sail, side: THREE.DoubleSide, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.04, transparent: true });
     this.main = new SailMesh(6, 10, sailMat.clone());
     this.jib = new SailMesh(6, 9, sailMat);
     this.root.add(this.main.mesh, this.jib.mesh);
@@ -545,7 +649,7 @@ export class Boat {
     const bag = new THREE.BoxGeometry(LAYOUT.boom.len - 0.3, 0.32, 0.26);
     bag.translate(-LAYOUT.boom.len / 2 - 0.1, 0.2, 0);
     boomParts.push(paint(bag, NAVY));
-    const boomMesh = new THREE.Mesh(mergeParts(boomParts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    const boomMesh = new THREE.Mesh(mergeParts(boomParts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true }));
     boomMesh.castShadow = true;
     this.boom.add(boomMesh);
     this.root.add(this.boom);
@@ -554,9 +658,10 @@ export class Boat {
     const fs = LAYOUT.forestay;
     this.furl = new THREE.Mesh(
       mergeParts([paint(segment(fs.tack.clone().add(new THREE.Vector3(-0.03, 0.4, 0)), fs.tack.clone().lerp(fs.head, 0.84), 0.075, 0.035, 6), NAVY)]),
-      new THREE.MeshLambertMaterial({ vertexColors: true }),
+      new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true }),
     );
     this.root.add(this.furl);
+    this.fadeMats = [this.main.mesh.material, this.jib.mesh.material, boomMesh.material, this.furl.material];
 
     // Wheel.
     this.wheel = new THREE.Group();
@@ -615,13 +720,14 @@ export class Boat {
       const m = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), mat);
       m.position.copy(pos);
       this.root.add(m);
+      let h = null;
       if (housing) {
-        const h = new THREE.Mesh(new THREE.BoxGeometry(...housing.size), housingMat);
+        h = new THREE.Mesh(new THREE.BoxGeometry(...housing.size), housingMat);
         h.position.copy(pos).add(housing.offset);
         this.root.add(h);
       }
       // Bright enough to bloom a little, not enough to glare.
-      return { mat, on: new THREE.Color(color).multiplyScalar(white(color) ? 1.6 : 2.6), off: new THREE.Color('#2f3336') };
+      return { mat, on: new THREE.Color(color).multiplyScalar(white(color) ? 1.6 : 2.6), off: new THREE.Color('#2f3336'), meshes: [m, h] };
     };
     const white = (c) => c === '#fff3d6';
     const sx = 4.3;
@@ -640,6 +746,11 @@ export class Boat {
       deck: lamp('#ffe6b8', new THREE.Vector3(LAYOUT.mast.x + 0.17, 6.85, 0), { size: [0.12, 0.1, 0.2], offset: new THREE.Vector3(-0.05, 0.05, 0) }),
       cockpit: lamp('#ffd9a0', new THREE.Vector3(LAYOUT.cabin.x0 - 0.06, deckAt(LAYOUT.cabin.x0) + LAYOUT.cabin.h + 0.02, 0), { size: [0.1, 0.06, 0.22], offset: new THREE.Vector3(0.02, 0.05, 0) }),
     };
+    // The lamp over the companionway sits on the coachroof, so it goes with it when that's cut away.
+    for (const o of this.lamps.cockpit.meshes) {
+      if (o.material === housingMat) o.material = housingMat.clone();
+      o.userData.cut = true;
+    }
     // The real light they throw. Kept in the scene and dimmed rather than
     // removed, so switching them doesn't make every material recompile.
     this.deckLight = new THREE.PointLight('#ffe2b0', 0, 13, 1.4);
@@ -693,13 +804,41 @@ export class Boat {
     stepBoat(this.state, dt, env);
   }
 
-  /** Float on the waves, move the spars and sails. Call once per frame. */
+  /**
+   * While you're below: the decks over the cabin drop out of sight (they
+   * still throw their shadow, so it stays dim down there) and the sails and
+   * boom thin almost to nothing, so you can see in from above.
+   * k: 0 on deck … 1 below.
+   */
+  setCutaway(k) {
+    if (!this.cutList) {
+      this.cutList = [];
+      this.root.traverse((o) => o.userData.cut && o.material && this.cutList.push(o));
+      this.cutHidden = false;
+    }
+    const hide = k > 0.5;
+    if (hide !== this.cutHidden) {
+      this.cutHidden = hide;
+      for (const o of this.cutList) {
+        o.material.colorWrite = !hide;
+        o.material.depthWrite = !hide;
+      }
+    }
+    const a = 1 - 0.94 * k;
+    for (const m of this.fadeMats) {
+      m.opacity = a;
+      m.depthWrite = a > 0.99;
+    }
+  }
+
   /** Show what the yard has done to her (list of shared/upgrades.js ids). */
   setUpgrades(list = []) {
     for (const id of list) {
       if (this.upgrades[id] || !UPGRADE_MODELS[id]) continue;
       this.upgrades[id] = UPGRADE_MODELS[id]();
       this.root.add(this.upgrades[id]);
+      this.cutList = null; // (the deck crates go with the deck)
+      this.setCutaway(this.cutHidden ? 1 : 0);
     }
     for (const [id, m] of Object.entries(this.upgrades)) m.visible = list.includes(id);
     this.state.tough = list.includes('hull');
@@ -945,14 +1084,98 @@ function buildColliders() {
     out.push({ center: new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), half: new THREE.Vector3((x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2), yaw: 0, ...extra });
   const k = LAYOUT.cockpit;
   const c = LAYOUT.cabin;
-  // Foredeck in tapering slices.
-  for (const [x0, x1] of [[4.35, 5.6], [3.2, 4.35], [2.3, 3.2]]) {
+  const b = LAYOUT.below;
+  // Forepeak, ahead of the cabin: solid.
+  for (const [x0, x1] of [[4.95, 5.6], [b.x1, 4.95]]) {
     const hz = halfAt(x0) + 0.05;
     box(x0, x1, -0.6, deckAt((x0 + x1) / 2), -hz, hz);
   }
-  // Side decks by the cabin, and the coachroof.
-  box(c.x0, c.x1, -0.6, deckAt(0.5), -1.98, 1.98);
-  box(c.x0, c.x1 - 0.3, deckAt(0.5), deckAt(0.5) + c.h, -c.w0 + 0.05, c.w0 - 0.05);
+  // The cabin is hollow: a sole to stand on, the hull's sides, the decks and
+  // coachroof over it (thin, to walk on), and the companionway down into it.
+  box(b.x0, b.x1, b.floor - 0.5, b.floor, -1.98, 1.98);
+  // A wall along a line (x0, z0)–(x1, z1) on one side, its face toward the middle.
+  const wall = (x0, z0, x1, z1, y0, y1, side, thick) => {
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const nx = -(z1 - z0) / len;
+    const nz = (x1 - x0) / len;
+    const s = Math.sign(nz) === side ? 1 : -1; // outward
+    out.push({
+      center: new THREE.Vector3((x0 + x1) / 2 + s * nx * thick / 2, (y0 + y1) / 2, (z0 + z1) / 2 + s * nz * thick / 2),
+      half: new THREE.Vector3(len / 2 + 0.02, (y1 - y0) / 2, thick / 2),
+      yaw: Math.atan2(z1 - z0, x1 - x0),
+    });
+  };
+  // The hull's sides, in bands: each band's face is where the hull is
+  // narrowest within it (it curves in toward the keel), so nothing pokes out.
+  const bands = [[b.floor - 0.5, b.floor + 0.35], [b.floor + 0.35, 0.45], [0.45, 1.4]];
+  for (let x = b.x0; x < b.x1 - 1e-6; x += 0.6) {
+    const xa = x;
+    const xb = Math.min(b.x1, x + 0.6);
+    for (const [y0, y1] of bands) {
+      const lo = Math.max(y0, b.floor);
+      const za = hullZ(xa, lo) - 0.06;
+      const zb = hullZ(xb, lo) - 0.06;
+      const thick = Math.max(hullZ(xa, Math.min(y1, deckAt(xa))), hullZ(xb, Math.min(y1, deckAt(xb)))) + 0.05 - Math.min(za, zb);
+      for (const side of [-1, 1]) wall(xa, side * za, xb, side * zb, y0, Math.min(y1, deckAt((xa + xb) / 2)), side, thick);
+    }
+  }
+  // Side decks by the coachroof, and the foredeck over the forecabin.
+  for (let x = c.x0; x < c.x1 - 1e-6; x += 0.7) {
+    const x1 = Math.min(c.x1, x + 0.7);
+    const d = deckAt((x + x1) / 2);
+    for (const side of [-1, 1]) {
+      const zi = cabinHalf(x1);
+      box(x, x1, d - 0.12, d, side > 0 ? zi : -1.98, side > 0 ? 1.98 : -zi);
+    }
+  }
+  for (const [x0, x1] of [[c.x1, 3.4], [3.4, b.x1]]) {
+    const hz = halfAt(x0) + 0.05;
+    const d = deckAt((x0 + x1) / 2);
+    box(x0, x1, d - 0.12, d, -hz, hz);
+  }
+  // Coachroof: its sides and front, and the roof (open over the companionway).
+  for (const side of [-1, 1]) {
+    wall(c.x0, side * c.w0, c.x1, side * c.w1, deckAt(c.x0) - 0.1, roofTop(0.5), -side, 0.12);
+  }
+  box(c.x1 - 0.3, c.x1, deckAt(c.x1) - 0.1, roofTop(c.x1 - 0.35), -c.w1, c.w1);
+  const roof = (x0, x1, z0, z1) => {
+    const len = x1 - x0;
+    const rise = roofTop(x1) - roofTop(x0);
+    out.push({
+      center: new THREE.Vector3((x0 + x1) / 2, (roofTop(x0) + roofTop(x1)) / 2 - 0.05, (z0 + z1) / 2),
+      half: new THREE.Vector3(Math.hypot(len, rise) / 2, 0.05, (z1 - z0) / 2),
+      yaw: 0,
+      pitch: Math.atan2(rise, len),
+    });
+  };
+  const rw = (c.w0 + c.w1) / 2 - 0.1;
+  roof(b.hatchX, c.x1 - 0.3, -rw, rw);
+  for (const side of [-1, 1]) roof(c.x0, b.hatchX, side > 0 ? b.door : -(c.w0 - 0.08), side > 0 ? c.w0 - 0.08 : -b.door);
+  // The bulkhead between the cockpit and the cabin, with the doorway.
+  box(b.x0 - 0.12, b.x0 + 0.05, b.floor - 0.5, k.sole, -1.98, 1.98);
+  for (const side of [-1, 1]) {
+    // Up to the coachroof beside the door; only to the deck outboard of it, where the side deck goes on forward.
+    box(b.x0 - 0.12, b.x0 + 0.05, k.sole, roofTop(c.x0), side > 0 ? b.door : -c.w0, side > 0 ? c.w0 : -b.door);
+    box(b.x0 - 0.12, b.x0 + 0.05, k.sole, deckAt(b.x0) - 0.12, side > 0 ? c.w0 : -1.98, side > 0 ? 1.98 : -c.w0);
+  }
+  // The companionway steps: walked as a ramp, with a wall each side so you
+  // can't step off them onto the galley or the chart table.
+  {
+    const x0 = b.x0;
+    const y0 = k.sole;
+    const x1 = -0.1;
+    const y1 = b.floor;
+    const a = Math.atan2(y0 - y1, x1 - x0);
+    const len = Math.hypot(x1 - x0, y0 - y1);
+    const th = 0.2;
+    out.push({
+      center: new THREE.Vector3((x0 + x1) / 2 - Math.sin(a) * th / 2, (y0 + y1) / 2 - Math.cos(a) * th / 2, 0),
+      half: new THREE.Vector3(len / 2, th / 2, b.door + 0.02),
+      yaw: 0,
+      pitch: -a,
+    });
+    for (const side of [-1, 1]) box(b.x0, -0.25, b.floor, roofTop(c.x0), side > 0 ? b.door + 0.02 : -(b.door + 0.1), side > 0 ? b.door + 0.1 : -(b.door + 0.02));
+  }
   // Cockpit: sole, benches, side decks.
   box(k.x0, k.x1, -0.6, k.sole, -k.half, k.half);
   for (const side of [-1, 1]) {
@@ -990,8 +1213,9 @@ function buildColliders() {
     // Transom corners beside the gate.
     box(-5.75, -5.55, k.sole, deckAt(-5.6), side > 0 ? 0.6 : -1.75, side > 0 ? 1.75 : -0.6);
   }
-  // Mast, wheel and pedestal.
-  box(LAYOUT.mast.x - 0.12, LAYOUT.mast.x + 0.12, 1.0, 14, -0.12, 0.12);
+  // Mast (down through the cabin to the keel: set corner-on, so you slide
+  // round it in the saloon rather than stop dead), wheel and pedestal.
+  out.push({ center: new THREE.Vector3(LAYOUT.mast.x, (b.floor + 14) / 2, 0), half: new THREE.Vector3(0.06, (14 - b.floor) / 2, 0.06), yaw: Math.PI / 4 });
   box(LAYOUT.wheel.x - 0.08, LAYOUT.wheel.x + 0.04, k.sole, LAYOUT.wheel.y + LAYOUT.wheel.r, -LAYOUT.wheel.r, LAYOUT.wheel.r);
   return out;
 }
