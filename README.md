@@ -95,8 +95,12 @@ close to sail), speed, heading and depth.
 
 H shows the controls and a plan of the boat; Tab shows the chart. The
 anchor's state is always shown top left while you're aboard, and a black
-ball goes up the forestay when it's holding. Telltales on the shrouds show
-where the wind's coming from. The lights come on by themselves at dusk:
+ball goes up on its halyard in front of the mast when it's holding.
+Telltales knotted to the shrouds and the backstay, and the pennant on the
+backstay, show where the wind's coming from. The rig is all joined up:
+the mainsheet runs from the end of the boom to a traveller in the cockpit,
+the jib sheets to the cockpit winches, the halyards back along the
+coachroof, and it all moves as she sails. The lights come on by themselves at dusk:
 navigation lights under way, the anchor light at anchor, and a floodlight
 on the mast and a lamp over the companionway so you can see the deck.
 
