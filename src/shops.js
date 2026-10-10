@@ -33,8 +33,8 @@ class Shop {
     this.F = F;
     // Where each place for goods is: shelves two to a board, baskets, hooks.
     const shelfPts = anchors.shelves.flatMap(({ a, b }) => [a.clone().lerp(b, 0.27), a.clone().lerp(b, 0.73)]);
-    const pools = { shelf: shelfPts, basket: anchors.baskets.map((p) => p.clone()), hook: anchors.hooks.slice(1).map((p) => p.clone()) };
-    const used = { shelf: 0, basket: 0, hook: 0 };
+    const pools = { shelf: shelfPts, table: (anchors.table ?? []).map((p) => p.clone()), basket: anchors.baskets.map((p) => p.clone()), hook: anchors.hooks.slice(anchors.hookFrom ?? 1).map((p) => p.clone()) };
+    const used = { shelf: 0, table: 0, basket: 0, hook: 0 };
     this.slots = def.slots.map((type) => {
       const pos = pools[type][used[type]++] ?? anchors.counter[0].clone();
       const g = new THREE.Group();
@@ -50,18 +50,18 @@ class Shop {
     this.group.add(this.counterGroup);
     this.cover = this.#cover();
     this.group.add(this.cover);
-    this.open = false;
+    this.open = null; // (not known till the first update, so a shop shut at the start gets covered)
     progress.onChange(() => (this.dirty = true));
     this.dirty = true;
   }
 
-  /** A cloth thrown over the counter and the shelves when it's shut. */
+  /** A cloth thrown over the counter and the shelves (or the whole table) when it's shut. */
   #cover() {
     const g = new THREE.Group();
     const mat = new THREE.MeshLambertMaterial({ color: '#8f8470', side: THREE.DoubleSide });
-    const c = this.counterAt;
+    const c = this.anchors.cloth?.at ?? this.counterAt;
     const along = this.F.Vv;
-    const cloth = new THREE.PlaneGeometry(2.7, 0.9, 6, 2);
+    const cloth = new THREE.PlaneGeometry(this.anchors.cloth?.w ?? 2.7, this.anchors.cloth?.d ?? 0.9, 6, 2);
     const p = cloth.attributes.position;
     for (let i = 0; i < p.count; i++) p.setZ(i, Math.sin(p.getX(i) * 3) * 0.03 - Math.abs(p.getY(i)) * 0.1);
     const m = new THREE.Mesh(cloth, mat);
@@ -102,6 +102,7 @@ class Shop {
         const m = goodsModel(st.kind, hung);
         if (hung) m.position.set(0, -0.02 - k * 0.02, 0).addScaledVector(this.F.Vv, (k - (n - 1) / 2) * 0.06);
         else if (sl.type === 'basket') m.position.set(Math.sin(k * 2.4) * 0.09, k * 0.04 - 0.08, Math.cos(k * 2.4) * 0.09);
+        else if (sl.type === 'table') m.position.copy(this.F.Vv.clone().multiplyScalar((k - (n - 1) / 2) * 0.1)).addScaledVector(this.F.U, (k % 2) * 0.05 - 0.02);
         else m.position.copy(this.F.Vv.clone().multiplyScalar((k - (n - 1) / 2) * 0.13));
         m.rotation.y = k * 1.7;
         sl.group.add(m);
@@ -109,7 +110,7 @@ class Shop {
       // The price, on a bit of card propped against it (or hung on a string).
       const t = priceTag(tag(st.price));
       if (hung) t.position.set(0, 0.06, 0).addScaledVector(this.F.U, 0.06);
-      else t.position.copy(this.F.U.clone().multiplyScalar(sl.type === 'basket' ? 0.3 : 0.14)).add(V(0, sl.type === 'basket' ? 0.05 : 0.04, 0));
+      else t.position.copy(this.F.U.clone().multiplyScalar(sl.type === 'basket' ? 0.3 : sl.type === 'table' ? 0.11 : 0.14)).add(V(0, sl.type === 'basket' ? 0.05 : 0.04, 0));
       t.lookAt(t.position.clone().add(this.F.U).add(V(0, 0.4, 0)));
       t.rotateZ(((i * 37) % 9) * 0.03 - 0.12);
       sl.group.add(t);
@@ -118,7 +119,7 @@ class Shop {
     this.counterGroup.clear();
     this.counter.forEach((i, k) => {
       const m = goodsModel(this.stock[i].kind);
-      m.position.copy(this.counterAt).addScaledVector(this.F.Vv, -0.9 + k * 0.2).add(V(0, 0.01, 0));
+      m.position.copy(this.anchors.counterSpot(k)).add(V(0, 0.01, 0));
       m.rotation.y = k;
       this.counterGroup.add(m);
     });
@@ -207,7 +208,10 @@ class Shop {
     else this.#putAllBack(s.back);
   }
 
-  update(dt, { player, hours, t }) {
+  update(dt, { player, hours, t, camera }) {
+    // The goods and their tags are small: past a stone's throw, don't draw them.
+    const eye = camera?.position ?? player.pos;
+    this.group.visible = Math.hypot(eye.x - this.centre.x, eye.z - this.centre.z) < 28;
     const open = openAt(this.id, hours);
     if (open !== this.open) {
       this.open = open;
@@ -247,7 +251,7 @@ export class Shops {
     this.list = [];
     for (const [id, def] of Object.entries(SHOPS)) {
       const hv = villages.hand.find((h) => h.id === def.village);
-      const anchors = hv?.goods;
+      const anchors = hv?.goods?.[id];
       if (!anchors) continue;
       this.list.push(new Shop(id, def, anchors, hv.detail, talk, progress));
     }
@@ -267,8 +271,8 @@ export class Shops {
     return null;
   }
 
-  update(dt, { player, hours }) {
+  update(dt, { player, hours, camera }) {
     const t = worldTime();
-    for (const s of this.list) s.update(dt, { player, hours, t });
+    for (const s of this.list) s.update(dt, { player, hours, t, camera });
   }
 }

@@ -6,6 +6,10 @@
 // written the way a shopkeeper would chalk them (4d, 1/6, 2/-); people say it
 // the way people do ("fourpence", "one and six", "two shillings"). You earn it
 // by selling things to Hester at the Landing. Nothing else gives you money.
+//
+// Three places sell things: Hester's stall at the Landing (what comes in on
+// the boats), Gwen's slab at Head Cove (fish) and Dorcas's table at Kettle
+// Strand (what grows, and Mags's cheese). Food and things to cook with only.
 
 import { ITEMS } from './items.js';
 import { VILLAGERS, routineAt } from './villages.js';
@@ -63,8 +67,8 @@ export const NED_FEE = 120;
 
 /**
  * Each shop: who keeps it and where they stand (it's open while they're
- * there working), its places for goods in order (shelf, basket, hook, as
- * laid out in src/handpieces.js), and what it sells:
+ * there working), its places for goods in order (shelf, table, basket,
+ * hook, as laid out in src/handpieces.js), and what it sells:
  * [kind, price in pence, where it goes, seasons it's in (or null), how many most days].
  */
 export const SHOPS = {
@@ -103,6 +107,66 @@ export const SHOPS = {
       back: "I'll put those back, then.",
     },
   },
+  // Gwen's slab at Head Cove: what came in this morning, and what she's salted.
+  gwen: {
+    name: "Gwen's",
+    village: 'cove',
+    keeper: 'gwen',
+    spot: 'slab',
+    spread: 3,
+    slots: ['table', 'table', 'table', 'table', 'table', 'table', 'table', 'table', 'table', 'basket', 'basket', 'basket', 'hook', 'hook', 'hook', 'hook'],
+    goods: [
+      ['pilchard', 2, 'table', [1, 2], 6],
+      ['mackerel', 3, 'table', [0, 1, 2], 4],
+      ['pollock', 4, 'table', null, 3],
+      ['plaice', 4, 'table', [0, 3], 3],
+      ['mullet', 4, 'table', [1, 2], 2],
+      ['squid', 4, 'table', [1, 2], 3],
+      ['crab', 6, 'basket', [0, 1, 2], 3],
+      ['pilchard', 2, 'basket', [1, 2], 8],
+      ['mackerel', 3, 'basket', [3], 5],
+      ['saltfish', 3, 'hook', null, 4],
+      ['kipper', 4, 'hook', null, 3],
+    ],
+    says: {
+      first: (p) => `${cap(words(p))}.`,
+      more: (p, n) => (n % 2 ? `${cap(words(p))}.` : `${cap(words(p))}. That the lot?`),
+      thanks: ['Mind the bones.', "Don't let Jenefer tell you how to cook it.", 'There. Off you go.'],
+      short: (p) => `You're ${words(p)} short. Back on the slab.`,
+      full: 'No room on that boat for a sprat.',
+      oi: "Oi. That's not yours yet.",
+      back: 'Back on the slab, then.',
+    },
+  },
+  // Dorcas's table by her garden at Kettle Strand: what came up, and Mags's cheese.
+  dorcas: {
+    name: "Dorcas's",
+    village: 'strand',
+    keeper: 'dorcas',
+    spot: 'veg',
+    spread: 3,
+    slots: ['table', 'table', 'table', 'table', 'table', 'table', 'table', 'table', 'basket', 'basket', 'basket', 'hook', 'hook'],
+    goods: [
+      ['potato', 1, 'table', [1, 2, 3], 6],
+      ['onion', 1, 'table', null, 5],
+      ['leek', 2, 'table', [2, 3, 0], 4],
+      ['cabbage', 2, 'table', [3, 0, 1], 3],
+      ['cheese', 4, 'table', null, 2],
+      ['beans', 2, 'basket', [2, 3], 4],
+      ['potato', 1, 'basket', null, 8],
+      ['onion', 1, 'basket', [0, 1], 6],
+      ['onion', 1, 'hook', null, 4],
+    ],
+    says: {
+      first: (p) => `${cap(words(p))}, that.`,
+      more: (p, n) => (n % 2 ? `${cap(words(p))} all told.` : `${cap(words(p))}. Is that all? I said is that all.`),
+      thanks: ['Ben dug those. Badly.', "Cook them, don't just look at them.", "There. You want feeding up."],
+      short: (p) => `You're ${words(p)} short, love. They'll keep.`,
+      full: "You've no room on that boat for a radish.",
+      oi: 'Oi. Those want paying for.',
+      back: 'Back they go, then.',
+    },
+  },
 };
 
 const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -118,7 +182,8 @@ function mix(...n) {
 /**
  * What's out today, place by place: [{ kind, price, n }] or null where
  * there's nothing. The same for everyone, and it changes every day (and with
- * the season). A shop never puts the same thing in more than two places.
+ * the season). A shop puts the same thing in no more than two places (or
+ * its `spread`).
  */
 export function stockFor(shopId, day, season = 0) {
   const shop = SHOPS[shopId];
@@ -126,7 +191,7 @@ export function stockFor(shopId, day, season = 0) {
   const used = {};
   return shop.slots.map((type, i) => {
     if (mix(day, key, i, 7) < 0.14) return null; // run out, or not come in
-    const fits = shop.goods.filter(([kind, , where, seasons]) => where === type && (!seasons || seasons.includes(season)) && (used[kind] ?? 0) < 2);
+    const fits = shop.goods.filter(([kind, , where, seasons]) => where === type && (!seasons || seasons.includes(season)) && (used[kind] ?? 0) < (shop.spread ?? 2));
     if (!fits.length) return null;
     const [kind, price, , , most] = fits[Math.floor(mix(day, key, i, 11) * fits.length)];
     used[kind] = (used[kind] ?? 0) + 1;

@@ -223,8 +223,9 @@ export class Restaurants {
     this.list = [];
     for (const [id, def] of Object.entries(PLACES)) {
       const hv = villages.hand.find((h) => h.id === def.village);
-      if (!hv?.kitchen) continue;
-      this.list.push(new Kitchen(id, def, hv.kitchen, hv.detail, scene, { talk, progress, villages }));
+      const k = hv?.kitchens?.[id];
+      if (!k) continue;
+      this.list.push(new Kitchen(id, def, k, hv.detail, scene, { talk, progress, villages }));
     }
   }
 

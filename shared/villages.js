@@ -42,6 +42,8 @@ export const VILLAGES = {
       nets: { at: [-40, -1.8], face: [-41, -3.5], via: [[-39, 6]] },
       rack1: { at: [-37, 9.4], face: [-38, 8], via: [] },
       rack2: { at: [-36.2, 26.3], face: [-37, 27.5], via: [] },
+      // Gwen behind her slab, selling what came in.
+      slab: { at: [-34.3, 9.7], face: [-36.5, 15], via: [] },
       odaBed: { at: [-47.2, 4.4], via: [[-42.6, 4], [-45.1, 4, 2.1]], y: 2.1, lie: 0 },
       tamBed: { at: [-46.2, 31.4], via: [[-41.6, 31], [-44.1, 31, 2.0]], y: 2.0, lie: 0 },
       gwenBed: { at: [-30.6, 31.25], via: [[-31, 26.6], [-31, 29.1, 2.6]], y: 2.6, lie: -Math.PI / 2 },
@@ -105,7 +107,7 @@ export const VILLAGES = {
     does: 'not much, now',
     hub: [-98, 0],
     huts: [
-      { id: 'mags', at: [-92, -18], face: Math.PI, stilts: false, floor: 2.55 },
+      { id: 'mags', at: [-92, -18], face: Math.PI, stilts: false, floor: 2.55, beds: 2 },
       { id: 'ben', at: [-92, 16], face: Math.PI, stilts: false, floor: 2.6, beds: 2 },
       { id: 'ruin1', at: [-92, -2], face: Math.PI, stilts: false, floor: 3.2, ruin: true },
       { id: 'ruin2', at: [-91, 30], face: Math.PI, stilts: false, floor: 2.55, ruin: true },
@@ -131,7 +133,21 @@ export const VILLAGES = {
       magsBed: { at: [-91.25, -18.4], via: [[-95.9, -18], [-93.4, -18, 2.55]], y: 2.55, lie: Math.PI },
       benBed: { at: [-91.25, 15.6], via: [[-95.9, 16], [-93.4, 16, 2.6]], y: 2.6, lie: Math.PI },
       dorcasBed: { at: [-92.4, 15.6], via: [[-95.9, 16], [-93.4, 16, 2.6]], y: 2.6, lie: Math.PI },
+      // Dorcas at her table by the garden.
+      veg: { at: [-91.75, 22.6], face: [-96, 22.6], via: [] },
+      // The Cellar: Loveday at her counter along the side of the old Hocking
+      // place, her bench round the far side, her bunk at Mags's; and the
+      // benches at the two tables.
+      cellar: { at: [-92.3, 1.1], face: [-92.3, 8], via: [] },
+      cellarSit: { at: [-94.8, -4.6], face: [-110, -4.6], via: [], bench: true },
+      lovedayBed: { at: [-92.4, -18.4], via: [[-95.9, -18], [-93.4, -18, 2.55]], y: 2.55, lie: Math.PI },
+      cellar1: { at: [-93.65, 4.7], face: [-92.9, 4.7], via: [], bench: true },
+      cellar2: { at: [-92.15, 5.3], face: [-92.9, 5.3], via: [], bench: true },
+      cellar3: { at: [-96.35, 6.5], face: [-95.6, 6.5], via: [], bench: true },
+      cellar4: { at: [-94.85, 7.1], face: [-95.6, 7.1], via: [], bench: true },
     },
+    // The tables out front of the Cellar (long side along z).
+    tables: [[-92.9, 5.0], [-95.6, 6.8]],
   },
   // Not a village: Ned Pascoe's boatyard on the west side of the bay on
   // Saddle Island, where your boat lies at anchor.
@@ -206,6 +222,7 @@ export const VILLAGERS = {
     routine: [
       [6, 'fire3', 'sit'],
       [8.5, 'rack1', 'work'],
+      [9.5, 'slab', 'work'],
       [17, 'kitto4', 'sit'],
       [18.5, 'fire3', 'sit'],
       [21, 'gwenBed', 'sleep'],
@@ -319,9 +336,11 @@ export const VILLAGERS = {
     routine: [
       [5, 'boat', 'work'],
       [8.5, 'goats', 'work'],
-      [13, 'magsBench', 'sit'],
+      [12.5, 'cellar1', 'sit'],
+      [13.5, 'magsBench', 'sit'],
       [15, 'goats', 'work'],
-      [18, 'fire1', 'sit'],
+      [17.75, 'cellar1', 'sit'],
+      [19, 'fire1', 'sit'],
       [21, 'magsBed', 'sleep'],
     ],
   },
@@ -337,7 +356,8 @@ export const VILLAGERS = {
       [7, 'benBench', 'sit'],
       [11, 'garden', 'work'],
       [15.5, 'benBench', 'sit'],
-      [19, 'fire2', 'sit'],
+      [18, 'cellar4', 'sit'],
+      [19.5, 'fire2', 'sit'],
       [21, 'benBed', 'sleep'],
     ],
   },
@@ -351,10 +371,29 @@ export const VILLAGERS = {
     size: 0.9,
     routine: [
       [6, 'garden2', 'work'],
+      [9, 'veg', 'work'],
       [12.5, 'benBench', 'sit'],
-      [14, 'garden2', 'work'],
+      [14, 'veg', 'work'],
+      [17.5, 'cellar3', 'sit'],
       [19, 'fire3', 'sit'],
       [21.5, 'dorcasBed', 'sleep'],
+    ],
+  },
+  loveday: {
+    name: 'Loveday Teague',
+    village: 'strand',
+    job: 'came home from the mainland and cooks in the shell of the old Hocking place',
+    look: { fur: '#8a6248', patch: '#ecdcc2', ear: '#b88a68', ink: '#3a2a1e' },
+    wears: 'apron',
+    tint: '#6a5a7a',
+    size: 1.0,
+    // Tea at the fire, dinner and supper at the Cellar, a sit in between; she lodges with Mags.
+    routine: [
+      [7.5, 'fire1', 'sit'],
+      [11, 'cellar', 'work'],
+      [14.75, 'cellarSit', 'sit'],
+      [17, 'cellar', 'work'],
+      [21.25, 'lovedayBed', 'sleep'],
     ],
   },
   ned: {

@@ -4,7 +4,7 @@ import { VILLAGERS } from '../shared/villages.js';
 import { mulberry32 } from '../shared/noise.js';
 import { paint, mergeParts, segment, rock } from './props.js';
 import { Kit, Instances, SHAPES, PALETTES, kitMat, signBoard, cat, gull, laundry } from './kit.js';
-import { stall, handcart, derrick, bollards, ropewalk, garden, overgrowth, shed, timber, logs, sawhorse, steambox, capstan, bench, kitchen } from './handpieces.js';
+import { stall, marketTable, handcart, derrick, bollards, ropewalk, garden, overgrowth, shed, timber, logs, sawhorse, steambox, capstan, bench, kitchen } from './handpieces.js';
 import { groundColorAt } from './terrain.js';
 
 // Villages built by hand (src/kit.js): every hut its own, nothing square,
@@ -33,7 +33,9 @@ const DRESS = {
     chair: [-29.4, 27.0, 0.6],
     // Kitto's: the lean-to off the side of Jenefer's shack (the shack's wall is
     // `wall` behind the counter), her fire, the board for what's on.
-    kitchen: { at: [-29.6, 20.1], face: Math.PI, wall: 2.1, span: [-1.4, 1.8], counter: [-1.0, 1.25], floor: 2.9, grill: [-28.6, 22.25], board: [-30.4, 17.3, -2.72], owner: 'jenefer' },
+    kitchens: { kitto: { at: [-29.6, 20.1], face: Math.PI, wall: 2.1, span: [-1.4, 1.8], counter: [-1.0, 1.25], floor: 2.9, grill: [-28.6, 22.25], board: [-30.4, 17.3, -2.72], owner: 'jenefer' } },
+    // Gwen's slab, out on the sand toward the dock.
+    stalls: { gwen: { kind: 'slab', at: [-34.6, 10.4], face: 1.96, len: 2.6, depth: 0.95, places: 9, hooks: 4, baskets: 3 } },
     oars: { hut: 'oda' },
     floats: { hut: 'oda' },
     netPile: [-42.6, -0.9],
@@ -57,7 +59,7 @@ const DRESS = {
     walls: { store: 'planks', jory: 'boards', abel: 'planks', martha: 'boards' },
     patches: { store: 'boards', jory: 'sail', abel: 'sail', martha: 'boards' },
     chimneys: ['store', 'abel', 'martha'],
-    stall: { at: [-55.4, -15.0], face: Math.PI, len: 4.2, depth: 3.4, counter: 0.1 },
+    stalls: { hester: { kind: 'awning', at: [-55.4, -15.0], face: Math.PI, len: 4.2, depth: 3.4, counter: 0.1 } },
     crates: [[-56.6, -11.5, 0.2], [-57.4, -10.9, 0.7], [-56.8, -11.3, 0.4, 1], [-57.7, -11.9, -0.3], [-69.4, 2.95, 0.1, 0, 1.6], [-70.1, 3.0, 0.5, 0, 1.6], [-69.7, 2.95, 0.3, 1, 1.6]],
     barrels: [[-58.1, -12.6], [-58.6, -11.8], [-72.2, 0.98, 1.6], [-72.8, 1.0, 1.6]],
     sacks: [[-57.9, -13.6], [-58.4, -14.1], [-57.7, -14.5], [-58.6, -13.0]],
@@ -90,7 +92,10 @@ const DRESS = {
     chimneys: ['mags', 'ben'],
     sparseRacks: true,
     garden: true,
-    overgrowth: [[-92, -2, 3.4, 16], [-91, 30, 3.4, 16], [-93, -32, 3.4, 16], [-96, -26, 4, 8], [-86, 6, 4, 10], [-104, 26, 3, 6], [-95, 40, 4, 8], [-86, -10, 3, 7]],
+    // Dorcas's table in front of her garden; Loveday's kitchen along the side of the old Hocking place.
+    stalls: { dorcas: { kind: 'veg', at: [-92.6, 22.6], face: Math.PI, len: 2.0, depth: 0.85, places: 8, hooks: 2, baskets: 3 } },
+    kitchens: { cellar: { at: [-92.3, 1.8], face: Math.PI / 2, wall: 2.1, span: [-1.6, 1.5], counter: [-1.0, 1.0], floor: 3.2, grill: [-94.7, 0.9], board: [-95.9, 2.6, -2.25], owner: 'loveday', fireEnd: 1, roof: 'sail' } },
+    overgrowth: [[-91, -4.2, 3.0, 12], [-91, 30, 3.4, 16], [-93, -32, 3.4, 16], [-96, -26, 4, 8], [-86, 6, 4, 10], [-104, 26, 3, 6], [-95, 40, 4, 8], [-86, -10, 3, 7]],
     sunk: [-105.5, 21.5, 0.9],
     laundry: { from: [-91.5, -15.9], fromY: 4.45, to: [-88.6, -13.6], pole: true, colors: ['#7a6458', '#9a9484', '#5a6a6e'] },
     gulls: [['ridge', 'ruin1', 0.3, 'crow'], ['ridge', 'ruin2', 0.62, 'crow'], ['dock', 0.75]],
@@ -100,6 +105,8 @@ const DRESS = {
       [[-98, 0], [-95.9, 16]],
       [[-98, 0], [-98.5, 6]],
       [[-95.9, 16], [-91.2, 21]],
+      [[-98, 0], [-95.4, 2.4], [-92.6, 2.7]],
+      [[-95.9, 16], [-93.6, 22.4]],
     ],
   },
   // Pascoe's yard: the shed, his timber and logs, the steam box going, the
@@ -622,14 +629,18 @@ export function handVillage(b, id, v, netMesh) {
   }
   // The rest of what the place does (src/handpieces.js).
   const bk = kit();
-  extras.goods = dress.stall ? stall(b, bk, dress.stall, inst) : null;
-  extras.kitchen = dress.kitchen ? kitchen(b, bk, dress.kitchen, v.tables, inst) : null;
-  if (extras.kitchen) {
+  // Shops (what's for sale goes where they say) and places to eat.
+  extras.goods = {};
+  for (const [sid, st] of Object.entries(dress.stalls ?? {})) extras.goods[sid] = st.kind === 'awning' ? stall(b, bk, st, inst) : marketTable(b, bk, st, inst);
+  extras.kitchens = {};
+  for (const [pid, kd] of Object.entries(dress.kitchens ?? {})) {
+    const kk = kitchen(b, bk, kd, v.tables, inst);
     const sg = signBoard('pot', 0.7);
-    sg.position.copy(extras.kitchen.sign.at);
-    sg.lookAt(extras.kitchen.sign.at.clone().add(extras.kitchen.sign.face));
+    sg.position.copy(kk.sign.at);
+    sg.lookAt(kk.sign.at.clone().add(kk.sign.face));
     sg.rotateZ(0.04);
     detail.add(sg);
+    extras.kitchens[pid] = kk;
   }
   if (dress.handcart) handcart(b, bk, ...dress.handcart);
   if (dress.derrick) derrick(b, bk, dress.derrick);
@@ -783,7 +794,7 @@ export function handVillage(b, id, v, netMesh) {
   // (A house not named for who lives in it.)
   const LIVES = { kitto: 'jenefer', store: 'hester' };
   for (const w of windows) w.bed = bed[w.owner] ?? bed[LIVES[w.owner]] ?? 22;
-  return { detail, far, windows, chimneys, life, hub: wp(b, ...v.hub), goods: extras.goods, kitchen: extras.kitchen };
+  return { detail, far, windows, chimneys, life, hub: wp(b, ...v.hub), goods: extras.goods, kitchens: extras.kitchens };
 }
 
 // Make sure the seeded random is used for anything left over.

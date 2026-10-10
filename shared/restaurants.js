@@ -91,6 +91,58 @@ export const PLACES = {
       thanks: 'Thanks, Jenefer.',
     },
   },
+  // Loveday Teague's, in the shell of the old Hocking place at Kettle Strand.
+  // No breakfast: nobody here's up for it.
+  cellar: {
+    name: 'The Cellar',
+    village: 'strand',
+    cook: 'loveday',
+    spot: 'cellar',
+    teaches: 'leek-potato',
+    helped: ['sail', 'lamp'],
+    menu: {
+      lunch: [
+        ['leek-potato', 4, null],
+        ['cheese-potato', 5, null],
+        ['cabbage-beans', 3, [3, 0]],
+        ['fish-curry', 8, [1]],
+      ],
+      supper: [
+        ['fish-curry', 8, null],
+        ['cheese-potato', 5, null],
+        ['leek-potato', 4, [2, 3, 0]],
+        ['cabbage-beans', 3, [3]],
+        ['saltfish-plantain', 5, [1, 2]],
+      ],
+    },
+    calls: {
+      'leek-potato': "Leek and potato. It's the potato does the work, whatever the leek thinks.",
+      'cheese-potato': "Potatoes and Mags's cheese. Don't tell Mags I said it was the best thing here.",
+      'cabbage-beans': 'Cabbage and beans. Good for you. I make no other promises.',
+      'fish-curry': 'Fish curry. I learnt it in Plymouth, off a ship\'s cook from Madras.',
+      'saltfish-plantain': "Salt fish and plantain. Dorcas's way, because she's watching.",
+    },
+    after: {
+      'leek-potato': 'Proper, that. Up the line they put cream in it. Cream.',
+      'cheese-potato': "It's the cheese makes it. Mags'd say the goats. Goats don't cook.",
+      'cabbage-beans': 'Nobody thanks you for cabbage. There, you see. Nobody.',
+      'fish-curry': 'Too hot? Good. Wakes you up.',
+      'saltfish-plantain': 'Dorcas says I put too much in. Dorcas has said that every day since I came back.',
+    },
+    says: {
+      serving: {
+        lunch: "Dinner's on. Board's there, if you can read my writing.",
+        supper: "Sit down. There's room. There's always room, here.",
+      },
+      between: (h) => (h < 12 ? "Not till half eleven. I'm chopping." : h < 17.5 ? "Supper's half five. Go and look at the sea a bit." : "Kitchen's done. Tomorrow."),
+      broke: "Can't feed you on nothing, my love. Hester buys fish. Try her.",
+      offer: "You've been good to this place. Come here, I'll show you the leek and potato.",
+      ask: 'How do you do the leek and potato?',
+      teach: "Leek, potato, an onion, in the pot. Let the potato fall apart. Don't fight it. It's the potato does the work.",
+      learnt: "I'll let it fall apart.",
+      thanks: 'Thanks, Loveday.',
+    },
+  },
 };
 
 /** The cook's spot and work: are they at the counter? */
@@ -108,8 +160,8 @@ export function menuAt(place, t, h = hoursAt(t)) {
   const meal = mealAt(h);
   if (!meal || !cookIn(place, h)) return null;
   const season = seasonAt(t);
-  const dishes = PLACES[place].menu[meal].filter(([, , seasons]) => !seasons || seasons.includes(season)).map(([dish, price]) => ({ dish, price }));
-  return { meal, dishes };
+  const dishes = (PLACES[place].menu[meal] ?? []).filter(([, , seasons]) => !seasons || seasons.includes(season)).map(([dish, price]) => ({ dish, price }));
+  return dishes.length ? { meal, dishes } : null;
 }
 
 /** Is this dish on, and at what price? */

@@ -550,7 +550,7 @@ function frame(now) {
   for (const p of villages.people) p.wantsToTalk = !!WANTS[p.id]?.(progress.state);
   villages.update(dt, { t, hours: hoursNow, player, night: atmosphere.uniforms.uNight.value, camera, wind: env.wind });
   talk.update(input, player);
-  shops.update(dt, { player, hours: hoursNow });
+  shops.update(dt, { player, hours: hoursNow, camera });
   restaurants.update(dt, { player, hours: hoursNow, wind: env.wind, night: atmosphere.uniforms.uNight.value });
   gathering.update(dt);
   decorating.update(dt, { input, boat, player, inside: interior.inside });

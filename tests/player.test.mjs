@@ -557,3 +557,54 @@ test("Kitto's is busy at supper and empty in the afternoon", () => {
   assert.equal(routineAt(VILLAGERS.jenefer, 18).spot, PLACES.kitto.spot);
   assert.equal(routineAt(VILLAGERS.jenefer, 15.5).act, 'sit');
 });
+
+// ---------------------------------------------------------------------------
+// The rest: Gwen's slab, Dorcas's table, the Cellar
+// ---------------------------------------------------------------------------
+
+import { SHOPS, openAt } from '../shared/trade.js';
+
+test("Gwen sells fish and Dorcas sells what grows, in the day, and only food", () => {
+  for (const id of ['gwen', 'dorcas']) {
+    const shop = SHOPS[id];
+    assert.ok(openAt(id, 11), `${id} open at eleven`);
+    assert.ok(!openAt(id, 23), `${id} shut at night`);
+    for (const [kind] of shop.goods) assert.ok(['fish', 'food', 'veg', 'store', 'fruit'].includes(ITEMS[kind]?.kind), `${id}: ${kind} is food`);
+    // Something out every season, and it changes with the season.
+    const seasons = [0, 1, 2, 3].map((se) => stockFor(id, 20, se));
+    for (const st of seasons) assert.ok(st.filter(Boolean).length >= 4, `${id} has things out`);
+    assert.ok(new Set(seasons.map((st) => JSON.stringify(st))).size > 1);
+  }
+  assert.ok(SHOPS.gwen.goods.every(([kind]) => ['fish', 'food'].includes(ITEMS[kind].kind)), 'the slab is all fish');
+});
+
+test("buying at Gwen's slab, on the server", async () => {
+  const t = 210; // half past ten in the morning
+  assert.equal(hoursAt(t), 10.5);
+  const stock = stockFor('gwen', dayAt(t), seasonAt(t));
+  const i = stock.findIndex((x) => x && x.n >= 1);
+  const s = { ...freshState(0), pence: 30 };
+  const r = await apply(s, { type: 'buy', shop: 'gwen', slots: [i] }, ctx(t));
+  assert.ok(r.reply.ok, r.reply.why);
+  assert.equal(r.state.pence, 30 - stock[i].price);
+  assert.ok(has(r.state, stock[i].kind));
+  assert.equal((await apply(s, { type: 'buy', shop: 'gwen', slots: [i] }, ctx(1000))).reply.why, 'closed');
+});
+
+test('the Cellar: no breakfast, dinner and supper, and Kettle eats there at supper', async () => {
+  assert.equal(menuAt('cellar', 60), null, 'no breakfast');
+  assert.ok(menuAt('cellar', LUNCH).dishes.some((d) => d.dish === 'leek-potato'));
+  assert.ok(menuAt('cellar', SUPPER).dishes.some((d) => d.dish === 'fish-curry'));
+  const at = (h) => Object.entries(VILLAGERS).filter(([, d]) => /^cellar\d$/.test(routineAt(d, h).spot)).map(([id]) => id);
+  assert.ok(at(18.2).length >= 3, `supper: ${at(18.2)}`);
+  assert.equal(at(15.5).length, 0);
+  // Loveday serves, and shows you her leek and potato once you've helped Ben.
+  let s = { ...freshState(0), pence: 20 };
+  const r = await apply(s, { type: 'talk', who: 'loveday', convo: 'order', line: '0', pick: 0, rid: 'cheese-potato' }, ctx(SUPPER));
+  assert.ok(r.reply.ok, r.reply.why);
+  assert.equal(r.state.pence, 15);
+  assert.equal(r.state.meals.cellar, 1);
+  const helped = { ...freshState(0), quests: { lamp: { stage: 3, done: true } } };
+  assert.ok(willTeach('cellar', helped));
+  assert.equal(openingFor('loveday', helped, hoursAt(AFTERNOON), AFTERNOON).id, 'teach');
+});

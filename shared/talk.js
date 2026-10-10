@@ -613,6 +613,16 @@ export const TALK = {
       { if: any, say: "Gwen thinks she can cook. Gwen can salt. It's not the same thing.", reply: "I won't tell her." },
     ]),
   ],
+  loveday: [
+    ...kitchen('cellar'),
+    chat('loveday', [
+      { if: (s) => !met(s, 'loveday'), say: "Loveday. I came home. Somebody had to feed this lot, and Dorcas won't be told.", reply: "I'll come and eat." },
+      { if: (s, h) => h >= 14.5 && h < 17, say: 'Twenty years in Plymouth. I never once sat and looked at the sea.', reply: "It's a good sea." },
+      { if: (s) => knows(s, 'leek-potato'), say: 'Did it fall apart? The potato?', reply: 'Like you said.' },
+      { if: (s) => stage(s, 'lamp') >= 2, say: "Ben's lamp. I could see it from the boat, coming home. I cried. Don't tell him.", reply: "I won't." },
+      { if: any, say: "Mags says I've got mainland airs. I've got a mainland stove. It's not the same.", reply: 'Is it a good stove?' },
+    ]),
+  ],
   dorcas: [
     {
       id: 'recipe',
@@ -646,6 +656,7 @@ export const WANTS = {
   ben: (s) => (met(s, 'ben') && !q(s, 'lamp')) || (stage(s, 'lamp') === 1 && has(s, 'oil')),
   dorcas: (s) => met(s, 'dorcas') && !knows(s, 'saltfish-plantain'),
   jenefer: (s) => willTeach('kitto', s),
+  loveday: (s) => willTeach('cellar', s),
 };
 
 /** The conversation someone opens with, for this state, hour and world time. */

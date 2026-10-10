@@ -173,7 +173,140 @@ export function stall(b, kit, s, inst) {
     kit.parts.push(paint(rim, '#7a6a48'));
     baskets.push(p.clone().add(V(0, 0.28, 0)));
   }
-  return { counter, shelves, hooks, baskets, frame: F, g0 };
+  const counterSpot = (k) => counter[0].clone().addScaledVector(F.Vv, -0.9 + k * 0.2);
+  return { counter, counterSpot, shelves, hooks, hookFrom: 1, baskets, frame: F, g0 };
+}
+
+/**
+ * A table to sell from in the open. Gwen's slab at the cove ('slab'): thick
+ * wet boards on two barrels, tipped toward you so it drains, an old sail
+ * over it on a pair of oars and two poles, a gallows with hooks for the
+ * kippers and salt fish, baskets of crab, a fish box and a bucket. Dorcas's
+ * at the strand ('veg'): an old door laid on two crates, baskets at the
+ * ends, a post with a crossbar for strings of onions. Returns where goods go
+ * (for the shop), like stall().
+ */
+export function marketTable(b, kit, s, inst) {
+  const pal = kit.pal;
+  const F = frame(b, s.at[0], s.at[1], s.face); // +u: toward the customers; the keeper's behind, at −u
+  const g0 = F.at(0, 0).y;
+  const slab = s.kind === 'slab';
+  const L = s.len ?? 2.4; // along v
+  const Dp = s.depth ?? 0.9; // along u
+  const th = g0 + (slab ? 0.7 : 0.58);
+  const yaw = b.yaw - s.face;
+  // What it stands on.
+  for (const v of [-L / 2 + 0.42, L / 2 - 0.42]) {
+    if (slab) inst.put('barrel', SHAPES.barrel, F.at(0, v, g0 + 0.31), kit.r(0, 6), kit.col(['#7a6450', '#6c5846']));
+    else inst.put('crate', SHAPES.crate, F.at(0, v, g0 + 0.27), yaw + kit.r(-0.12, 0.12), kit.col(['#8a7a62', '#7a6c58', '#94846a']));
+  }
+  if (slab) {
+    // Thick boards, dark with wet, the front edge lower.
+    for (let u = -Dp / 2; u < Dp / 2 - 0.02; ) {
+      const w = Math.min(Dp / 2 - u, kit.r(0.2, 0.27));
+      const drop = ((u + w / 2 + Dp / 2) / Dp) * 0.05;
+      kit.board(F.at(u + w / 2, -L / 2 - kit.r(0, 0.06), th - drop), F.at(u + w / 2, L / 2 + kit.r(0, 0.06), th - drop + kit.r(-0.01, 0.01)), w - 0.012, 0.07, UP, kit.col(['#5f5a52', '#57524a', '#646058'], 0.05));
+      u += w;
+    }
+  } else {
+    // A door: its boards, two battens, a rusty handle, and what's left of its paint.
+    const doorCol = kit.col(pal.paint, 0.04);
+    for (let u = -Dp / 2; u < Dp / 2 - 0.02; ) {
+      const w = Math.min(Dp / 2 - u, kit.r(0.16, 0.22));
+      kit.board(F.at(u + w / 2, -L / 2, th), F.at(u + w / 2, L / 2, th + kit.r(-0.006, 0.006)), w - 0.01, 0.04, UP, kit.rand() < 0.3 ? kit.col(pal.wood) : doorCol);
+      u += w;
+    }
+    for (const v of [-L / 2 + 0.3, L / 2 - 0.3]) kit.board(F.at(-Dp / 2 + 0.05, v, th - 0.035), F.at(Dp / 2 - 0.05, v, th - 0.035), 0.12, 0.03, UP, kit.col(pal.wood));
+    kit.block(F.at(Dp / 2 - 0.12, 0.2, th + 0.035), 0.05, 0.03, 0.14, kit.col(pal.rust), yaw);
+  }
+  solidAt(b, F, 0, 0, g0 + 0.4, Dp, 0.8, L);
+  // Where the goods go: two rows along it, leaving the end by the keeper's hand clear for paying.
+  const n = s.places ?? 8;
+  const cols = Math.ceil(n / 2);
+  const table = [];
+  for (let i = 0; i < n; i++) {
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    const v = -L / 2 + 0.22 + (c + 0.5) * ((L - 0.85) / cols);
+    const u = r ? -Dp / 4 : Dp / 4 - 0.02;
+    table.push(F.at(u, v, th + (slab ? 0.04 - ((u + Dp / 2) / Dp) * 0.05 : 0.025)));
+  }
+  const counter = [F.at(-0.05, L / 2 - 0.3, th + 0.03)];
+  const counterSpot = (k) => counter[0].clone().addScaledVector(F.U, 0.22 - (k % 3) * 0.17).addScaledVector(F.Vv, -Math.floor(k / 3) * 0.17);
+  // Scales at the paying end, on the slab; a knife.
+  if (slab) {
+    kit.block(F.at(-0.25, L / 2 - 0.12, th + 0.02), 0.06, 0.02, 0.24, '#8a8f93', yaw + 0.5);
+    const pan = new THREE.CylinderGeometry(0.12, 0.09, 0.04, 10);
+    const pp = F.at(-0.3, L / 2 - 0.45, th + 0.05);
+    pan.translate(pp.x, pp.y, pp.z);
+    kit.parts.push(paint(pan, '#8a6a3a'));
+  }
+  // Hooks: a gallows at the far end (the slab), or a post with a crossbar (the door).
+  const hooks = [];
+  const gv = -L / 2 - (slab ? 0.55 : 0.4);
+  const gu = slab ? 0.25 : 0.1;
+  const gTop = g0 + (slab ? 1.85 : 1.55);
+  const gp = F.at(gu, gv);
+  kit.post(gp.clone().add(V(0, -0.3, 0)), F.at(gu, gv, gTop + 0.08), 0.05, kit.col(pal.dark), 5);
+  postCollider(b, gp, 0.09, gTop - g0);
+  const arm = slab ? 0.9 : 0.55;
+  const a0 = F.at(gu, gv + 0.08, gTop);
+  const a1 = F.at(gu, gv + arm, gTop - kit.r(0.02, 0.05));
+  kit.board(F.at(gu, gv - 0.12, gTop), a1, 0.05, 0.05, UP, kit.col(pal.dark), { sag: 0.02 });
+  kit.parts.push(paint(segment(F.at(gu, gv, gTop - 0.4), F.at(gu, gv + 0.35, gTop), 0.02, 0.02, 4), kit.col(pal.dark).getStyle())); // the brace
+  const nh = s.hooks ?? 4;
+  for (let k = 0; k < nh; k++) {
+    const p = a0.clone().lerp(a1, (k + 0.6) / (nh + 0.2)).add(V(0, -0.03, 0));
+    kit.parts.push(paint(segment(p, p.clone().add(V(0, -0.12, 0)), 0.006, 0.006, 3), '#3a3532'));
+    hooks.push(p.clone().add(V(0, -0.12, 0)));
+  }
+  // Baskets on the ground at the ends.
+  const baskets = [];
+  const bspots = slab ? [[0.15, L / 2 + 0.5], [0.75, L / 2 + 0.35], [-0.35, L / 2 + 0.55]] : [[0.25, L / 2 + 0.45], [0.15, gv - 0.55], [0.75, gv - 0.3]];
+  for (const [u, v] of bspots.slice(0, s.baskets ?? 3)) {
+    const p = F.at(u, v);
+    const bk = new THREE.CylinderGeometry(0.3, 0.24, 0.3, 10, 1, true);
+    bk.translate(p.x, p.y + 0.15, p.z);
+    kit.parts.push(paint(bk, kit.col(['#a08a5c', '#94804f', '#ab9466']).getStyle()));
+    const rim = new THREE.TorusGeometry(0.3, 0.025, 3, 12);
+    rim.rotateX(Math.PI / 2);
+    rim.translate(p.x, p.y + 0.3, p.z);
+    kit.parts.push(paint(rim, '#7a6a48'));
+    baskets.push(p.clone().add(V(0, 0.28, 0)));
+  }
+  if (slab) {
+    // An old sail over it, on a pair of oars stuck in the sand behind and two poles in front.
+    const corners = [];
+    for (const [u, v, h] of [[-Dp / 2 - 0.75, -L / 2 - 0.1, 2.25], [-Dp / 2 - 0.75, L / 2 + 0.1, 2.2], [Dp / 2 + 0.35, -L / 2 - 0.05, 1.95], [Dp / 2 + 0.35, L / 2 + 0.05, 2.0]]) {
+      const foot = F.at(u, v);
+      const top = foot.clone().add(V(kit.r(-0.05, 0.05), h, kit.r(-0.05, 0.05)));
+      kit.post(foot.clone().add(V(0, -0.3, 0)), top, u < 0 ? 0.035 : 0.045, kit.col(u < 0 ? pal.wood : pal.dark), 5);
+      if (u < 0) {
+        // The blade of the oar, at the top.
+        kit.block(top.clone().add(V(0, -0.15, 0)), 0.12, 0.45, 0.02, kit.col(pal.paint), yaw + kit.r(-0.3, 0.3));
+      } else postCollider(b, foot, 0.08, h);
+      corners.push(top);
+    }
+    // Old tan sailcloth, a patch let in, sagging where the rain sits.
+    kit.parts.push(cloth(corners[0].clone(), corners[1].clone(), corners[3].clone(), corners[2].clone(), [kit.col(['#8f8168', '#998a6e']).getStyle(), kit.col(['#8a7c62']).getStyle(), kit.col(pal.paint, 0.04).getStyle(), kit.col(['#938569']).getStyle()], 0.3, 8, 4));
+    for (const [i, j] of [[0, 2], [1, 3]]) kit.parts.push(paint(segment(corners[i], corners[j], 0.012, 0.012, 3), pal.rope));
+    // A fish box with the morning's leftovers, a bucket, a stain on the sand.
+    const fb = F.at(-Dp / 2 - 0.35, L / 2 + 0.2);
+    inst.put('crate', SHAPES.crate, fb.clone().add(V(0, 0.2, 0)), yaw + 0.3, kit.col(['#7a6c58']), V(1, 0.75, 1));
+    for (let i = 0; i < 3; i++) inst.put('fish', SHAPES.fish, fb.clone().add(V(kit.r(-0.12, 0.12), 0.42, kit.r(-0.12, 0.12))), kit.r(0, 6), kit.col(['#8a9aa0', '#9aa5a0', '#7f8c88'], 0.05), 0.8, 0.2);
+    const bucket = new THREE.CylinderGeometry(0.16, 0.13, 0.3, 9, 1, true);
+    const bp = F.at(-Dp / 2 - 0.2, -L / 2 + 0.2);
+    bucket.translate(bp.x, bp.y + 0.15, bp.z);
+    kit.parts.push(paint(bucket, '#6b6f6e'));
+  } else {
+    // A sack of something and a fork stuck in the ground; the trug she carries it in.
+    inst.put('sack', SHAPES.sack, F.at(-Dp / 2 - 0.35, L / 2 - 0.1), kit.r(0, 6), kit.col(['#a8956c', '#9c8a60']), 0.9, 0.15);
+    const fk = F.at(-Dp / 2 - 0.5, -L / 2 + 0.25);
+    kit.parts.push(paint(segment(fk.clone().add(V(0, -0.1, 0)), fk.clone().add(V(0.04, 1.05, 0.02)), 0.018, 0.016, 4), kit.col(pal.wood).getStyle()));
+    kit.block(fk.clone().add(V(0.04, 1.08, 0.02)), 0.2, 0.04, 0.04, kit.col(pal.wood), yaw);
+  }
+  const top = F.at(0, 0, th + 0.02);
+  return { counter, counterSpot, table, shelves: [], hooks, hookFrom: 0, baskets, frame: F, g0, cloth: { at: top, w: L + 0.1, d: Dp + 0.1 } };
 }
 
 /** A handcart with one wheel off, propped on a crate. */
@@ -651,10 +784,15 @@ export function kitchen(b, kit, k, tables, inst) {
   const front = 0.62;
   const hi = Math.min(k.floor + 1.85, g0 + 2.65); // where it's nailed to the shack
   const lo = g0 + 2.12; // the front beam
+  // Which end the fire's at (k.fireEnd: 0 the v0 end, 1 the v1 end); e runs from it to the other.
+  const e = k.fireEnd === 1 ? -1 : 1;
+  const vf = e > 0 ? v0 : v1;
+  const vo = e > 0 ? v1 : v0;
+  const mid = (v0 + v1) / 2;
   // A ledger along the shack wall, and posts out front that don't match.
   kit.board(F.at(wall + 0.06, v0 - 0.2, hi), F.at(wall + 0.06, v1 + 0.2, hi + kit.r(-0.03, 0.03)), 0.12, 0.06, F.U, kit.col(pal.dark));
   const tops = [];
-  for (const v of [v0 + 0.05, (v0 + v1) / 2 + 0.35, v1 - 0.05]) {
+  for (const v of [v0 + 0.05, mid + 0.35 * e, v1 - 0.05]) {
     const foot = F.at(front, v);
     const top = F.at(front + kit.r(-0.04, 0.04), v + kit.r(-0.04, 0.04), lo + kit.r(-0.07, 0.05));
     kit.post(foot.clone().add(V(0, -0.3, 0)), top, kit.r(0.06, 0.08), kit.col(pal.dark), 6);
@@ -665,22 +803,32 @@ export function kitchen(b, kit, k, tables, inst) {
   // Rafters from the ledger out over the beam, and planks across them.
   for (const v of [v0 + 0.1, (v0 + v1) / 2, v1 - 0.1]) kit.board(F.at(wall + 0.08, v, hi - 0.02), F.at(front + 0.35, v, lo + 0.02 - (hi - lo) * (0.35 / (front - wall))), 0.07, 0.07, UP, kit.col(pal.dark));
   const slope = (u) => hi + 0.08 - ((u - wall) / (front + 0.35 - wall)) * (hi - lo + (hi - lo) * (0.35 / (front - wall)));
+  const sailRoof = k.roof === 'sail';
   for (let v = v0 - 0.25; v < v1 + 0.2; ) {
     const w = kit.r(0.2, 0.32);
     const vm = v + w / 2;
     v += w;
-    // Two gone near the fire end, where the heat got at them.
-    if (vm < v0 + 0.5 && kit.rand() < 0.6) continue;
+    // Two gone near the fire end, where the heat got at them. (Under a sail, just a few to hold it down.)
+    if (e * (vm - vf) < 0.5 && kit.rand() < 0.6) continue;
+    if (sailRoof && kit.rand() < 0.8) continue;
     const reach = front + 0.35 + kit.r(-0.06, 0.08);
     kit.board(F.at(wall + 0.04, vm, slope(wall + 0.04) + 0.04), F.at(reach, vm + kit.r(-0.03, 0.03), slope(reach) + 0.04), w - 0.015, 0.04, UP, kit.col(kit.rand() < 0.15 ? pal.paint : pal.wood, 0.08), { sag: kit.r(0, 0.03) });
   }
-  // An old sail thrown over the middle, weighted with a stone at each corner.
-  const su0 = wall + 0.5;
-  const su1 = front + 0.25;
-  const sv0 = (v0 + v1) / 2 - 0.9;
-  const sv1 = (v0 + v1) / 2 + 0.7;
-  const lift = (u, v) => F.at(u, v, slope(u) + 0.09);
-  kit.parts.push(cloth(lift(su0, sv0), lift(su0, sv1), lift(su1, sv1), lift(su1, sv0), [kit.col(pal.canvas).getStyle(), kit.col(pal.canvas, 0.1).getStyle()], -0.05, 4, 3));
+  // An old sail thrown over the middle, weighted with a stone at each corner
+  // (or, for a roof that's only sail, the whole of it, sagging between the rafters).
+  const su0 = sailRoof ? wall + 0.02 : wall + 0.5;
+  const su1 = sailRoof ? front + 0.42 : front + 0.25;
+  const sv0 = sailRoof ? v0 - 0.3 : mid - 0.9;
+  const sv1 = sailRoof ? v1 + 0.3 : mid + 0.7;
+  const lift = (u, v) => F.at(u, v, slope(u) + (sailRoof ? 0.0 : 0.09));
+  kit.parts.push(cloth(lift(su0, sv0), lift(su0, sv1), lift(su1, sv1), lift(su1, sv0), [kit.col(pal.canvas).getStyle(), kit.col(pal.canvas, 0.1).getStyle(), kit.col(pal.paint, 0.05).getStyle()], sailRoof ? 0.18 : -0.05, sailRoof ? 7 : 4, 3));
+  if (sailRoof) {
+    // Its torn front edge hanging down in strips.
+    for (let k2 = 0; k2 < 7; k2++) {
+      const v = sv0 + ((k2 + 0.5) / 7) * (sv1 - sv0);
+      kit.block(F.at(su1 - 0.02, v, slope(su1) - 0.18 - kit.r(0, 0.12)), kit.r(0.25, 0.4), kit.r(0.2, 0.36), 0.012, kit.col(pal.canvas), b.yaw - k.face + Math.PI / 2, kit.r(-0.1, 0.1));
+    }
+  }
   for (const [u, v] of [[su0, sv0], [su1, sv1], [su1 - 0.1, sv0 + 0.1]]) {
     const r = rock(0.13, Math.round(u * 50 + v * 17), kit.col(pal.stone).getStyle());
     const p = lift(u, v);
@@ -688,9 +836,9 @@ export function kitchen(b, kit, k, tables, inst) {
     kit.parts.push(r);
   }
   // A sign under the front beam: a pot, steaming.
-  const sign = { at: F.at(front + 0.02, (v0 + v1) / 2 - 0.4, lo - 0.42), face: F.U };
-  kit.parts.push(paint(segment(F.at(front + 0.02, (v0 + v1) / 2 - 0.7, lo), sign.at.clone().addScaledVector(F.Vv, -0.3).add(V(0, 0.22, 0)), 0.006, 0.006, 3), pal.rope));
-  kit.parts.push(paint(segment(F.at(front + 0.02, (v0 + v1) / 2 - 0.1, lo), sign.at.clone().addScaledVector(F.Vv, 0.3).add(V(0, 0.22, 0)), 0.006, 0.006, 3), pal.rope));
+  const sv = mid - e * 0.4;
+  const sign = { at: F.at(front + 0.02, sv, lo - 0.42), face: F.U };
+  for (const d of [-0.3, 0.3]) kit.parts.push(paint(segment(F.at(front + 0.02, sv + d, lo), sign.at.clone().addScaledVector(F.Vv, d).add(V(0, 0.17, 0)), 0.006, 0.006, 3), pal.rope));
 
   // The counter: planks on two trestles, boards nailed down the front.
   const ch = g0 + 0.96;
@@ -711,25 +859,28 @@ export function kitchen(b, kit, k, tables, inst) {
   }
   solidAt(b, F, 0, (cv0 + cv1) / 2, g0 + 0.5, 0.56, 1.0, cv1 - cv0);
   // On it: a stack of tin plates, a bowl with a ladle, a cleaver, a salt jar.
+  const cvf = e > 0 ? cv0 : cv1;
+  const cvo = e > 0 ? cv1 : cv0;
+  const cmid = (cv0 + cv1) / 2;
   for (let i = 0; i < 4; i++) {
-    const p = F.at(-0.05, cv1 - 0.35, ch + 0.035 + i * 0.016);
+    const p = F.at(-0.05, cvo - e * 0.35, ch + 0.035 + i * 0.016);
     const plate = new THREE.CylinderGeometry(0.13, 0.11, 0.014, 12);
     plate.translate(p.x + kit.r(-0.01, 0.01), p.y, p.z + kit.r(-0.01, 0.01));
     kit.parts.push(paint(plate, kit.col(['#9a9a92', '#8a8a84'], 0.04).getStyle()));
   }
-  const bowl = F.at(-0.1, cv0 + 0.45, ch + 0.08);
+  const bowl = F.at(-0.1, cvf + e * 0.45, ch + 0.08);
   const bg = new THREE.SphereGeometry(0.17, 10, 5, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
   bg.translate(bowl.x, bowl.y + 0.1, bowl.z);
   kit.parts.push(paint(bg, '#7a5a40'));
   kit.parts.push(paint(segment(bowl.clone().add(V(0, 0.05, 0)), bowl.clone().addScaledVector(F.Vv, 0.22).add(V(0, 0.32, 0)), 0.012, 0.01, 4), '#5a5550'));
-  kit.block(F.at(-0.12, (cv0 + cv1) / 2 + 0.3, ch + 0.035), 0.24, 0.02, 0.07, '#8a8f93', b.yaw - k.face + 0.3);
-  kit.block(F.at(-0.12, (cv0 + cv1) / 2 + 0.12, ch + 0.04), 0.12, 0.035, 0.04, kit.col(pal.dark), b.yaw - k.face + 0.3);
-  inst.put('jar', SHAPES.jar, F.at(-0.15, cv1 - 0.75, ch + 0.03), kit.r(0, 6), '#b8b2a2', 0.9);
-  const plate = F.at(0.05, (cv0 + cv1) / 2 - 0.15, ch + 0.03);
+  kit.block(F.at(-0.12, cmid + e * 0.3, ch + 0.035), 0.24, 0.02, 0.07, '#8a8f93', b.yaw - k.face + 0.3);
+  kit.block(F.at(-0.12, cmid + e * 0.12, ch + 0.04), 0.12, 0.035, 0.04, kit.col(pal.dark), b.yaw - k.face + 0.3);
+  inst.put('jar', SHAPES.jar, F.at(-0.15, cvo - e * 0.75, ch + 0.03), kit.r(0, 6), '#b8b2a2', 0.9);
+  const plate = F.at(0.05, cmid - e * 0.15, ch + 0.03);
 
   // Fish on a bar under the beam, and a string of onions.
-  const ha = F.at(front - 0.02, v0 + 0.4, lo - 0.35);
-  const hb = F.at(front - 0.02, (v0 + v1) / 2 - 0.15, lo - 0.33);
+  const ha = F.at(front - 0.02, vf + e * 0.4, lo - 0.35);
+  const hb = F.at(front - 0.02, mid - e * 0.15, lo - 0.33);
   kit.board(ha, hb, 0.04, 0.04, UP, kit.col(pal.dark), { sag: 0.02 });
   for (let i = 0; i < 4; i++) {
     const p = ha.clone().lerp(hb, (i + 0.5) / 4);
@@ -786,14 +937,14 @@ export function kitchen(b, kit, k, tables, inst) {
   b.world.addStatic({ type: 'cyl', x: fc.x, z: fc.z, r: 0.62, y0: fc.y - 0.3, y1: fc.y + 0.5, noClimb: true });
   // Wood for it, stacked against the shack.
   for (let i = 0; i < 7; i++) {
-    const p = F.at(wall + 0.25 + (i % 2) * 0.05, v0 - 0.3 - (i % 3) * 0.02, g0 + 0.08 + Math.floor(i / 2) * 0.12);
+    const p = F.at(wall + 0.25 + (i % 2) * 0.05, vf - e * (0.3 + (i % 3) * 0.02), g0 + 0.08 + Math.floor(i / 2) * 0.12);
     kit.parts.push(paint(segment(p.clone().addScaledVector(F.Vv, -0.35), p.clone().addScaledVector(F.Vv, 0.35 + kit.r(-0.05, 0.05)), 0.055, 0.05, 5), kit.col(['#7a6450', '#6a5646', '#8a7258']).getStyle()));
   }
   // Behind the counter: a water barrel, a crate of potatoes, a broom.
-  const bp = F.at(wall + 0.4, v1 - 0.35);
+  const bp = F.at(wall + 0.4, vo - e * 0.35);
   inst.put('barrel', SHAPES.barrel, bp.clone().add(V(0, 0.31, 0)), kit.r(0, 6), kit.col(['#7a6450', '#6c5846']));
   b.world.addStatic({ type: 'cyl', x: bp.x, z: bp.z, r: 0.28, y0: bp.y - 0.2, y1: bp.y + 0.62, noClimb: true });
-  const cp = F.at(wall + 0.35, v1 - 1.05);
+  const cp = F.at(wall + 0.35, vo - e * 1.05);
   inst.put('crate', SHAPES.crate, cp.clone().add(V(0, 0.25, 0)), b.yaw - k.face + kit.r(-0.2, 0.2), kit.col(['#8a7a62', '#7a6c58']));
   for (let i = 0; i < 6; i++) {
     const o = new THREE.SphereGeometry(0.055, 6, 4);
@@ -801,8 +952,8 @@ export function kitchen(b, kit, k, tables, inst) {
     o.translate(cp.x + kit.r(-0.16, 0.16), cp.y + 0.5 + kit.r(0, 0.04), cp.z + kit.r(-0.16, 0.16));
     kit.parts.push(paint(o, kit.col(['#9a7a4e', '#8a6c44'], 0.05).getStyle()));
   }
-  solidAt(b, F, wall + 0.35, v1 - 1.05, cp.y + 0.25, 0.5, 0.5, 0.5);
-  const broom = F.at(wall + 0.12, v1 + 0.15, g0 + 0.02);
+  solidAt(b, F, wall + 0.35, vo - e * 1.05, cp.y + 0.25, 0.5, 0.5, 0.5);
+  const broom = F.at(wall + 0.12, vo + e * 0.15, g0 + 0.02);
   kit.parts.push(paint(segment(broom, broom.clone().addScaledVector(F.U, -0.06).add(V(0, 1.35, 0)), 0.018, 0.016, 4), kit.col(pal.wood).getStyle()));
   const bristle = new THREE.ConeGeometry(0.1, 0.32, 6);
   bristle.translate(broom.x, broom.y + 0.16, broom.z);
