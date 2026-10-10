@@ -124,11 +124,15 @@ The companionway at the front of the cockpit is open: walk forward and down
 the steps into the cabin, which is built inside her own hull and moves with
 her. Galley to port at the foot of the steps, chart table to starboard, a
 saloon with a dinette round the mast to port and a settee to starboard, and
-through the bulkhead door a V-berth in the bow. While you're below, the decks
-over you are cut away and the camera looks in from above, with the sea going
-by outside. It's dim by day (the deck's shadow is real) and lamplit at night.
-Walk back up the steps to come out. There's always a spare treasure map on
-the chart table if you've run out, and the galley stove is for cooking (below).
+through the bulkhead door a V-berth in the bow. It's lived in: cushions and a
+tartan rug on the settees, a rag rug at the foot of the steps, oilskins on
+their hooks by the steps and sea boots kicked off at the bottom, the teapot
+out in the galley, charts rolled up on the chart table. While you're below,
+the decks over you are cut away and the camera looks in from above, with the
+sea going by outside. It's dim by day (the deck's shadow is real) and lamplit
+at night. Walk back up the steps to come out. There's always a spare treasure
+map on the chart table if you've run out, and the galley stove is for cooking
+(below).
 
 There are eleven things to find on the islands, some in plain sight, some
 not: a fisherman's hut, a cairn on the summit, a burnt-out cottage, an

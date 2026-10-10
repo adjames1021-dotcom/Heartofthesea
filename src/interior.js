@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { makeBox } from './collision.js';
 import { paint, mergeParts, segment } from './props.js';
 import { LAYOUT, hullZ, deckAt, cabinHalf, roofTop, halfAt } from './boat.js';
@@ -33,10 +34,10 @@ const SOLE = LAYOUT.cockpit.sole - FLOOR; // the cockpit sole, from down here
 const BH = 2.1; // the bulkhead between the saloon and the forecabin
 const BERTH = 2.85; // where the V-berth starts
 
-const TEAK = '#8a5a34';
-const TEAK_DARK = '#6a4426';
-const TEAK_LIGHT = '#a8774a';
-const HOLLY = '#e6dcc4';
+// Old varnish, gone honey-coloured with the years.
+const TEAK = '#93603a';
+const TEAK_DARK = '#704829';
+const TEAK_LIGHT = '#b3824f';
 const CREAM = '#ebe3d0';
 const CREAM2 = '#e2d8c3';
 const NAVY = '#33425c';
@@ -223,13 +224,20 @@ export class Interior {
       if (w <= 0) return;
       box((x0 + x1) / 2, (y0 + y1) / 2, s * (zIn + w / 2), x1 - x0, y1 - y0, w, color, list);
     };
+    /** Something soft: a box with its edges and corners rounded off, turned rx (about x), then rz, then ry. */
+    const soft = (cx, cy, cz, sx, sy, sz, color, { r = 0.035, rx = 0, ry = 0, rz = 0 } = {}) => {
+      const g = new RoundedBoxGeometry(sx, sy, sz, 2, Math.min(r, 0.45 * Math.min(sx, sy, sz)));
+      g.rotateX(rx).rotateZ(rz).rotateY(ry).translate(cx, cy, cz);
+      parts.push(paint(g, color));
+    };
 
     this.#shell(parts, ceil, rod);
     this.#steps(parts, solid);
     this.#galley(parts, box, rod, toHull, solid);
     this.#chartTable(parts, box, rod, toHull, solid);
-    this.#saloon(parts, ceil, box, rod, toHull, solid);
+    this.#saloon(parts, ceil, box, rod, toHull, solid, soft);
     this.#forecabin(parts, box, rod, toHull, solid);
+    this.#lived(parts, box, rod, soft);
     this.#betterStove();
 
     const mat = indoor(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
@@ -354,7 +362,7 @@ export class Interior {
           // (Wide and soft enough not to flicker from the camera up above as she moves.)
           const g = new THREE.BoxGeometry(b - a, 0.004, 0.024);
           g.translate((a + b) / 2, 0.002, z);
-          parts.push(paint(g, '#c9a97c'));
+          parts.push(paint(g, '#bd9a6c'));
         }
       }
       // The bilge board in the saloon floor, with its brass ring.
@@ -698,21 +706,26 @@ export class Interior {
   // The saloon
   // ---------------------------------------------------------------------
 
-  #saloon(parts, ceil, box, rod, toHull, solid) {
+  #saloon(parts, ceil, box, rod, toHull, solid, soft) {
     const x0 = 0.62;
     const x1 = 2.05;
     const xm = (x0 + x1) / 2;
     for (const s of [-1, 1]) {
-      // Settees: a base, a cushion with piping, a backrest against the lining.
+      // Settees: a base, three plump cushions (one more faded than the
+      // others), and their backs leaning against the lining.
       toHull(x0, x1, 0, 0.38, 1.0, s, TEAK);
       box(xm, 0.19, s * 1.0, x1 - x0, 0.3, 0.012, TEAK_LIGHT);
-      toHull(x0 + 0.02, x1 - 0.02, 0.38, 0.5, 1.0, s, s < 0 ? NAVY : RED);
-      box(xm, 0.5, s * 1.003, x1 - x0 - 0.04, 0.012, 0.012, '#c9b98a');
       const back = (x) => side(x, 0.7) - 0.14;
-      for (let x = x0; x < x1 - 0.01; x += (x1 - x0) / 3) {
-        const xb = x + (x1 - x0) / 3;
-        const zb = Math.min(back(x), back(xb));
-        box((x + xb) / 2 - 0.0, 0.72, s * (zb + 0.06), (x1 - x0) / 3 - 0.02, 0.4, 0.14, s < 0 ? NAVY_LIGHT : '#9c5a48');
+      const len = (x1 - x0) / 3;
+      const seats = s < 0 ? [NAVY, '#3b4a63', '#2f3d55'] : [RED, '#985646', '#874536'];
+      const backs = s < 0 ? [NAVY_LIGHT, '#4d5c74', '#43526a'] : ['#9c5a48', '#a5604d', '#935343'];
+      for (let k = 0; k < 3; k++) {
+        const a = x0 + k * len;
+        const b = a + len;
+        const w = Math.min(side(a, 0.38), side(b, 0.38)) + 0.02 - 0.98;
+        soft((a + b) / 2, 0.445, s * (0.98 + w / 2), len - 0.012, 0.15, w, seats[k], { r: 0.05 });
+        const zb = Math.min(back(a), back(b));
+        soft((a + b) / 2, 0.73, s * (zb + 0.06), len - 0.02, 0.42, 0.15, backs[k], { r: 0.055, rx: s * 0.12 });
       }
       solid(x0, x1, 0, 0.62, s > 0 ? 1.0 : -1.98, s > 0 ? 1.98 : -1.0);
       // A bookshelf above, behind a fiddle rail.
@@ -833,6 +846,144 @@ export class Interior {
     rod(V(BH + 0.06, 1.42, -0.3), V(BH + 0.16, 1.4, -0.3), 0.012, BRASS);
   }
 
+  // ---------------------------------------------------------------------
+  // Lived in: the things that pile up aboard
+  // ---------------------------------------------------------------------
+
+  // (Clear of where your finds go to begin with, shared/decor.js
+  // DEFAULT_SPOTS: the saloon table, the front of the chart table, the bell's
+  // place by the steps and the nameboard's on the bulkhead.)
+  #lived(parts, box, rod, soft) {
+    const tri = (pts, color, want) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3));
+      parts.push(orient(paint(g, color), want));
+    };
+    const back = (x) => side(x, 0.7) - 0.14;
+    const seatTop = 0.52;
+
+    // Scatter cushions against the settee backs, a cushion or two each end.
+    for (const [x, s, color, ry] of [
+      [0.8, -1, '#e2d6bb', 0.15],
+      [1.9, -1, '#b8653a', -0.2],
+      [0.8, 1, '#c8973a', -0.12],
+      [1.88, 1, '#3e6b6a', 0.22],
+    ]) {
+      const zb = back(x) + 0.06 - 0.075;
+      soft(x, seatTop + 0.15, s * (zb - 0.08), 0.3, 0.3, 0.11, color, { r: 0.05, rx: s * 0.35, ry });
+    }
+    // A tartan rug thrown over the starboard settee, half off it.
+    {
+      const x0 = 1.13;
+      const x1 = 1.57;
+      const z1 = 1.42;
+      const top = seatTop + 0.008;
+      box((x0 + x1) / 2, top, (0.97 + z1) / 2, x1 - x0, 0.012, z1 - 0.97, '#7a3b33');
+      box((x0 + x1) / 2, top - 0.13, 0.965, x1 - x0, 0.27, 0.012, '#7a3b33');
+      for (const [x, w, c] of [[x0 + 0.08, 0.06, '#2f4a3a'], [x0 + 0.2, 0.015, '#d9c27a'], [x1 - 0.12, 0.06, '#2f4a3a']]) {
+        box(x, top + 0.004, (0.97 + z1) / 2, w, 0.006, z1 - 0.97, c);
+        box(x, top - 0.13, 0.958, w, 0.27, 0.006, c);
+      }
+      for (const [z, w, c] of [[1.12, 0.06, '#2f4a3a'], [1.3, 0.015, '#d9c27a']]) box((x0 + x1) / 2, top + 0.005, z, x1 - x0, 0.006, w, c);
+      box((x0 + x1) / 2, top - 0.08, 0.958, x1 - x0, 0.05, 0.006, '#2f4a3a');
+      // A book left face down on the end of the seat.
+      for (const s of [-1, 1]) {
+        const g = new THREE.BoxGeometry(0.12, 0.006, 0.17);
+        g.rotateX(s * 0.42).translate(0.98, seatTop + 0.03, 1.12 + s * 0.055);
+        parts.push(paint(g, '#3d4b62'));
+      }
+    }
+
+    // A braided rag rug at the foot of the steps, an oval of old cloth gone soft with washing.
+    ['#7d5a44', '#a68a64', '#6c7470', '#97704f', '#b29a74', '#7f5c48', '#a08262', '#8a6a52'].forEach((c, i) => {
+      const r = 0.4 - i * 0.048;
+      const g = new THREE.CylinderGeometry(r, r, 0.01, 24);
+      g.scale(1, 1, 0.78).translate(0.24, 0.005 + i * 0.003, 0.0);
+      parts.push(paint(g, c));
+    });
+
+    // Oilskins on brass hooks by the steps, to port: the jacket and the sou'wester.
+    const wall = AFT + 0.02;
+    for (const z of [-0.66, -1.04]) rod(V(wall - 0.01, 1.3, z), V(wall + 0.07, 1.34, z), 0.01, BRASS);
+    {
+      const YEL = '#dfa52c';
+      const z = -0.66;
+      const coat = new THREE.CylinderGeometry(0.12, 0.17, 0.58, 8);
+      coat.scale(0.55, 1, 1).translate(wall + 0.085, 1.0, z);
+      parts.push(paint(coat, YEL));
+      const hood = new THREE.SphereGeometry(0.09, 8, 6);
+      hood.scale(0.8, 1.05, 1).translate(wall + 0.08, 1.3, z);
+      parts.push(paint(hood, '#c99220'));
+      for (const s of [-1, 1]) {
+        parts.push(paint(segment(V(wall + 0.08, 1.2, z + s * 0.12), V(wall + 0.1, 0.84, z + s * 0.19), 0.05, 0.042, 7), '#cf9824'));
+      }
+      for (const y of [1.14, 1.02, 0.9]) box(wall + 0.16, y, z, 0.012, 0.025, 0.025, '#3a3a3a');
+      // The sou'wester, hung by its brim with its crown toward you.
+      const brim = new THREE.CylinderGeometry(0.15, 0.15, 0.012, 14);
+      brim.rotateZ(-Math.PI / 2).translate(wall + 0.012, 1.22, -1.04);
+      parts.push(paint(brim, YEL));
+      const crown = new THREE.CylinderGeometry(0.07, 0.095, 0.1, 12);
+      crown.rotateZ(-Math.PI / 2).translate(wall + 0.068, 1.22, -1.04);
+      parts.push(paint(crown, '#d39c26'));
+    }
+    // Sea boots, kicked off at the foot of the steps to starboard.
+    for (const [x, z, yaw, lean] of [[-0.95, 0.6, 0.3, 0], [-0.8, 0.76, -0.4, 0.12]]) {
+      const g = new THREE.CylinderGeometry(0.062, 0.058, 0.32, 9);
+      g.translate(0, 0.18, 0);
+      const f = new THREE.BoxGeometry(0.2, 0.07, 0.11);
+      f.translate(0.05, 0.035, 0);
+      for (const [p, c] of [[g, '#2e4236'], [f, '#263830']]) {
+        p.rotateZ(-lean).rotateY(yaw).translate(x, 0, z);
+        parts.push(paint(p, c));
+      }
+    }
+
+    // A painting of a boat, on the bulkhead over the starboard settee.
+    {
+      const x = BH - 0.004;
+      const [y, z] = [1.12, 1.1];
+      box(x - 0.01, y, z, 0.02, 0.26, 0.34, TEAK_DARK);
+      box(x - 0.022, y, z, 0.006, 0.21, 0.29, '#e8dfc8');
+      box(x - 0.027, y + 0.03, z, 0.004, 0.11, 0.24, '#a9c9d2');
+      box(x - 0.027, y - 0.05, z, 0.004, 0.06, 0.24, '#3f6f86');
+      const xp = x - 0.031;
+      tri([[xp, y - 0.03, z - 0.05], [xp, y + 0.07, z - 0.02], [xp, y - 0.03, z + 0.03]], '#f4f0e6', () => [-1, 0, 0]);
+      tri([[xp, y - 0.03, z - 0.06], [xp, y + 0.03, z - 0.035], [xp, y - 0.03, z - 0.035]], '#efe6d2', () => [-1, 0, 0]);
+      box(xp, y - 0.038, z - 0.01, 0.003, 0.014, 0.1, '#7a3b33');
+    }
+
+    // Charts rolled up at the back of the chart table, one tied with tape.
+    for (const [y, z, x0, x1, c] of [[0.822, 1.47, -1.08, -0.56, '#e9ddbc'], [0.822, 1.405, -1.04, -0.6, '#e2d3ad'], [0.872, 1.44, -1.06, -0.62, '#eee4c6']]) {
+      rod(V(x0, y, z), V(x1, y, z), 0.03, c, parts, 8);
+    }
+    rod(V(-0.86, 0.872, 1.44), V(-0.84, 0.872, 1.44), 0.033, '#8e4a3c', parts, 8);
+
+    // In the galley: the teapot and a mug out, and the end of a loaf.
+    {
+      const [x, y, z] = [-0.24, 0.92, -1.13];
+      const pot = new THREE.SphereGeometry(0.075, 12, 8);
+      pot.scale(1, 0.82, 1).translate(x, y + 0.06, z);
+      parts.push(paint(pot, '#5a3424'));
+      parts.push(paint(segment(V(x + 0.06, y + 0.05, z), V(x + 0.12, y + 0.11, z), 0.016, 0.009, 6), '#5a3424'));
+      const lid = new THREE.CylinderGeometry(0.02, 0.035, 0.03, 8);
+      lid.translate(x, y + 0.125, z);
+      parts.push(paint(lid, '#4a2b1d'));
+      const handle = new THREE.TorusGeometry(0.04, 0.009, 4, 10, Math.PI);
+      handle.rotateZ(Math.PI / 2).translate(x - 0.07, y + 0.065, z);
+      parts.push(paint(handle, '#5a3424'));
+      const mug = new THREE.CylinderGeometry(0.036, 0.033, 0.085, 10);
+      mug.translate(-0.2, y + 0.043, -0.99);
+      parts.push(paint(mug, '#efe9dc'));
+      const tea = new THREE.CircleGeometry(0.031, 10);
+      tea.rotateX(-Math.PI / 2).translate(-0.2, y + 0.078, -0.99);
+      parts.push(paint(tea, '#7a4a2a'));
+      box(-0.97, y + 0.012, -1.2, 0.32, 0.024, 0.22, TEAK_LIGHT);
+      soft(-1.0, y + 0.07, -1.2, 0.2, 0.1, 0.12, '#bd8648', { r: 0.04 });
+      box(-0.89, y + 0.07, -1.2, 0.012, 0.092, 0.112, '#e8d7b0');
+      box(-0.84, y + 0.03, -1.12, 0.16, 0.006, 0.02, STEEL);
+    }
+  }
+
   /** Ned's stove, when he's fitted it: cast iron, with an oven, and a flue up through the side deck. */
   #betterStove() {
     const st = this.stove;
@@ -947,8 +1098,8 @@ export class Interior {
       m.position.copy(p);
       this.group.add(m);
     }
-    this.lamps = [[V(lx, ly - 0.05, lz), 2.4], [V(-0.25, 1.3, gz + 0.25), 1.4], [V(3.35, deckUnder(3.35) - 0.2, 0.3), 1.2]].map(([p, i]) => {
-      const light = new THREE.PointLight('#ffc98a', i, 5.5, 1.5);
+    this.lamps = [[V(lx, ly - 0.05, lz), 2.7], [V(-0.25, 1.3, gz + 0.25), 1.6], [V(3.35, deckUnder(3.35) - 0.2, 0.3), 1.3]].map(([p, i]) => {
+      const light = new THREE.PointLight('#ffbf7e', i, 5.5, 1.5);
       light.position.copy(p);
       light.userData.base = i;
       this.lightGroup.add(light);
@@ -1021,8 +1172,8 @@ export class Interior {
     this.group.visible = this.inside || camera.position.distanceTo(this.boat.root.position) < 45;
     this.portMat.color.setRGB(0.78 - 0.68 * night, 0.86 - 0.74 * night, 0.9 - 0.7 * night);
     // The lamps are turned down by day and up after dark.
-    for (const lamp of this.lamps) lamp.intensity = lamp.userData.base * (0.45 + 1.1 * night);
-    this.glowMat.color.setRGB(0.55 + 0.6 * night, 0.42 + 0.45 * night, 0.25 + 0.3 * night);
+    for (const lamp of this.lamps) lamp.intensity = lamp.userData.base * (0.5 + 1.15 * night);
+    this.glowMat.color.setRGB(0.6 + 0.6 * night, 0.44 + 0.46 * night, 0.24 + 0.26 * night);
   }
 }
 
