@@ -23,11 +23,21 @@ export class Talk {
     return !!this.v;
   }
 
+  /** Someone says something in passing (no replies): a shopkeeper, a cook calling out. */
+  say(name, text, secs = 4) {
+    if (this.v) return; // not over the top of a conversation
+    this.el.innerHTML = `<div class="who">${name}</div><p class="said">${text}</p>`;
+    this.el.classList.add('show');
+    clearTimeout(this.sayT);
+    this.sayT = setTimeout(() => !this.v && this.el.classList.remove('show'), secs * 1000);
+  }
+
   /** Start talking to a villager. */
   begin(v) {
     const s = this.progress.state;
     const convo = openingFor(v.id, s, this.hours());
     if (!convo) return;
+    clearTimeout(this.sayT);
     this.v = v;
     this.convo = convo;
     this.line = '0';
@@ -80,7 +90,7 @@ export class Talk {
   /** Keys while talking, and walking off ends it. */
   update(input, player) {
     if (!this.v) return;
-    for (let i = 0; i < 4; i++) if (input.pressed(`Digit${i + 1}`, `Numpad${i + 1}`)) this.choose(i);
+    for (let i = 0; i < 9; i++) if (input.pressed(`Digit${i + 1}`, `Numpad${i + 1}`)) this.choose(i);
     if (input.pressed('Escape')) this.close();
     const d = Math.hypot(player.pos.x - this.v.pos.x, player.pos.z - this.v.pos.z);
     if (d > 4.5 || !this.v.awakeNow) this.close();

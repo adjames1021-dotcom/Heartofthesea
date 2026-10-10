@@ -25,6 +25,7 @@
 
 import { ITEMS, countOf } from './items.js';
 import { UPGRADES } from './upgrades.js';
+import { NED_FEE, VALUE, words, fishValue } from './trade.js';
 
 const q = (s, id) => s?.quests?.[id] ?? null; // a quest's state, or null if never started
 const met = (s, who) => !!s?.met?.[who];
@@ -54,7 +55,12 @@ export const count = (s, kind) =>
   (s?.items ?? []).filter((i) => !i.off && !i.cooked && (kind === '@fish' ? ITEMS[i.kind]?.kind === 'fish' : i.kind === kind)).length;
 const knows = (s, recipe) => (s?.recipes ?? []).includes(recipe);
 /** Could Ned do this to her now? (He has what he needs, and something for his time.) */
-const canDo = (s, up) => !upgraded(s, up) && !!firstValuable(s) && UPGRADES[up].needs.every(([k, n]) => count(s, k) >= n);
+/** Can you pay Ned for his time: something of value, or ten shillings? */
+export const canPay = (s) => !!firstValuable(s) || (s?.pence ?? 0) >= NED_FEE;
+/** What you'd pay him with, in words. */
+const payment = (s) => (firstValuable(s) ? countOf(firstValuable(s).kind, 1) : words(NED_FEE));
+const canDo = (s, up) => !upgraded(s, up) && canPay(s) && UPGRADES[up].needs.every(([k, n]) => count(s, k) >= n);
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 const job = (up) => [...UPGRADES[up].needs.map(([k, n]) => ['takeN', k, n]), ['pay'], ['upgrade', up]];
 const done = (s, id) => !!q(s, id)?.done;
 const stage = (s, id) => q(s, id)?.stage ?? -1;
@@ -246,16 +252,16 @@ export const TALK = {
     },
     {
       id: 'hull-do',
-      when: (s) => !!q(s, 'hull') && !done(s, 'hull') && has(s, 'copper') && !!firstValuable(s),
+      when: (s) => !!q(s, 'hull') && !done(s, 'hull') && has(s, 'copper') && canPay(s),
       lines: {
         0: { say: 'That my copper?', replies: [{ say: 'Off the Molly Ann.', to: 1 }] },
         1: {
           say: 'Good stuff. Bronze-fastened, she was. What have you got for my time?',
           replies: [
             {
-              say: (st) => (firstValuable(st) ? `There's ${countOf(firstValuable(st).kind, 1)}.` : 'There was something.'),
+              say: (st) => `There's ${payment(st)}.`,
               to: 2,
-              needs: (st) => has(st, 'copper') && !!firstValuable(st),
+              needs: (st) => has(st, 'copper') && canPay(st),
               do: [['take', 'copper'], ['pay'], ['upgrade', 'hull'], ['done', 'hull'], ['note', 'hull', 'Gave Ned the copper and something out of one of the chests. He had the planks cut already, the day I anchored. Doubled her along the waterline and put the copper on her stem.']],
             },
           ],
@@ -351,16 +357,27 @@ export const TALK = {
             { say: 'Three fish for a bale of canvas?', to: 1, needs: (st) => count(st, '@fish') >= 3, do: [['takeN', '@fish', 3], ['give', 'canvas']] },
             { say: 'Two coconuts for a coil of rope?', to: 1, needs: (st) => count(st, 'coconut') >= 2, do: [['takeN', 'coconut', 2], ['give', 'rope']] },
             { say: 'A fish for a couple of limes?', to: 1, needs: (st) => count(st, '@fish') >= 1, do: [['takeN', '@fish', 1], ['give', 'lime'], ['give', 'lime']] },
+            { say: (st) => (firstValuable(st) ? `What'll you give me for ${countOf(firstValuable(st).kind, 1)}?` : 'What would you give me for this?'), to: 3, needs: (st) => !!firstValuable(st) },
+            { say: 'What about my fish, for money?', to: 4, needs: (st) => fishValue(st) > 0 },
             { say: (st) => (firstValuable(st) ? `Iron for ${countOf(firstValuable(st).kind, 1)}?` : 'Iron?'), to: 2, needs: (st) => !!firstValuable(st), do: [['pay'], ['give', 'iron'], ['give', 'iron']] },
             { say: 'Just looking.' },
           ],
         },
         1: { say: 'Done. Pleasure doing business.', replies: [{ say: 'Thanks, Hester.' }] },
         2: { say: "Two pigs of iron off the old boiler. Don't drop them on your feet.", replies: [{ say: "I'll try not to." }] },
+        3: {
+          say: (s) => (firstValuable(s) ? `${cap(words(VALUE[firstValuable(s).kind] ?? 60))}. And I'm robbing myself.` : "Where's it gone?"),
+          replies: [{ say: 'Done.', to: 5, needs: (st) => !!firstValuable(st), do: [['sell']] }, { say: "I'll hang on to it." }],
+        },
+        4: {
+          say: (s) => `${cap(words(fishValue(s)))} the lot. They won't be getting any fresher.`,
+          replies: [{ say: 'Done.', to: 5, needs: (st) => fishValue(st) > 0, do: [['sellFish']] }, { say: "I'll keep them." }],
+        },
+        5: { say: (s) => `There. That's ${words(s?.pence ?? 0)} you've got. Spend it somewhere sensible. Here, say.`, replies: [{ say: 'Thanks, Hester.' }] },
       },
     },
     chat('hester', [
-      { if: (s) => !met(s, 'hester'), say: "You'll be off the yacht. Hester. The store's open when I'm stood here.", reply: "I'll remember." },
+      { if: (s) => !met(s, 'hester'), say: "You'll be off the yacht. Hester. I buy and I sell. The store's open when I'm stood here.", reply: "I'll remember." },
       { if: (s) => done(s, 'sail'), say: 'Mags came in at noon. Noon. Waved at me.', reply: 'Did you wave back?' },
       { if: any, say: 'Prices go up when it rains. Nobody knows why. Me included.', reply: 'Fair enough.' },
     ]),
@@ -547,7 +564,7 @@ export const WANTS = {
   silas: (s) => (!!q(s, 'knife') && !done(s, 'knife') && !has(s, 'knife')) || (stage(s, 'lamp') === 0 && !has(s, 'oil')),
   ned: (s) =>
     (met(s, 'ned') && !q(s, 'hull') && !upgraded(s, 'hull')) ||
-    (!!q(s, 'hull') && !done(s, 'hull') && has(s, 'copper') && !!firstValuable(s)) ||
+    (!!q(s, 'hull') && !done(s, 'hull') && has(s, 'copper') && canPay(s)) ||
     (!!q(s, 'yard') && ['sail', 'lantern', 'hold', 'stove'].some((u) => canDo(s, u))),
   hester: (s) => stage(s, 'sail') === 1,
   abel: (s) => (met(s, 'abel') && !q(s, 'cairn')) || (stage(s, 'cairn') === 1 && !done(s, 'cairn')),

@@ -20,6 +20,17 @@ export function hoursAt(t) {
   return h < 0 ? h + 24 : h;
 }
 
+/** Which in-game day it is (it turns over at midnight, with the hours). */
+export function dayAt(t) {
+  return Math.floor(((t / DAY_LENGTH) * 24 + EPOCH_HOURS) / 24);
+}
+
+/** The seasons turn every seven days: 0 spring, 1 summer, 2 autumn, 3 winter. */
+export const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
+export function seasonAt(t) {
+  return ((Math.floor(dayAt(t) / 7) % 4) + 4) % 4;
+}
+
 /**
  * Unit vector toward the sun. It rises in the east (+x), passes high to the
  * south (+z) and sets in the west (−x); 06:00 and 18:00 are on the horizon.

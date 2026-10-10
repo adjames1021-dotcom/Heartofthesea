@@ -413,3 +413,67 @@ test('Hester trades, Dorcas tells you how to make do, and the hold fills up', as
   full = { ...full, upgrades: ['hold'] };
   assert.ok((await apply(full, { type: 'catch', kind: 'mackerel', kg: 0.5 }, ctx(100))).reply.ok);
 });
+
+// --- Money and shops ---
+import { stockFor, words, tag, VALUE, NED_FEE } from '../shared/trade.js';
+import { dayAt, seasonAt, hoursAt } from '../shared/environment.js';
+
+test('old money, written and said', () => {
+  assert.equal(tag(4), '4d');
+  assert.equal(tag(18), '1/6');
+  assert.equal(tag(24), '2/-');
+  assert.equal(words(2), 'tuppence');
+  assert.equal(words(12), 'a shilling');
+  assert.equal(words(18), 'one and six');
+  assert.equal(words(240), 'twenty shillings');
+});
+
+test('Hester buys things of value and fish, and that is where money comes from', async () => {
+  let s = withItems(await meet(freshState(0), 'hester'), 'watch', 'mackerel', 'bass');
+  // (Her replies: a fish for limes, sell the watch, sell the fish, iron, just looking.)
+  ({ s } = await talk(s, 'hester', [1, 0]));
+  assert.equal(s.pence, VALUE.watch, 'a pocket watch, sold');
+  assert.ok(!has(s, 'watch'));
+  ({ s } = await talk(s, 'hester', [1, 0]));
+  assert.equal(s.pence, VALUE.watch + 2 + 5, 'and the fish');
+  assert.ok(!has(s, 'mackerel') && !has(s, 'bass'));
+});
+
+test("buying at Hester's: only what's out today, only while she's there, only with the money", async () => {
+  const t = 120; // nine in the morning: she's at the store
+  assert.equal(Math.round(hoursAt(t)), 9);
+  const stock = stockFor('hester', dayAt(t), seasonAt(t));
+  const i = stock.findIndex((x) => x && x.n >= 1);
+  assert.ok(i >= 0, 'something on the shelves');
+  let s = { ...freshState(0), pence: 0 };
+  assert.equal((await apply(s, { type: 'buy', shop: 'hester', slots: [i] }, ctx(t))).reply.why, 'short');
+  s = { ...s, pence: 100 };
+  const r = await apply(s, { type: 'buy', shop: 'hester', slots: [i] }, ctx(t));
+  assert.ok(r.reply.ok);
+  assert.equal(r.state.pence, 100 - stock[i].price);
+  assert.ok(has(r.state, stock[i].kind));
+  // Sold out once you've had them all.
+  let st = r.state;
+  for (let k = 1; k < stock[i].n; k++) st = (await apply(st, { type: 'buy', shop: 'hester', slots: [i] }, ctx(t))).state;
+  assert.equal((await apply(st, { type: 'buy', shop: 'hester', slots: [i] }, ctx(t))).reply.why, 'sold out');
+  // Closed at night; nothing where nothing was put out.
+  assert.equal((await apply(s, { type: 'buy', shop: 'hester', slots: [i] }, ctx(960))).reply.why, 'closed');
+  const empty = stock.findIndex((x) => !x);
+  if (empty >= 0) assert.equal((await apply(s, { type: 'buy', shop: 'hester', slots: [empty] }, ctx(t))).reply.why, 'not there');
+  // And the hold has to have room.
+  const full = { ...withItems(freshState(0), ...Array(16).fill('lime')), pence: 100 };
+  assert.equal((await apply(full, { type: 'buy', shop: 'hester', slots: [i] }, ctx(t))).reply.why, 'full');
+});
+
+test('the stock changes from day to day', () => {
+  const a = JSON.stringify(stockFor('hester', 10, 0));
+  const days = [11, 12, 13, 14].map((d) => JSON.stringify(stockFor('hester', d, 0)));
+  assert.ok(days.some((d) => d !== a));
+});
+
+test('Ned will take ten shillings instead of something of value', async () => {
+  let s = { ...withItems(freshState(0), 'copper'), pence: NED_FEE + 5, met: { ned: true }, quests: { hull: { stage: 0, started: 0, done: false } } };
+  ({ s } = await talk(s, 'ned', [0, 0]));
+  assert.ok(s.upgrades.includes('hull'));
+  assert.equal(s.pence, 5);
+});

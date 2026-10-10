@@ -11,9 +11,9 @@ import { DAY_LENGTH } from './environment.js';
  * In the pan it depends on what's in it (the slowest thing sets the pace);
  * the pot is slower and the same for everything.
  */
-export const PAN = { fish: [16, 34], fruit: [9, 22], food: [8, 22] };
+export const PAN = { fish: [16, 34], fruit: [9, 22], veg: [12, 26], store: [10, 24], food: [8, 22] };
 export const POT = [45, 95];
-const PACE = ['fruit', 'food', 'fish'];
+const PACE = ['fruit', 'store', 'food', 'veg', 'fish'];
 
 /** Where you can cook and what's there: the galley stove has a pan and a pot, each village fire a griddle. */
 export const VESSELS = { galley: ['pan', 'pot'], 'fire:cove': ['pan'], 'fire:landing': ['pan'], 'fire:strand': ['pan'] };
@@ -62,6 +62,63 @@ export const RECIPES = {
     needs: [['squid'], ['coconut']],
     effect: 'swim',
   },
+  // The cooks' dishes (shared/restaurants.js). They'll show you, in time.
+  'pilchards-oatmeal': {
+    name: 'Pilchards in oatmeal',
+    note: "Pilchards rolled in oats and into hot fat in the pan. Jenefer says don't touch them till they want turning.",
+    vessel: 'pan',
+    needs: [['pilchard'], ['oats']],
+    effect: 'night',
+  },
+  'crab-rice': {
+    name: 'Crab and rice',
+    note: 'A crab, rice and pepper in the pot.',
+    vessel: 'pot',
+    needs: [['crab'], ['rice'], ['pepper']],
+    effect: 'swim',
+  },
+  'fish-soup': {
+    name: 'Fish soup',
+    note: 'White fish, a potato and an onion in the pot.',
+    vessel: 'pot',
+    needs: [WHITE_FISH, ['potato'], ['onion']],
+    effect: 'steady',
+  },
+  kedgeree: {
+    name: 'Kedgeree',
+    note: 'A kipper, rice and an onion in the pot. Breakfast, Jenefer says, and nothing else.',
+    vessel: 'pot',
+    needs: [['kipper'], ['rice'], ['onion']],
+    effect: 'night',
+  },
+  'leek-potato': {
+    name: 'Leek and potato soup',
+    note: "A leek, a potato and an onion in the pot. Loveday says it's the potato does the work.",
+    vessel: 'pot',
+    needs: [['leek'], ['potato'], ['onion']],
+    effect: 'steady',
+  },
+  'cheese-potato': {
+    name: "Potatoes and goat's cheese",
+    note: "A potato and a round of Mags's cheese in the pan.",
+    vessel: 'pan',
+    needs: [['potato'], ['cheese']],
+    effect: 'night',
+  },
+  'cabbage-beans': {
+    name: 'Cabbage and beans',
+    note: 'A cabbage and dried beans in the pot, a long time.',
+    vessel: 'pot',
+    needs: [['cabbage'], ['beans']],
+    effect: 'swim',
+  },
+  'fish-curry': {
+    name: 'Fish curry',
+    note: 'White fish, curry powder and rice in the pot. Loveday learnt it on the mainland.',
+    vessel: 'pot',
+    needs: [WHITE_FISH, ['curry'], ['rice']],
+    effect: 'swim',
+  },
 };
 
 /** What eating does, for how long (in-game hours), and what it feels like. */
@@ -72,10 +129,10 @@ export const EFFECTS = {
 };
 
 /** How long raw things keep, in in-game days. Cooked food keeps a while too. */
-const KEEPS = { fish: 2, fruit: 4, cooked: 3 };
+const KEEPS = { fish: 2, fruit: 4, veg: 6, cooked: 3 };
 
 /** Can this go in a pan or a pot? */
-export const cookable = (it) => !!it && !it.off && !it.cooked && ['fish', 'fruit', 'food'].includes(ITEMS[it.kind]?.kind);
+export const cookable = (it) => !!it && !it.off && !it.cooked && ['fish', 'fruit', 'food', 'veg', 'store'].includes(ITEMS[it.kind]?.kind);
 
 /** Has this gone off by time t? */
 export function goneOff(it, t) {

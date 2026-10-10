@@ -14,6 +14,8 @@ import { QUESTS } from '../shared/quests.js';
 import { hoursAt, DAY_LENGTH } from '../shared/environment.js';
 import { GATHER, gatherWorld, ripe } from '../shared/gather.js';
 import { VESSELS, ROOM, EFFECTS, RECIPES, cookable, goneOff, doneness, recipeFor } from '../shared/food.js';
+import { SHOPS, VALUE, FISH_PRICE, NED_FEE, sellableFish, stockFor, openNow } from '../shared/trade.js';
+import { dayAt, seasonAt } from '../shared/environment.js';
 
 /** A brand-new player. */
 export function freshState(now) {
@@ -40,6 +42,9 @@ export function freshState(now) {
     decor: [], // things put about the cabin: { item, kind, at: [x, y, z], yaw, wall }
     decorV: LAYOUT_V, // which cabin those positions are for (shared/decor.js)
     stowed: [], // finds put away in the locker rather than out on show
+    pence: 0, // money, in pence (shared/trade.js)
+    shops: {}, // what you've bought today: { [shop]: { day, bought: { [slot]: n } } }
+    meals: {}, // how many times you've eaten at each place (shared/restaurants.js)
     nextId: 1,
   };
 }
@@ -48,7 +53,7 @@ const fail = (why) => ({ ok: false, why });
 
 /** How full the hold is: food and materials (not keepsakes, not things of value). */
 export function holdUsed(s) {
-  return s.items.filter((i) => ['fish', 'fruit', 'food', 'dish', 'material', 'junk'].includes(ITEMS[i.kind]?.kind)).length;
+  return s.items.filter((i) => ['fish', 'fruit', 'veg', 'store', 'food', 'dish', 'material', 'junk'].includes(ITEMS[i.kind]?.kind)).length;
 }
 const holdRoom = (s) => ((s.upgrades ?? []).includes('hold') ? HOLD.big : HOLD.small);
 
@@ -259,7 +264,7 @@ const ACTIONS = {
     const it = s.items.find((i) => i.id === a.item);
     if (!it) return fail('what');
     const k = ITEMS[it.kind]?.kind;
-    if (!['fish', 'fruit', 'food', 'dish'].includes(k)) return fail('not food');
+    if (!['fish', 'fruit', 'veg', 'food', 'dish'].includes(k)) return fail('not food');
     if (k === 'fish' && !it.cooked && !it.off) return fail('raw');
     s.items = s.items.filter((i) => i !== it);
     if (it.off) return { ok: true, result: 'off' };
@@ -319,8 +324,21 @@ function effects(s, list, now) {
       s.recipes ??= [];
       if (!s.recipes.includes(a)) s.recipes.push(a);
     } else if (what === 'pay') {
+      // Something of value if you've got it, or ten shillings.
       const v = firstValuable(s);
       if (v) s.items = s.items.filter((i) => i !== v);
+      else if ((s.pence ?? 0) >= NED_FEE) s.pence -= NED_FEE;
+    } else if (what === 'sell') {
+      // To Hester: the first thing of value you've got, for what it's worth to her.
+      const v = firstValuable(s);
+      if (v) {
+        s.items = s.items.filter((i) => i !== v);
+        s.pence = (s.pence ?? 0) + (VALUE[v.kind] ?? 60);
+      }
+    } else if (what === 'sellFish') {
+      const fish = sellableFish(s);
+      s.pence = (s.pence ?? 0) + fish.reduce((t, i) => t + FISH_PRICE[i.kind], 0);
+      s.items = s.items.filter((i) => !fish.includes(i));
     } else if (what === 'upgrade') {
       s.upgrades ??= [];
       if (UPGRADES[a] && !s.upgrades.includes(a)) s.upgrades.push(a);
@@ -335,6 +353,40 @@ function effects(s, list, now) {
     }
   }
 }
+
+/**
+ * Bought at a shop: the things you took to the counter (by where they were
+ * on the shelves). It has to be open, they have to have been there today and
+ * not already sold to you, you have to have the money and the room.
+ */
+ACTIONS.buy = async (s, a, { now }) => {
+  const shop = Object.hasOwn(SHOPS, a.shop) ? SHOPS[a.shop] : null;
+  if (!shop || !Array.isArray(a.slots) || !a.slots.length || a.slots.length > 12) return fail('what');
+  if (!openNow(a.shop, now)) return fail('closed');
+  const day = dayAt(now);
+  const stock = stockFor(a.shop, day, seasonAt(now));
+  s.shops ??= {};
+  const mine = s.shops[a.shop]?.day === day ? s.shops[a.shop] : { day, bought: {} };
+  const want = {};
+  for (const i of a.slots) {
+    if (!Number.isInteger(i) || !stock[i]) return fail('not there');
+    want[i] = (want[i] ?? 0) + 1;
+    if (want[i] + (mine.bought[i] ?? 0) > stock[i].n) return fail('sold out');
+  }
+  const total = a.slots.reduce((t, i) => t + stock[i].price, 0);
+  if ((s.pence ?? 0) < total) return fail('short');
+  if (holdUsed(s) + a.slots.length > holdRoom(s)) return fail('full');
+  s.pence -= total;
+  const got = [];
+  for (const i of a.slots) {
+    const kind = stock[i].kind;
+    const kg = ITEMS[kind].kg ? Math.round(((ITEMS[kind].kg[0] + ITEMS[kind].kg[1]) / 2) * 100) / 100 : undefined;
+    got.push(give(s, kind, now, kg ? { kg } : {}).kind);
+    mine.bought[i] = (mine.bought[i] ?? 0) + 1;
+  }
+  s.shops[a.shop] = mine;
+  return { ok: true, total, got };
+};
 
 /** Something out in the world for a quest (shared/quests.js): only counts at the right stage. */
 ACTIONS.quest = async (s, a, { now }) => {

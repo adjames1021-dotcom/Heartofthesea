@@ -40,6 +40,7 @@ import { QuestWorld } from './questworld.js';
 import { WANTS } from '../shared/talk.js';
 import { Finds } from './finds.js';
 import { Decorating } from './decorate.js';
+import { Shops } from './shops.js';
 import { WreckCourse } from './course.js';
 import { HatchPuzzle } from './hatch.js';
 import { StackClimb } from './stack.js';
@@ -143,6 +144,7 @@ const villages = new Villages({ scene, world });
 let hoursNow = 12;
 const talk = new Talk({ progress, hours: () => hoursNow });
 const journal = new Journal({ progress });
+const shops = new Shops({ villages, progress, talk });
 const questWorld = new QuestWorld({ scene, progress });
 const gathering = new Gathering({ scene, world, progress });
 const stormFx = new Storm({ scene, audio });
@@ -372,6 +374,9 @@ function findInteraction() {
     }
     return null;
   }
+  // At a shop: pick things up, take them to the counter, pay.
+  const sh = shops.interaction(player);
+  if (sh) return sh;
   if (player.carrying) return { key: 'E', label: 'Put down', act: putDown };
   const near = treasure.nearest(player.pos);
   if (near) {
@@ -543,6 +548,7 @@ function frame(now) {
   for (const p of villages.people) p.wantsToTalk = !!WANTS[p.id]?.(progress.state);
   villages.update(dt, { t, hours: hoursNow, player, night: atmosphere.uniforms.uNight.value, camera, wind: env.wind });
   talk.update(input, player);
+  shops.update(dt, { player, hours: hoursNow });
   gathering.update(dt);
   decorating.update(dt, { input, boat, player, inside: interior.inside });
   cooking.update(dt, { input, player, inside: interior.inside });
@@ -719,7 +725,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { shops, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {

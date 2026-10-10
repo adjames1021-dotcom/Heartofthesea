@@ -8,6 +8,7 @@ import { QUESTS } from '../shared/quests.js';
 import { RECIPES, describe, sameKey } from '../shared/food.js';
 import { UPGRADES } from '../shared/upgrades.js';
 import { aboutCabin } from '../shared/decor.js';
+import { words } from '../shared/trade.js';
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -92,7 +93,8 @@ export class Journal {
     const done = (s.upgrades ?? []).filter((u) => UPGRADES[u]);
     const right = `
       <div class="entry"><h3>In the hold</h3>
-      ${hold.length ? `<ul>${hold.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="empty">Not much.</p>'}</div>
+      ${hold.length ? `<ul>${hold.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="empty">Not much.</p>'}
+      <p>${s.pence ? `${esc(words(s.pence).replace(/^./, (c) => c.toUpperCase()))} in the purse.` : 'Not a penny in the purse.'}</p></div>
       ${done.length ? `<div class="entry"><h3>Done to her</h3>${done.map((u) => `<p>${esc(UPGRADES[u].say)}</p>`).join('')}</div>` : ''}
       ${recipes.length ? `<div class="entry"><h3>Cooking</h3>${recipes.map((r) => `<p><b>${esc(RECIPES[r].name)}.</b> ${esc(RECIPES[r].note)}</p>`).join('')}</div>` : ''}`;
     this.el.innerHTML = `

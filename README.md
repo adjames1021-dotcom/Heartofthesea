@@ -187,6 +187,18 @@ right. Eating a good dish helps a little for a while (a stronger swimmer,
 steadier on a heeling deck, better eyes at night). Raw food goes off after a
 few days. Nothing else: no hunger, no starving.
 
+**Money and Hester's.** Money is old money: pennies and shillings, twelve
+to the shilling. The only way to come by any is to sell to Hester at the
+Landing: something of value out of a chest, or the fish you've caught. Her
+stall is open while she's at it (from early till evening); at night it's
+covered over. Walk round it: the day's goods are on the shelves, in the
+baskets and hung on hooks, each with a price written on a bit of card (4d,
+1/6). Pick a thing up (E), carry it to the counter and put it down; she says
+what it comes to. Pay at the counter, or walk off and it goes back. What's out
+changes every day and with the season, and when it's gone it's gone till
+tomorrow. She sells food and things to cook with, nothing else. Ned will take
+coin for his time instead of something of value.
+
 **The cabin.** Everything you find is on show below. Walk up to something
 and press E to pick it up; the mouse moves it over whatever's under it (a
 table, a shelf, the floor) or hangs it on a wall. Q or the wheel turns it, E
@@ -323,6 +335,7 @@ shared/items.js        everything you can own, and how it's written
 shared/villages.js     villages, people and their days; shared/talk.js what they say
 shared/quests.js       the steps of things people ask that are out in the world
 shared/food.js         cooking times, recipes, what eating does, going off
+shared/trade.js        money, what Hester pays, the shops and what's out each day
 shared/gather.js       where fruit, driftwood and iron are; shared/upgrades.js the yard
 shared/decor.js        what can go about the cabin, and where finds first go
 src/main.js            renderer, loop, interactions, keys
@@ -331,6 +344,7 @@ src/village.js         villages and the yard, and the people walking their day
 src/handvillage.js     the villages built by hand; src/handpieces.js the stall, shed, garden and the rest; src/kit.js boards, walls, roofs, weathering
 src/talk.js            the talk card; shared/talk.js has everything people say
 src/journal.js         the journal (J)
+src/shops.js           shops you walk round; src/goods3d.js the goods and price tags
 src/questworld.js      things out in the world for quests (the copper, the bales)
 src/cooking.js         stove, pans, pot and fires; src/food3d.js food models
 src/gather.js          fruit trees, driftwood and old iron

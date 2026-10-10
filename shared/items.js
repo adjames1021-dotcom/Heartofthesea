@@ -2,8 +2,8 @@
 // both agree on what exists. `name` is how it's written in the journal's
 // list ("a mackerel", "three mackerel"); `plural` when it isn't just +s.
 //
-// Kinds: fish, fruit, food (cooked things), material, valuable, find
-// (things picked up on the islands), junk.
+// Kinds: fish, fruit, veg, store (dry goods), food (cooked things), dish,
+// material, valuable, find (things picked up on the islands), junk.
 
 export const ITEMS = {
   // --- Fish (see src/fishing.js for where each lives). `cooked`: what it's called once it's done. ---
@@ -44,6 +44,34 @@ export const ITEMS = {
   'squid-coconut': { kind: 'dish', name: 'bowl of squid in coconut', plural: 'bowls of squid in coconut' },
   fryup: { kind: 'dish', name: 'fry-up', plural: 'fry-ups' },
   potful: { kind: 'dish', name: 'pot of something', plural: 'pots of something' },
+
+  // --- Bought: dry goods from far off (kind 'store'), what grows (kind 'veg'),
+  // and fish you can't catch yourself (shared/trade.js) ---
+  pilchard: { kind: 'fish', name: 'pilchard', kg: [0.08, 0.15], cooked: 'fried pilchard' },
+  crab: { kind: 'fish', name: 'crab', kg: [0.5, 1.5], cooked: 'boiled crab' },
+  kipper: { kind: 'food', name: 'kipper', cooked: 'grilled kipper' },
+  rice: { kind: 'store', name: 'bag of rice', plural: 'bags of rice' },
+  flour: { kind: 'store', name: 'bag of flour', plural: 'bags of flour' },
+  oats: { kind: 'store', name: 'bag of oats', plural: 'bags of oats' },
+  pepper: { kind: 'store', name: 'twist of pepper', plural: 'twists of pepper' },
+  curry: { kind: 'store', name: 'jar of curry powder', plural: 'jars of curry powder' },
+  sugar: { kind: 'store', name: 'bag of brown sugar', plural: 'bags of brown sugar' },
+  beans: { kind: 'store', name: 'bag of dried beans', plural: 'bags of dried beans' },
+  ginger: { kind: 'veg', name: 'root of ginger', plural: 'roots of ginger' },
+  onion: { kind: 'veg', name: 'onion' },
+  potato: { kind: 'veg', name: 'potato', plural: 'potatoes' },
+  leek: { kind: 'veg', name: 'leek' },
+  cabbage: { kind: 'veg', name: 'cabbage' },
+
+  // --- Dishes the cooks make (shared/restaurants.js), once you know them ---
+  'pilchards-oatmeal': { kind: 'dish', name: 'plate of pilchards in oatmeal', plural: 'plates of pilchards in oatmeal' },
+  'crab-rice': { kind: 'dish', name: 'bowl of crab and rice', plural: 'bowls of crab and rice' },
+  'fish-soup': { kind: 'dish', name: 'bowl of fish soup', plural: 'bowls of fish soup' },
+  kedgeree: { kind: 'dish', name: 'plate of kedgeree', plural: 'plates of kedgeree' },
+  'leek-potato': { kind: 'dish', name: 'bowl of leek and potato soup', plural: 'bowls of leek and potato soup' },
+  'cheese-potato': { kind: 'dish', name: "plate of potatoes and goat's cheese", plural: "plates of potatoes and goat's cheese" },
+  'cabbage-beans': { kind: 'dish', name: 'bowl of cabbage and beans', plural: 'bowls of cabbage and beans' },
+  'fish-curry': { kind: 'dish', name: 'bowl of fish curry', plural: 'bowls of fish curry' },
 
   // --- Things of value, from the chests (what the shipwright takes for his time) ---
   shillings: { kind: 'valuable', name: 'purse of silver shillings', plural: 'purses of silver shillings' },
