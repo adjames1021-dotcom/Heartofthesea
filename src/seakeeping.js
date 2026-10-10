@@ -12,6 +12,14 @@ import { halfAt, deckAt } from './boat.js';
 //
 // Sail heel stays in shared/boat.js (b.heel); `roll` here is what the sea does
 // on top of it.
+//
+// In a storm, and only then, the sea gets rough with her. Come over a crest
+// fast and she leaves the water and lands hard. A breaking crest on the beam
+// can knock her flat; a bad one rolls her right over. Like any keelboat she
+// lies keel-up a few seconds, then her keel brings her the rest of the way
+// round and up. `phase` says which: null, 'knock', 'over' or 'righting', and
+// `events` what happened this step ('launch', 'slam', 'breaker', 'knock',
+// 'over', 'up').
 
 const G = 9.81;
 const D = 0.36; // how far below the waterline each column floats at rest (stiffer: she follows the sea closely)
@@ -26,6 +34,12 @@ let TRIM = 0;
 const M = BOAT.mass;
 const I_PITCH = M * 3.2 * 3.2;
 const I_ROLL = 26000;
+// Her keel's righting moment once she's well over (newton metres at 90°).
+const KEEL = 70000;
+const smooth = (a, b, x) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 function columns() {
   if (COLS) return COLS;
   COLS = [];
@@ -58,6 +72,15 @@ export class Seakeeping {
     this.wet = 1; // how much of her is in the water (0: in the air)
     this.airT = 0; // how long she's been clear of it
     this.slam = 0; // how hard she last came down (m/s), for spray and a thump
+    this.phase = null;
+    this.events = [];
+    this.rising = false; // the sea under her lifting (for spotting a crest)
+    this.random = Math.random;
+  }
+
+  /** Her whole roll: the sail's heel and the sea's, together. */
+  total(b) {
+    return (b.heel ?? 0) + this.roll;
   }
 
   /** Columns' positions in the world (plan view; tilt is small for this). */
@@ -97,9 +120,11 @@ export class Seakeeping {
    * Move her on to world time t. b: the boat's state (where she is, which way
    * she's heading). Returns this.
    */
-  step(b, t, scale) {
+  step(b, t, scale, storm = 0) {
+    this.events.length = 0;
     if (this.t === undefined || t - this.t > 0.6 || t < this.t) {
       this.#settle(b, t, scale);
+      this.phase = null;
       this.t = t;
       return this;
     }
@@ -116,8 +141,15 @@ export class Seakeeping {
       let Mp = TRIM;
       let Mr = 0;
       const cp = Math.sin(this.pitch);
-      const cr = Math.sin(this.roll);
+      // (Upside down the columns can't tell port from starboard: float her level.)
+      const capsized = this.phase === 'over' || this.phase === 'righting';
+      const cr = capsized ? 0 : Math.sin(this.roll);
       wetSum = 0;
+      let vw = 0;
+      let port = 0;
+      let stbd = 0;
+      let fore = 0;
+      let aft = 0;
       for (let i = 0; i < COLS.length; i++) {
         const col = COLS[i];
         // This column's waterline in the world, and how much of it is under.
@@ -128,10 +160,29 @@ export class Seakeeping {
         wetSum += col.w * wetK;
         const vCol = this.vy + col.x * this.vp * Math.cos(this.pitch) - col.z * this.vr * Math.cos(this.roll);
         const vWater = (this.h[i] - prev[i]) / h;
+        vw += vWater * col.w;
         const f = col.w * (K * sub - C * wetK * (vCol - vWater));
         F += f;
         Mp += f * col.x;
         Mr -= f * col.z;
+      }
+      for (let i = 0; i < COLS.length; i++) {
+        const col = COLS[i];
+        if (col.z < 0) port += this.h[i];
+        else stbd += this.h[i];
+        if (col.x > 1) fore += this.h[i];
+        else if (col.x < -1) aft += this.h[i];
+      }
+      vw /= W;
+      // Her keel, once she's well over: brings her back (until she's past it).
+      const phi = this.total(b);
+      if (!capsized && Math.abs(phi) > 0.5) Mr -= KEEL * Math.sin(phi) * smooth(0.5, 1.1, Math.abs(phi));
+      // Over a crest (the sea under her stops rising and starts to fall)?
+      if (vw > 0.45) this.rising = true;
+      else if (this.rising && vw < 0) {
+        this.rising = false;
+        // (Only with her in the water: not again on the way up.)
+        if (storm > 0.3 && !this.phase && this.wet > 0.6) this.#crest(b, storm, (port - stbd) / (COLS.length / 2), (fore - aft) / (COLS.length / 2));
       }
       // Aground: the keel sits on the bottom.
       const keel = this.y - BOAT.contacts[0].draft;
@@ -139,15 +190,26 @@ export class Seakeeping {
       if (bed > keel) {
         F += (bed - keel) * 2.5e5 - this.vy * 4e4;
       }
+      // Clear of the water she drops back quickly: a hop off a crest, not a hang.
+      if (this.wet < 0.05) F -= 0.9 * M * G;
       this.vy += (F / M) * h;
+      if (this.wet < 0.05 && this.vy < -11) this.vy = -11;
       this.vp += (Mp / I_PITCH - this.vp * 2.0) * h;
-      this.vr += ((Mr - ROLL_DAMP * this.vr) / I_ROLL) * h;
       const before = this.vy;
       this.y += this.vy * h;
       this.pitch += this.vp * h;
-      this.roll += this.vr * h;
+      if (capsized) this.#capsized(b, h);
+      else {
+        this.vr += ((Mr - ROLL_DAMP * this.vr) / I_ROLL) * h;
+        this.roll += this.vr * h;
+        this.#knockdown(b);
+      }
       // How hard she lands, coming back from the air.
-      if (this.wet < 0.05 && wetSum / W > 0.05 && before < -1.5) this.slam = Math.max(this.slam, -before);
+      if (this.wet < 0.05 && wetSum / W > 0.05 && before < -1.5) {
+        this.slam = -before;
+        this.maxSlam = Math.max(this.maxSlam ?? 0, this.slam);
+        this.events.push('slam');
+      }
       this.wet = wetSum / W;
     }
     this.airT = this.wet < 0.02 ? this.airT + dw : 0;
@@ -155,5 +217,85 @@ export class Seakeeping {
     this.pitch = Math.max(-0.45, Math.min(0.45, this.pitch));
     this.t = t;
     return this;
+  }
+
+  /**
+   * At the top of a sea in a storm: come over it fast and she flies; take a
+   * breaking one on the beam and it can knock her down. lat: how much higher
+   * the sea is to port than to starboard; lon: at the bow than the stern.
+   */
+  #crest(b, storm, lat, lon) {
+    const sog = b.sog ?? 0;
+    const now = this.t ?? 0;
+    // Driving hard over the top of one, now and then she takes off.
+    if (sog > 4 && this.vy > 0.4 && now - (this.lastLaunch ?? -1e9) > 4) {
+      const chance = Math.min(1, (sog - 4) / 5) * storm * 0.35;
+      if (this.random() < chance) {
+        this.vy += Math.min(2.0, (0.5 + 0.4 * this.random()) * (1 + 0.15 * sog) * storm);
+        this.vp += 0.18 * storm;
+        this.lastLaunch = now;
+        this.events.push('launch');
+      }
+    }
+    // Beam-on (the slope's across her, not along her) is when one breaks over her.
+    const beamOn = Math.abs(lat) / (Math.abs(lat) + 0.5 * Math.abs(lon) + 0.05);
+    const side = Math.sign(lat) || 1; // a higher sea to port puts her starboard side down
+    const pressed = Math.sign(b.heel ?? 0) === side && Math.abs(b.heel ?? 0) > 0.35;
+    const chance = storm * storm * smooth(0.45, 0.85, beamOn) * 0.1 + (pressed ? 0.04 * storm : 0);
+    if (this.random() < chance) {
+      this.vr += side * (1.6 + 3.3 * this.random() ** 1.5 + (pressed ? 0.9 : 0)) * storm;
+      this.events.push('breaker');
+    }
+  }
+
+  /** Knocked flat, or rolled right over? (And back up from a knockdown.) */
+  #knockdown(b) {
+    const phi = this.total(b);
+    if (!this.phase && Math.abs(phi) > 1.15) {
+      this.phase = 'knock';
+      this.events.push('knock');
+    }
+    if (this.phase === 'knock') {
+      if (Math.abs(phi) > 2.1) {
+        this.phase = 'over';
+        this.side = Math.sign(phi);
+        this.hold = 2.2 + 1.8 * this.random();
+        this.events.push('over');
+      } else if (Math.abs(phi) < 0.6) {
+        this.phase = null;
+        this.events.push('up');
+      }
+    }
+  }
+
+  /** Keel-up a few seconds, wallowing; then round the rest of the way and up. */
+  #capsized(b, h) {
+    const heel = b.heel ?? 0;
+    if (this.phase === 'over') {
+      this.hold -= h;
+      this.wallow = (this.wallow ?? 0) + h;
+      const target = this.side * (Math.PI + 0.12 * Math.sin(this.wallow * 1.7)) - heel;
+      this.roll += (target - this.roll) * (1 - Math.exp(-h * 2.5));
+      this.vr = 0;
+      if (this.hold <= 0) {
+        this.phase = 'righting';
+        this.rightT = 0;
+        this.from = this.roll + heel;
+      }
+      return;
+    }
+    // Righting: on round, the same way she went over, a bit of a wobble at the end.
+    this.rightT += h / 2.6;
+    const p = Math.min(1, this.rightT);
+    const e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+    const end = this.side * 2 * Math.PI;
+    this.roll = this.from + (end - this.from) * e - heel;
+    if (p >= 1) {
+      this.roll -= this.side * 2 * Math.PI;
+      this.vr = -this.side * 0.6;
+      this.phase = null;
+      this.wallow = 0;
+      this.events.push('up');
+    }
   }
 }

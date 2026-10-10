@@ -351,7 +351,7 @@ function onBoat(p) {
 }
 
 function findInteraction() {
-  if (player.mode === 'station' || player.mode === 'dig' || player.flopT > 0 || player.clinging) return null;
+  if (player.mode === 'station' || player.mode === 'dig' || player.mode === 'hold' || player.flopT > 0 || player.clinging) return null;
   if (interior.inside) {
     // Something you're carrying about the cabin to put somewhere.
     if (decorating.holding) {
@@ -484,6 +484,51 @@ function bowSpray(dt, t, swell, storm) {
   }
 }
 
+/**
+ * What the sea did to her this frame (src/seakeeping.js): a hard landing off
+ * a crest, a knockdown, rolling right over, coming back up. On deck when she
+ * goes flat, you're thrown in; below, you hang on and go round with her.
+ * Nothing aboard is lost.
+ */
+function seaEvents(dt) {
+  const sea = boat.sea;
+  const b = boat.state;
+  for (const e of sea.events) {
+    if (e === 'slam') {
+      const bow = boat.toWorld(tmpV.set(3.2, 0.5, 0));
+      sprayDrift.x = env.wind.x * env.wind.speed * 0.5;
+      sprayDrift.z = env.wind.z * env.wind.speed * 0.5;
+      wildlife.splashes.spawn(bow.x, bow.y, bow.z, 10 + Math.round(sea.slam * 2), 1 + sea.slam * 0.12, sprayDrift);
+      audio.splash(Math.min(1, 0.3 + sea.slam / 12), 420, 0.9);
+    } else if (e === 'knock' || e === 'over') {
+      const aboard = player.platform === boat.body || player.mode === 'station' || player.mode === 'hold';
+      if (!aboard) continue;
+      if (player.sheltered) {
+        if (player.mode !== 'hold') player.holdOn(boat.body);
+        hud.say(e === 'over' ? "She's going over. Hold on." : 'Knocked flat. Hold on.', 3);
+      } else if (player.mode !== 'hold') {
+        // Into the sea on the low side.
+        const low = Math.sign(sea.total(b)) || 1; // + : starboard down
+        player.throwOff(-Math.sin(b.heading) * low * 4, Math.cos(b.heading) * low * 4, 2.5);
+        hud.say("Knocked flat. You're in the sea.", 4);
+      }
+    } else if (e === 'up') {
+      if (player.mode === 'hold') player.letGo();
+      if (sea.wasOver) hud.say("She's come up.", 3);
+    }
+  }
+  sea.wasOver = sea.phase === 'over' || sea.phase === 'righting' || (sea.wasOver && sea.phase);
+  // Knocked down or keel-up, her sails are in the water: she stops.
+  if (sea.phase) {
+    const k = Math.exp(-dt * 1.4);
+    b.u *= k;
+    b.v *= k;
+    b.r *= k;
+    b.heel *= Math.exp(-dt * 2);
+    b.heelRate = 0;
+  }
+}
+
 // A word before a storm, and when it's over.
 function stormNotices(t, storm) {
   if (dev.storm !== null) return;
@@ -593,8 +638,9 @@ function frame(now) {
     boat.step(STEP, env);
     acc -= STEP;
   }
-  boat.update(dt, t, swell);
+  boat.update(dt, t, swell, storm);
   boat.body.setMatrix(boat.matrix, boat.prevMatrix);
+  seaEvents(dt);
   ocean.uniforms.uHullInv.value.copy(boat.matrix).invert();
   bowSpray(dt, t, swell, storm);
   if (!started) {

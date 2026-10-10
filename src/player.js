@@ -110,7 +110,8 @@ export class Player {
       this.platformVel = null;
     }
 
-    if (this.mode === 'station') this.#station(input);
+    if (this.mode === 'hold') this.#holding();
+    else if (this.mode === 'station') this.#station(input);
     else if (this.mode === 'dig') this.#dig(dt);
     else if (this.mode === 'hang') this.#hang(dt, input);
     else if (this.mode === 'climbup') this.#climbUp(dt);
@@ -921,6 +922,46 @@ export class Player {
     this.boat = boat;
     this.mode = 'station';
     this.vel.set(0, 0, 0);
+  }
+
+  /**
+   * Hang on where you are (below decks while she's knocked down or rolled
+   * over): you go round with her, and let go once she's up.
+   */
+  holdOn(body) {
+    if (this.mode === 'station') this.leaveStation();
+    this.mode = 'hold';
+    this.holdBody = body;
+    this.holdLocal = this.pos.clone().applyMatrix4(body.inverse);
+    this.vel.set(0, 0, 0);
+  }
+
+  letGo() {
+    if (this.mode !== 'hold') return;
+    this.mode = 'air';
+    this.grounded = false;
+    this.platform = this.holdBody;
+    this.holdBody = null;
+  }
+
+  #holding() {
+    this.pos.copy(this.holdLocal).applyMatrix4(this.holdBody.matrix);
+    this.vel.set(0, 0, 0);
+    this.speed = 0;
+    this.animMode = 'idle';
+  }
+
+  /** Thrown off a deck that's gone over: away to the low side and up. */
+  throwOff(dx, dz, up = 3) {
+    if (this.mode === 'station') this.leaveStation();
+    if (this.mode === 'hold') this.letGo();
+    this.mode = 'air';
+    this.grounded = false;
+    this.platform = null;
+    this.vel.set(dx, up, dz);
+    this.fallStart = this.pos.y;
+    this.grabCooldown = 1.2;
+    this.emit('splash');
   }
 
   leaveStation() {

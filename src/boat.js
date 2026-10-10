@@ -1194,7 +1194,7 @@ export class Boat {
     this.main.mesh.material.color.set(big ? '#f4e9cf' : '#ffffff');
   }
 
-  update(dt, t, waveScale) {
+  update(dt, t, waveScale, storm = 0) {
     const b = this.state;
     const v = this.vis;
     // Follow the water on world time, so a slow frame can't leave the hull
@@ -1202,7 +1202,7 @@ export class Boat {
     // (Buoyancy along the whole hull: src/seakeeping.js.)
     const dw = this.time === undefined ? dt : Math.min(Math.max(t - this.time, 0), 1);
     this.time = t;
-    const sea = this.sea.step(b, t, waveScale);
+    const sea = this.sea.step(b, t, waveScale, storm);
     const k = 1 - Math.exp(-dw * 4);
     v.heave = sea.y;
     v.pitch = sea.pitch;

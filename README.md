@@ -43,6 +43,17 @@ surfs down the faces of the seas, heels hard, gets slewed about by gusts
 and seas on the quarter, and throws spray over the bow. (Fair-weather
 sailing is around 8–10 knots.) `?dev&storm=1` forces a storm for testing.
 
+She rides the sea on buoyancy worked out along the whole hull, so she sits
+in the water, rises to each swell and drops into the trough. In a storm the
+sea gets rough with her. Drive hard over the top of a big one and she leaves
+the water and lands with a crash and a burst of spray. Lie beam-on to the
+breaking seas (worse with too much sail up) and one can knock her flat, and
+now and then a bad one rolls her right over. She lies keel-up a few seconds,
+then her keel brings her round and up again; she always comes up. On deck
+when she goes flat, you're thrown into the sea and have to swim back to the
+swim platform; below, you hang on and go round with her. Nothing aboard is
+ever lost. Calm days stay calm.
+
 Ashore there are crabs that scuttle off sideways and burrow, sandpipers
 running at the water's edge, butterflies over the grass, goats on the hills
 that trot off if you walk up to them, lizards on the rocks, and fireflies in
