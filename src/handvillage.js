@@ -4,6 +4,7 @@ import { VILLAGERS } from '../shared/villages.js';
 import { mulberry32 } from '../shared/noise.js';
 import { paint, mergeParts, segment, rock } from './props.js';
 import { Kit, Instances, SHAPES, PALETTES, kitMat, signBoard, cat, gull, laundry } from './kit.js';
+import { stall, handcart, derrick, bollards, ropewalk, garden, overgrowth, shed, timber, logs, sawhorse, steambox, capstan, bench } from './handpieces.js';
 import { groundColorAt } from './terrain.js';
 
 // Villages built by hand (src/kit.js): every hut its own, nothing square,
@@ -45,6 +46,77 @@ const DRESS = {
     walls: { oda: 'boards', tam: 'planks', gwen: 'boards' },
     patches: { oda: 'sail', tam: 'boards', gwen: 'sail' },
   },
+  // The Landing: every house its own faded colour, Hester's stall under an
+  // old sail out front of the store, goods about, a derrick on the quay.
+  landing: {
+    paint: { store: ['#6a7a82', '#64737b'], jory: ['#86604f', '#7e5a4a'], abel: ['#9a8a5a', '#918254'], martha: ['#74846e', '#6d7c67'] },
+    walls: { store: 'planks', jory: 'boards', abel: 'planks', martha: 'boards' },
+    patches: { store: 'boards', jory: 'sail', abel: 'sail', martha: 'boards' },
+    chimneys: ['store', 'abel', 'martha'],
+    stall: { at: [-55.4, -15.0], face: Math.PI, len: 4.2, depth: 3.4, counter: 0.1 },
+    crates: [[-56.6, -11.5, 0.2], [-57.4, -10.9, 0.7], [-56.8, -11.3, 0.4, 1], [-57.7, -11.9, -0.3], [-69.4, 2.95, 0.1, 0, 1.6], [-70.1, 3.0, 0.5, 0, 1.6], [-69.7, 2.95, 0.3, 1, 1.6]],
+    barrels: [[-58.1, -12.6], [-58.6, -11.8], [-72.2, 0.98, 1.6], [-72.8, 1.0, 1.6]],
+    sacks: [[-57.9, -13.6], [-58.4, -14.1], [-57.7, -14.5], [-58.6, -13.0]],
+    handcart: [-59.6, -7.6, 0.5],
+    derrick: { at: [-67.6, 3.05], y: 1.6, face: Math.PI / 2 },
+    bollards: [[-70.6, 0.85], [-75.6, 3.15], [-80.6, 0.85], [-87.2, 3.15]],
+    bollardY: 1.6,
+    ropewalk: true,
+    signs: [{ kind: 'scales', at: [-57.9, -12.4], face: Math.PI + 0.4 }, { kind: 'rope', at: [-51.8, 38.4], face: Math.PI + 0.3 }],
+    laundry: { from: [-47.4, 22.0], fromY: 5.25, to: [-44.6, 26.2], pole: true, colors: ['#8a5a48', '#c2b392', '#5f7a8a', '#a08a4a', '#7d8a5c'] },
+    cat: { hut: 'store', along: 0.65 },
+    gulls: [['dock', 0.95], ['dock', 0.55], ['ridge', 'jory', 0.4]],
+    paths: [
+      [[-55, 3], [-54.5, -6], [-53.9, -12]],
+      [[-54.5, -6], [-55.9, -24]],
+      [[-55, 3], [-52.5, 12], [-51.9, 20]],
+      [[-52.5, 12], [-50.5, 27], [-49.9, 34], [-50, 37]],
+      [[-55, 3], [-63.6, 2]],
+      [[-55, 3], [-30, 0], [-6, -4]],
+      [[-54.5, -6], [-56.2, -12.4]],
+    ],
+  },
+  // Kettle Strand: most of it empty and falling in, the island growing back
+  // over it. Ben's lamp in his window all night, for his son.
+  strand: {
+    paint: { mags: ['#7a6458', '#715d52'], ben: ['#6b6f75', '#646870'] },
+    walls: { mags: 'planks', ben: 'boards', ruin1: 'boards', ruin2: 'planks', ruin3: 'boards' },
+    patches: { mags: 'sail', ben: 'boards' },
+    frontWindow: { ben: 'always' },
+    chimneys: ['mags', 'ben'],
+    sparseRacks: true,
+    garden: true,
+    overgrowth: [[-92, -2, 3.4, 16], [-91, 30, 3.4, 16], [-93, -32, 3.4, 16], [-96, -26, 4, 8], [-86, 6, 4, 10], [-104, 26, 3, 6], [-95, 40, 4, 8], [-86, -10, 3, 7]],
+    sunk: [-105.5, 21.5, 0.9],
+    laundry: { from: [-91.5, -15.9], fromY: 4.45, to: [-88.6, -13.6], pole: true, colors: ['#7a6458', '#9a9484', '#5a6a6e'] },
+    gulls: [['ridge', 'ruin1', 0.3, 'crow'], ['ridge', 'ruin2', 0.62, 'crow'], ['dock', 0.75]],
+    signs: [{ kind: 'fish', hut: 'ruin1', askew: true }],
+    paths: [
+      [[-98, 0], [-95.9, -18]],
+      [[-98, 0], [-95.9, 16]],
+      [[-98, 0], [-98.5, 6]],
+      [[-95.9, 16], [-91.2, 21]],
+    ],
+  },
+  // Pascoe's yard: the shed, his timber and logs, the steam box going, the
+  // capstan at the head of the slip, a boat upside down being tarred.
+  yard: {
+    shed: true,
+    timber: true,
+    logs: true,
+    horse: true,
+    steambox: [-50.5, 223.6, 0],
+    capstan: { at: [-47.6, 216], toward: [-38.5, 216] },
+    tarring: [-36.5, 206.0, 0.15],
+    signs: [{ kind: 'boat', at: [-45.6, 208.0], face: 0.3 }],
+    gulls: [['at', -41.5, 228.5, 1.2], ['at', -47.6, 216, 0.84]],
+    paths: [
+      [[-49.5, 211.5], [-42, 213], [-36.3, 213.3]],
+      [[-42, 213], [-42, 208.6]],
+      [[-42, 213], [-46, 219.5], [-48.6, 221.4]],
+      [[-42, 213], [-40.5, 220.8], [-31.5, 218.7]],
+    ],
+  },
 };
 
 /** World position of an island-local point at height y. */
@@ -54,7 +126,7 @@ function wp(b, lx, lz, y = null) {
 }
 
 /** A ground-hugging strip along a path: sand worn darker and flatter where people walk. */
-function pathStrip(b, pts, color, rand) {
+function pathStrip(b, pts, color, rand, dark = 0.74) {
   const pos = [];
   const samples = [];
   for (let i = 0; i + 1 < pts.length; i++) {
@@ -64,7 +136,12 @@ function pathStrip(b, pts, color, rand) {
     for (let k = 0; k < n; k++) samples.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]);
   }
   samples.push(pts[pts.length - 1]);
-  const world = samples.map(([x, z]) => b.w(x, z));
+  // Nobody walks a straight line: the path wanders a little either side.
+  const world = samples.map(([x, z], i) => {
+    const w = b.w(x, z);
+    if (i === 0 || i === samples.length - 1) return w;
+    return { x: w.x + Math.sin(i * 1.7 + x) * 0.25, z: w.z + Math.cos(i * 1.3 + z) * 0.25 };
+  });
   for (let i = 0; i + 1 < world.length; i++) {
     const a = world[i];
     const c = world[i + 1];
@@ -73,8 +150,8 @@ function pathStrip(b, pts, color, rand) {
     const l = Math.hypot(dx, dz) || 1;
     const nx = -dz / l;
     const nz = dx / l;
-    const wa = 0.45 + rand() * 0.25;
-    const wc = 0.45 + rand() * 0.25;
+    const wa = 0.35 + rand() * 0.35;
+    const wc = 0.35 + rand() * 0.35;
     const y = (x, z) => groundAt(x, z) + 0.02;
     const A = [a.x + nx * wa, 0, a.z + nz * wa];
     const B = [a.x - nx * wa, 0, a.z - nz * wa];
@@ -91,7 +168,7 @@ function pathStrip(b, pts, color, rand) {
   const tint = new THREE.Color(color);
   for (let i = 0; i < pos.length; i += 3) {
     groundColorAt(pos[i], pos[i + 2], c);
-    c.lerp(tint, 0.3).multiplyScalar(0.74);
+    c.lerp(tint, 0.3).multiplyScalar(dark);
     col.set([c.r, c.g, c.b], i);
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -119,10 +196,11 @@ function hut(b, kit, h, opts, inst, extras) {
 
   // Floor: boards across, ends ragged, on three joists.
   for (const v of [-W / 2 + 0.2, 0, W / 2 - 0.2]) kit.board(at(-D / 2 - 0.1, v, y0 - 0.1), at(D / 2 + 0.1, v, y0 - 0.1), 0.14, 0.12, UP, kit.col(pal.dark));
+  const ruin = !!h.ruin;
   for (let u = -D / 2 - 0.12; u < D / 2 + 0.1; ) {
     const w = kit.r(0.17, 0.29);
     const um = u + w / 2;
-    kit.board(at(um, -W / 2 - kit.r(0.05, 0.2), y0 - 0.03), at(um, W / 2 + kit.r(0.05, 0.2), y0 - 0.03 + kit.r(-0.01, 0.01)), w - 0.015, 0.055, UP, kit.col(pal.wood));
+    if (!(ruin && kit.rand() < 0.25)) kit.board(at(um, -W / 2 - kit.r(0.05, 0.2), y0 - 0.03), at(um, W / 2 + kit.r(0.05, 0.2), y0 - 0.03 + kit.r(-0.01, 0.01)), w - 0.015, 0.055, UP, kit.col(pal.wood));
     u += w;
   }
   // Stilts with braces, or a footing of stones.
@@ -150,21 +228,47 @@ function hut(b, kit, h, opts, inst, extras) {
   const across = opts.walls === 'planks';
   const lean = () => kit.r(-0.035, 0.035);
   const wallAt = (o, along, out, len, holes) => {
-    const up = UP.clone().addScaledVector(out, lean()).addScaledVector(along, lean() * 0.5).normalize();
-    kit.wall(o, along, up, out, len, H, { across, holes, base: across ? 0.24 : 0.2, salvage: across ? 0.32 : 0.12 });
+    const up = UP.clone().addScaledVector(out, lean() * (ruin ? 2.2 : 1)).addScaledVector(along, lean() * 0.5).normalize();
+    kit.wall(o, along, up, out, len, H, {
+      across,
+      holes,
+      base: across ? 0.24 : 0.2,
+      // A painted house: its colour, with bare boards where it's flaked or been replaced.
+      salvage: opts.paint ? 0.2 : across ? 0.32 : 0.12,
+      colors: opts.paint ?? null,
+      odd: opts.paint ? pal.wood : null,
+      missing: ruin ? 0.24 : 0,
+    });
+  };
+  // A window, or (in a ruin) the hole boarded across.
+  const win = (c, along, out, w, hh, always = false) => {
+    if (ruin) {
+      for (const k of [-1, 1]) kit.board(c.clone().addScaledVector(along, -w / 2 - 0.05).add(V(0, k * hh * 0.35, 0)).addScaledVector(out, 0.04), c.clone().addScaledVector(along, w / 2 + 0.05).add(V(0, -k * hh * 0.35, 0)).addScaledVector(out, 0.04), 0.1, 0.03, out, kit.col(pal.wood));
+      return;
+    }
+    kit.window(c, along, out, w, hh, h.id);
+    if (always) kit.windows[kit.windows.length - 1].always = true;
   };
   // Back wall (u = −D/2), facing −U, with a window.
   wallAt(at(-D / 2, W / 2, y0), Vv.clone().negate(), U.clone().negate(), W, [{ a0: 1.4, a1: 1.95, b0: 0.95, b1: 1.42 }]);
-  kit.window(at(-D / 2 - 0.02, W / 2 - 1.675, y0 + 1.185), Vv.clone().negate(), U.clone().negate(), 0.5, 0.42, h.id);
+  win(at(-D / 2 - 0.02, W / 2 - 1.675, y0 + 1.185), Vv.clone().negate(), U.clone().negate(), 0.5, 0.42);
   // Sides.
   wallAt(at(-D / 2, -W / 2, y0), U, Vv.clone().negate(), D, []);
   wallAt(at(D / 2, W / 2, y0), U.clone().negate(), Vv, D, [{ a0: 1.0, a1: 1.5, b0: 1.0, b1: 1.4 }]);
-  kit.window(at(D / 2 - 1.25, W / 2 + 0.02, y0 + 1.2), U.clone().negate(), Vv, 0.46, 0.38, h.id);
-  // Front, with the doorway in the middle.
-  wallAt(at(D / 2, -W / 2, y0), Vv, U, W, [{ a0: W / 2 - 0.47, a1: W / 2 + 0.47, b0: -0.1, b1: 1.78 }]);
+  win(at(D / 2 - 1.25, W / 2 + 0.02, y0 + 1.2), U.clone().negate(), Vv, 0.46, 0.38);
+  // Front, with the doorway in the middle (and a window beside it, if there's one to look out of).
+  const frontHoles = [{ a0: W / 2 - 0.47, a1: W / 2 + 0.47, b0: -0.1, b1: 1.78 }];
+  if (opts.frontWindow) frontHoles.push({ a0: 0.35, a1: 0.95, b0: 1.0, b1: 1.45 });
+  wallAt(at(D / 2, -W / 2, y0), Vv, U, W, frontHoles);
+  if (opts.frontWindow) win(at(D / 2 + 0.02, -W / 2 + 0.65, y0 + 1.225), Vv, U, 0.55, 0.42, opts.frontWindow === 'always');
   kit.board(at(D / 2 + 0.03, -0.55, y0 + 1.82), at(D / 2 + 0.03, 0.55, y0 + 1.84), 0.12, 0.05, U, kit.col(pal.dark)); // lintel
+  if (ruin) {
+    // The door's come off and lies in the weeds below.
+    const d0 = at(D / 2 + 2.9, -1.3, null);
+    for (let k = 0; k < 4; k++) kit.board(d0.clone().addScaledVector(Vv, -0.33 + k * 0.22).add(V(0, 0.06, 0)), d0.clone().addScaledVector(Vv, -0.3 + k * 0.22).addScaledVector(U, 1.7).add(V(0, 0.1, 0)), 0.2, 0.04, UP, kit.col(pal.tar));
+  }
   // The door, hanging open on its hinges.
-  {
+  if (!ruin) {
     const hinge = at(D / 2, -0.46, y0 + 0.02);
     const open = kit.r(1.1, 1.7);
     const dir = U.clone().multiplyScalar(Math.sin(open)).addScaledVector(Vv, Math.cos(open)).normalize();
@@ -178,16 +282,29 @@ function hut(b, kit, h, opts, inst, extras) {
 
   // The roof: ridge along u, slopes out to ±v, sagging, patched.
   const roofC = at(0, 0, y0);
-  kit.roof(roofC, U, Vv, D + 0.5, W / 2, H + 0.85, H - 0.02, { sag: kit.r(0.06, 0.16), overhang: kit.r(0.35, 0.5), patch: opts.patch, material: 'tar' });
+  kit.roof(roofC, U, Vv, D + 0.5, W / 2, H + 0.85, H - 0.02, { sag: kit.r(0.06, 0.16) + (ruin ? 0.22 : 0), overhang: kit.r(0.35, 0.5), patch: ruin ? null : opts.patch, material: opts.roof ?? 'tar', keep: ruin ? [kit.r(0.05, 0.25), kit.r(0.4, 0.7)] : [1, 1] });
   // Gables, boarded.
   for (const side of [-1, 1]) {
     const u = side * (D / 2);
     const n = U.clone().multiplyScalar(side);
     for (let v = -W / 2 + 0.05; v < W / 2 - 0.05; v += 0.24) {
       const top = H + 0.85 * (1 - Math.abs(v + 0.12) / (W / 2)) - 0.04;
-      if (top <= H) continue;
+      if (top <= H || (ruin && kit.rand() < 0.35)) continue;
       kit.board(at(u, v + 0.12, y0 + H - 0.02), at(u, v + 0.12, y0 + top), 0.22, 0.04, n, kit.col(pal.wood));
     }
+  }
+  if (ruin) {
+    // Roof boards fallen in across the floor, and something growing through it.
+    for (let k = 0; k < 5; k++) {
+      const a = at(kit.r(-1.0, 0.8), kit.r(-1.4, 0.2), y0 + 0.05);
+      kit.board(a, a.clone().addScaledVector(Vv, kit.r(0.9, 1.6)).addScaledVector(U, kit.r(-0.4, 0.4)).add(V(0, kit.r(0.1, 0.9), 0)), 0.22, 0.04, UP, kit.col(pal.tar));
+    }
+    const sap = at(0.3, 0.8, y0 - 0.1);
+    kit.post(sap, sap.clone().add(V(0.1, 2.6, -0.05)), 0.04, kit.col(['#5a4c3a']), 4);
+    const crown = new THREE.IcosahedronGeometry(0.55, 0);
+    crown.scale(1, 0.8, 1);
+    crown.translate(sap.x + 0.1, sap.y + 2.75, sap.z - 0.05);
+    kit.parts.push(paint(crown, kit.col(['#4f6a34', '#5a7036']).getStyle()));
   }
   if (opts.chimney) kit.stovepipe(at(-0.55, -0.7, y0 + H + 0.25), kit.r(0.9, 1.2));
 
@@ -201,24 +318,28 @@ function hut(b, kit, h, opts, inst, extras) {
   const steps = Math.max(3, Math.round(rise / 0.28));
   const gone = Math.floor(kit.r(1, steps));
   for (let i = 1; i < steps; i++) {
-    if (i === gone && steps > 4) continue;
+    if ((i === gone && steps > 4) || (ruin && kit.rand() < 0.35)) continue;
     const t = i / steps;
     const u = D / 2 + t * run;
     const y = y0 - t * rise + 0.02;
     kit.board(at(u, -0.55 + kit.r(-0.04, 0.02), y), at(u, 0.55 + kit.r(-0.02, 0.05), y + kit.r(-0.02, 0.02)), 0.24, 0.04, UP, kit.col(pal.wood));
   }
   const railV = kit.rand() < 0.5 ? 0.6 : -0.6;
-  kit.post(at(D / 2 + run - 0.05, railV, gy - 0.2), at(D / 2 + run - 0.05, railV, gy + 0.95), 0.05, kit.col(pal.dark));
-  kit.board(at(D / 2 + 0.05, railV, y0 + 0.9), at(D / 2 + run - 0.05, railV, gy + 0.9), 0.06, 0.06, Vv, kit.col(pal.wood));
+  if (!ruin) {
+    kit.post(at(D / 2 + run - 0.05, railV, gy - 0.2), at(D / 2 + run - 0.05, railV, gy + 0.95), 0.05, kit.col(pal.dark));
+    kit.board(at(D / 2 + 0.05, railV, y0 + 0.9), at(D / 2 + run - 0.05, railV, gy + 0.9), 0.06, 0.06, Vv, kit.col(pal.wood));
+  }
 
   // Inside: the bunk with its blanket, and a shelf.
   const bunk = (u, v, blanket) => {
     kit.block(at(u, v, y0 + 0.15), 1.0, 0.3, 2.0, kit.col(pal.dark), b.yaw - f);
     kit.block(at(u, v + 0.1, y0 + 0.33), 0.95, 0.06, 1.7, blanket, b.yaw - f);
   };
-  bunk(-0.75, 0.4, kit.col(['#7f5a4c', '#5d6b7a', '#7a6d4f']));
-  if (h.beds === 2) bunk(0.4, 0.4, kit.col(['#5a6a8a', '#6f5f4a']));
-  kit.board(at(-D / 2 + 0.12, -1.2, y0 + 1.3), at(-D / 2 + 0.12, -0.4, y0 + 1.31), 0.22, 0.03, UP, kit.col(pal.wood));
+  if (!ruin) {
+    bunk(-0.75, 0.4, kit.col(['#7f5a4c', '#5d6b7a', '#7a6d4f']));
+    if (h.beds === 2) bunk(0.4, 0.4, kit.col(['#5a6a8a', '#6f5f4a']));
+    kit.board(at(-D / 2 + 0.12, -1.2, y0 + 1.3), at(-D / 2 + 0.12, -0.4, y0 + 1.31), 0.22, 0.03, UP, kit.col(pal.wood));
+  }
 
   // Colliders: exactly the plain hut's.
   const [fx, fz] = loc(0, 0);
@@ -243,7 +364,7 @@ function hut(b, kit, h, opts, inst, extras) {
   roofFar.rotateZ(Math.PI / 2);
   roofFar.rotateY(b.yaw - f);
   roofFar.translate(roofC.x, y0 + H + 0.3, roofC.z);
-  extras.far.push(paint(roofFar, '#3d3731'));
+  extras.far.push(paint(roofFar, ruin ? '#4a4a44' : '#3d3731'));
   if (h.stilts) for (const [u, v] of legs.slice(0, 4)) extras.far.push(paint(new THREE.BoxGeometry(0.16, y0 + 0.6, 0.16).translate(at(u, v, 0).x, y0 / 2 - 0.3, at(u, v, 0).z), '#4e4740'));
   void inst;
 }
@@ -299,7 +420,7 @@ function dock(b, kit, d, inst, extras) {
 }
 
 /** A drying rack: poles that lean, bars that sag, rows of split fish. */
-function rack(b, kit, lx, lz, face, inst, extras) {
+function rack(b, kit, lx, lz, face, inst, extras, empty = 0.12) {
   const pal = kit.pal;
   const at = (u, v, y) => {
     const x = lx + Math.cos(face) * u - Math.sin(face) * v;
@@ -314,7 +435,7 @@ function rack(b, kit, lx, lz, face, inst, extras) {
   for (const y of [1.18, 1.78]) kit.board(at(0, -1.5, g0 + y), at(0, 1.5, g0 + y + kit.r(-0.04, 0.04)), 0.05, 0.05, UP, kit.col(pal.wood), { sag: 0.05 });
   for (const y of [1.18, 1.78]) {
     for (let i = 0; i < 8; i++) {
-      if (kit.rand() < 0.12) continue;
+      if (kit.rand() < empty) continue;
       const v = -1.2 + i * 0.34 + kit.r(-0.03, 0.03);
       const p = at(0, v, g0 + y - 0.02 - 0.05 * 4 * ((v + 1.5) / 3) * (1 - (v + 1.5) / 3));
       inst.put('splitFish', SHAPES.splitFish, p, b.yaw - face + Math.PI / 2 + kit.r(-0.3, 0.3), kit.col(['#c9b48e', '#b59f78', '#c4ab86', '#a99272'], 0.04), 1, kit.r(-0.08, 0.08));
@@ -326,12 +447,12 @@ function rack(b, kit, lx, lz, face, inst, extras) {
 }
 
 /** A rowing boat drawn up on the sand: planked, faded, oars in it. */
-function rowboat(b, kit, lx, lz, face, upturned = false) {
+function rowboat(b, kit, lx, lz, face, upturned = false, sunk = false) {
   const pal = kit.pal;
   const p = b.w(lx, lz);
   const g = groundAt(p.x, p.z);
   const parts = [];
-  const paintC = kit.col(['#4f6a76', '#7a4a3e', '#6b7a5e', '#8a7f68'], 0.05);
+  const paintC = sunk ? kit.col(pal.wood, 0.05) : kit.col(['#4f6a76', '#7a4a3e', '#6b7a5e', '#8a7f68'], 0.05);
   for (let k = 0; k < 4; k++) {
     const t0 = k / 4;
     const t1 = (k + 1) / 4 - 0.02;
@@ -348,7 +469,7 @@ function rowboat(b, kit, lx, lz, face, upturned = false) {
     th.translate(0, -0.1, z);
     parts.push(paint(th, kit.col(pal.wood)));
   }
-  if (!upturned) {
+  if (!upturned && !sunk) {
     for (const s of [-1, 1]) {
       const oar = segment(V(s * 0.25, -0.05, -1.1), V(s * 0.1, 0.0, 1.0), 0.025, 0.025, 4);
       parts.push(paint(oar, kit.col(pal.wood)));
@@ -356,10 +477,16 @@ function rowboat(b, kit, lx, lz, face, upturned = false) {
   }
   const geo = mergeParts(parts);
   if (upturned) geo.rotateZ(Math.PI);
-  geo.rotateZ(upturned ? 0 : 0.1);
+  geo.rotateZ(upturned ? 0 : sunk ? 0.45 : 0.1);
+  geo.rotateX(sunk ? 0.15 : 0);
   geo.rotateY(b.yaw - face);
-  geo.translate(p.x, upturned ? g + 0.62 : g + 0.32, p.z);
+  geo.translate(p.x, upturned ? g + 0.62 : sunk ? g + 0.02 : g + 0.32, p.z);
   kit.parts.push(geo);
+  if (sunk) {
+    // Half full of sand, a plank stove in, and she's going nowhere.
+    b.solid(lx, g + 0.2, lz, 3.4, 0.4, 1.4, face + Math.PI / 2);
+    return;
+  }
   if (upturned) {
     // Up on trestles, half tarred, a pot of tar and a brush.
     for (const z of [-0.9, 0.9]) {
@@ -447,10 +574,12 @@ export function handVillage(b, id, v, netMesh) {
   };
   const life = [];
 
-  for (const h of v.huts) hut(b, kit(), h, { walls: dress.walls?.[h.id], patch: dress.patches?.[h.id] ?? 'sail', chimney: dress.chimneys?.includes(h.id) }, inst, extras);
+  for (const h of v.huts) {
+    hut(b, kit(), h, { walls: dress.walls?.[h.id], patch: dress.patches?.[h.id] ?? 'sail', chimney: dress.chimneys?.includes(h.id), paint: dress.paint?.[h.id], frontWindow: dress.frontWindow?.[h.id] }, inst, extras);
+  }
   if (v.dock) dock(b, kit(), v.dock, inst, extras);
   const k = kit();
-  for (const [x, z, f] of v.racks ?? []) rack(b, k, x, z, f, inst, extras);
+  for (const [x, z, f] of v.racks ?? []) rack(b, k, x, z, f, inst, extras, dress.sparseRacks ? 0.7 : 0.12);
   for (const [x, z, f] of v.boats ?? []) rowboat(b, k, x, z, f);
   if (dress.tarring) rowboat(b, k, ...dress.tarring, true);
   if (dress.gutting) guttingTable(b, k, ...dress.gutting, inst, extras.flat);
@@ -473,17 +602,48 @@ export function handVillage(b, id, v, netMesh) {
     const p = wp(b, x, z);
     inst.put('pot', SHAPES.lobsterPot, V(p.x, p.y + (up ? 0.33 : 0.02), p.z), k.r(0, 6), k.col(['#9a8a6a', '#8a7a5c', '#a49274']), 1, up ? k.r(-0.2, 0.2) : 0);
   }
-  for (const [x, z, f, up] of dress.crates ?? []) {
-    const p = wp(b, x, z);
+  for (const [x, z, f, up, y] of dress.crates ?? []) {
+    const p = wp(b, x, z, y ?? null);
     inst.put('crate', SHAPES.crate, V(p.x, p.y + 0.25 + (up ? 0.5 : 0), p.z), b.yaw - f + k.r(-0.15, 0.15), k.col(['#8a7a62', '#7a6c58', '#94846a']), 1, 0, k.r(-0.04, 0.04));
     if (!up) b.solid(x, p.y + 0.25, z, 0.6, 0.5, 0.5, f);
   }
-  for (const [x, z] of dress.barrels ?? []) {
-    const p = wp(b, x, z);
+  for (const [x, z, y] of dress.barrels ?? []) {
+    const p = wp(b, x, z, y ?? null);
     inst.put('barrel', SHAPES.barrel, V(p.x, p.y + 0.31, p.z), k.r(0, 6), k.col(['#7a6450', '#6c5846']));
+    b.world.addStatic({ type: 'cyl', x: p.x, z: p.z, r: 0.28, y0: p.y - 0.2, y1: p.y + 0.62, noClimb: true });
+  }
+  for (const [x, z] of dress.sacks ?? []) {
+    const p = wp(b, x, z);
+    inst.put('sack', SHAPES.sack, p, k.r(0, 6), k.col(['#a8956c', '#9c8a60', '#b09c72'], 0.05), k.r(0.85, 1.1), k.r(-0.12, 0.12));
+  }
+  // The rest of what the place does (src/handpieces.js).
+  const bk = kit();
+  extras.goods = dress.stall ? stall(b, bk, dress.stall, inst) : null;
+  if (dress.handcart) handcart(b, bk, ...dress.handcart);
+  if (dress.derrick) derrick(b, bk, dress.derrick);
+  if (dress.bollards) bollards(b, bk, dress.bollards, dress.bollardY);
+  if (dress.ropewalk && v.ropewalk) ropewalk(b, bk, v.ropewalk, inst);
+  for (const [x, z] of v.rope ?? []) inst.put('coil', SHAPES.coil, wp(b, x, z), bk.r(0, 6), bk.col([pal.rope, '#9a8660']));
+  if (dress.garden && v.garden) garden(b, bk, v.garden, inst);
+  for (const [x, z, r, nn] of dress.overgrowth ?? []) overgrowth(b, bk, x, z, r, inst, nn);
+  if (dress.shed && v.shed) {
+    const sh = shed(b, bk, v.shed, inst);
+    const c = wp(b, ...v.shed.at, v.shed.floor);
+    extras.far.push(paint(new THREE.BoxGeometry(sh.D, sh.H, sh.W).rotateY(b.yaw).translate(c.x, c.y + sh.H / 2, c.z), '#5e5446'));
+    extras.far.push(paint(new THREE.BoxGeometry(sh.D + 0.6, 0.5, sh.W + 0.6).rotateY(b.yaw).translate(c.x, c.y + sh.H + 0.4, c.z), '#35302b'));
+  }
+  for (const [x, z, f] of dress.timber ? v.timber ?? [] : []) timber(b, bk, x, z, f);
+  for (const [x, z, f] of dress.logs ? v.logs ?? [] : []) logs(b, bk, x, z, f);
+  if (dress.horse && v.horse) sawhorse(b, bk, ...v.horse);
+  if (dress.steambox) steambox(b, bk, ...dress.steambox);
+  if (dress.capstan) capstan(b, bk, ...dress.capstan.at, dress.capstan.toward);
+  if (dress.sunk) rowboat(b, bk, ...dress.sunk, false, true);
+  // Benches where people sit about (not round the fire).
+  for (const spots of [v.spots ?? {}, ...Object.values(VILLAGERS).filter((d) => d.village === id).map((d) => d.spots ?? {})]) {
+    for (const sp of Object.values(spots)) if (sp.bench) bench(b, bk, sp);
   }
   // Worn paths.
-  for (const pts of dress.paths ?? []) extras.flat.push(pathStrip(b, pts, pal.path, k.rand));
+  for (const pts of dress.paths ?? []) extras.flat.push(pathStrip(b, pts, pal.path, k.rand, pal.pathDark ?? 0.74));
   // A broken chair nobody's fixed: three legs, leaning on the wall.
   if (dress.chair) {
     const [x, z, yaw] = dress.chair;
@@ -531,7 +691,9 @@ export function handVillage(b, id, v, netMesh) {
       const p = hh.at(hh.D / 2 + 0.06, 0.95, hh.y0 + 1.65);
       sign.position.copy(p);
       sign.lookAt(p.clone().add(hh.U));
-      sign.rotateZ(0.06);
+      // An old sign hanging from one nail.
+      sign.rotateZ(s.askew ? 0.55 : 0.06);
+      if (s.askew) sign.position.y -= 0.12;
       sign.scale.setScalar(0.7);
     } else {
       const p = wp(b, ...s.at);
@@ -564,9 +726,10 @@ export function handVillage(b, id, v, netMesh) {
   }
   // Gulls on whatever's high.
   for (const gdef of dress.gulls ?? []) {
-    const gl = gull();
+    const gl = gull(gdef[0] !== 'at' && gdef[3] === 'crow');
     let p = null;
-    if (gdef[0] === 'dock' && extras.dock) {
+    if (gdef[0] === 'at') p = wp(b, gdef[1], gdef[2]).add(V(0, gdef[3], 0));
+    else if (gdef[0] === 'dock' && extras.dock) {
       const tall = extras.dock.piles.filter((q) => q.u > extras.dock.len * gdef[1] - 3).sort((x2, y2) => y2.p.y - x2.p.y)[0];
       p = tall?.p.clone();
     } else if (gdef[0] === 'ridge' && H(gdef[1])) p = H(gdef[1]).ridge(gdef[2]);
@@ -606,7 +769,7 @@ export function handVillage(b, id, v, netMesh) {
     if (sleep) bed[vid] = sleep[0];
   }
   for (const w of windows) w.bed = bed[w.owner] ?? 22;
-  return { detail, far, windows, chimneys, life, hub: wp(b, ...v.hub) };
+  return { detail, far, windows, chimneys, life, hub: wp(b, ...v.hub), goods: extras.goods };
 }
 
 // Make sure the seeded random is used for anything left over.

@@ -11,8 +11,10 @@ import { handVillage } from './handvillage.js';
 import { NavGrid } from './navgrid.js';
 import { WindowLights, Smoke } from './kit.js';
 
-// Villages rebuilt by hand so far (src/handvillage.js); the rest are still plain.
-const HAND = new Set(['cove']);
+// Villages built by hand (src/handvillage.js). The plain builder below still
+// does the slipway, Mags's boat and the fires, and everything's colliders
+// stay as they were.
+const HAND = new Set(['cove', 'landing', 'strand', 'yard']);
 
 // The villages: huts, docks, drying racks, nets and fires, and the people who
 // live there going about their day by the shared clock (shared/villages.js
@@ -983,20 +985,22 @@ export class Villages {
       for (const c of hv.chimneys) this.chimneys.push({ pos: c, village: id });
       this.hand.push({ id, ...hv });
     }
-    for (const h of HAND.has(id) ? [] : v.huts) b.hut(h);
-    if (v.dock && !HAND.has(id)) b.dock(v.dock);
-    for (const [x, z, f] of HAND.has(id) ? [] : v.racks ?? []) b.rack(x, z, f);
-    for (const [x, z, f] of HAND.has(id) ? [] : v.boats ?? []) b.boat(x, z, f, rand() < 0.5 ? '#3c5a78' : '#8a3a2e');
+    const hand = HAND.has(id);
+    const plain = (list) => (hand ? [] : list ?? []);
+    for (const h of plain(v.huts)) b.hut(h);
+    if (v.dock && !hand) b.dock(v.dock);
+    for (const [x, z, f] of plain(v.racks)) b.rack(x, z, f);
+    for (const [x, z, f] of plain(v.boats)) b.boat(x, z, f, rand() < 0.5 ? '#3c5a78' : '#8a3a2e');
     if (v.slip) b.slipway(v.slip);
-    if (v.shed) b.shed(v.shed);
-    for (const [x, z, f] of v.timber ?? []) b.timber(x, z, f);
-    for (const [x, z, f] of v.logs ?? []) b.logs(x, z, f);
-    for (const [x, z] of v.rope ?? []) b.rope(x, z);
-    if (v.horse) b.sawhorse(...v.horse);
-    for (const [x, z, f, st] of v.crates ?? []) b.crate(x, z, f, st);
-    if (v.ropewalk) b.ropewalk(v.ropewalk);
+    if (v.shed && !hand) b.shed(v.shed);
+    for (const [x, z, f] of plain(v.timber)) b.timber(x, z, f);
+    for (const [x, z, f] of plain(v.logs)) b.logs(x, z, f);
+    for (const [x, z] of plain(v.rope)) b.rope(x, z);
+    if (v.horse && !hand) b.sawhorse(...v.horse);
+    for (const [x, z, f, st] of plain(v.crates)) b.crate(x, z, f, st);
+    if (v.ropewalk && !hand) b.ropewalk(v.ropewalk);
     if (v.sailboat) b.sailboat(...v.sailboat);
-    if (v.garden) b.garden(v.garden);
+    if (v.garden && !hand) b.garden(v.garden);
     for (const [x, z] of HAND.has(id) ? [] : v.pots ?? []) {
       const pot = new THREE.CylinderGeometry(0.3, 0.32, 0.5, 8, 1, false, 0, Math.PI);
       pot.rotateZ(Math.PI / 2);
@@ -1048,7 +1052,7 @@ export class Villages {
 
     // Benches where someone sits that isn't by the fire (Silas, at his door).
     const own = Object.values(VILLAGERS).filter((d) => d.village === id).map((d) => d.spots ?? {});
-    for (const spots of [v.spots ?? {}, ...own]) {
+    for (const spots of HAND.has(id) ? [] : [v.spots ?? {}, ...own]) {
       for (const sp of Object.values(spots)) {
         if (!sp.bench) continue;
         const f = Math.atan2(sp.face[1] - sp.at[1], sp.face[0] - sp.at[0]);
@@ -1114,7 +1118,8 @@ export class Villages {
       if (near) for (const l of hv.life) l.update(t, wind);
     }
     // Lamps in the windows from dusk till an hour after bed, and before dawn.
-    this.windows.update(t, camera, night, (w) => (hours >= 17 && hours < w.bed + 1) || hours < 6.5 || (w.bed < 12 && hours < w.bed + 1));
+    // (Ben's is lit all night, every night.)
+    this.windows.update(t, camera, night, (w) => w.always || (hours >= 17 && hours < w.bed + 1) || hours < 6.5 || (w.bed < 12 && hours < w.bed + 1));
     // Chimneys smoke morning and evening, a thread in the day.
     const cook = hours < 9 || hours > 17 ? 1 : 0.35;
     this.smoke.update(dt, wind, cook, 1 - night, innerHeight);

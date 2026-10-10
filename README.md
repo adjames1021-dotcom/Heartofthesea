@@ -139,10 +139,17 @@ Three villages, each its own sort of place, and a boatyard:
 
 | Where | Who |
 | --- | --- |
-| **Head Cove**, on Old Head. Fishing: stilt huts, a dock, drying racks, nets. | Oda Penhale (nets), Tam Ruddock (fishes off the dock, talks), Gwen Tallack (salts the catch), and Silas Hendy, who keeps the light up the hill. |
-| **The Landing**, on Green Island. Trading: a store, a quay, a ropewalk. | Hester Pengelly (the store), her boy Jory, Abel Trounson (under the big tree), Martha Vosper (rope). |
-| **Kettle Strand**, below the notch on Kettle Island. Half empty: ruined cottages, a jetty with boards missing. | Mags Rowe (goats, cheese, her own boat), Ben and Dorcas Clemo. |
-| **Pascoe's yard**, on the west side of the bay on Saddle. | Ned Pascoe, shipwright. |
+| **Head Cove**, on Old Head. Fishing: stilt huts of driftwood and old ship's timber, a dock, drying racks hung with split fish, nets, a gutting table, gulls. | Oda Penhale (nets), Tam Ruddock (fishes off the dock, talks), Gwen Tallack (salts the catch), and Silas Hendy, who keeps the light up the hill. |
+| **The Landing**, on Green Island. Trading: every house its own faded colour, Hester's stall under an old sail, goods about, a derrick on the quay, a ropewalk. | Hester Pengelly (the store), her boy Jory, Abel Trounson (under the big tree), Martha Vosper (rope). |
+| **Kettle Strand**, below the notch on Kettle Island. Half empty: cottages falling in and overgrown, a jetty with boards missing, Dorcas's fenced garden. | Mags Rowe (goats, cheese, her own boat), Ben and Dorcas Clemo. |
+| **Pascoe's yard**, on the west side of the bay on Saddle. A tarred shed open to the slip, timber seasoning, a steam box, a capstan. | Ned Pascoe, shipwright. |
+
+Everything in them is built by hand (src/kit.js, src/handvillage.js,
+src/handpieces.js): boards of uneven widths, walls that lean, roofs that sag
+and are patched with old sail, salt low down, moss on the shady side, paint
+bleached by the sun. Each place has its own colours, muted. Windows light up
+at night with real (flickering) lamplight, chimneys smoke morning and
+evening, and from far off each village is drawn as a few plain blocks.
 
 Everyone keeps their own hours on the shared clock: down at the dock at
 dawn, at work through the day, round the fire at dusk, asleep at night (and
@@ -321,6 +328,7 @@ shared/decor.js        what can go about the cabin, and where finds first go
 src/main.js            renderer, loop, interactions, keys
 src/progress.js        your save code, and asking the server to do things
 src/village.js         villages and the yard, and the people walking their day
+src/handvillage.js     the villages built by hand; src/handpieces.js the stall, shed, garden and the rest; src/kit.js boards, walls, roofs, weathering
 src/talk.js            the talk card; shared/talk.js has everything people say
 src/journal.js         the journal (J)
 src/questworld.js      things out in the world for quests (the copper, the bales)

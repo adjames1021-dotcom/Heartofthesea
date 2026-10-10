@@ -32,6 +32,54 @@ export const PALETTES = {
     moss: '#56663a',
     path: '#bfb08f',
   },
+  // The Landing trades: more paint about, faded, every house its own colour,
+  // awnings made of old sails.
+  landing: {
+    wood: ['#9c8a70', '#a39276', '#8f7d64', '#ab977a', '#968366'],
+    dark: ['#6b5a46', '#5f5040', '#74624c'],
+    tar: ['#4c4038', '#55473d', '#433932'],
+    paint: ['#86604f', '#6a7a82', '#9a8a5a', '#74846e', '#93705f', '#6f7f84'],
+    canvas: ['#c2b392', '#b5a482', '#cbbd9e'],
+    stripe: ['#86604f', '#6a7a82', '#7f8762'],
+    rope: '#b09a6e',
+    rust: ['#7a4f35', '#6b4430', '#83563a'],
+    stone: ['#8d8576', '#7d7669', '#958d7d'],
+    salt: '#cfcabd',
+    moss: '#5f6e40',
+    path: '#b8a888',
+    pathDark: 0.9,
+  },
+  // Kettle Strand: half empty. Timber gone grey and green, black sand, the
+  // paint all but gone, and the island growing back over it.
+  strand: {
+    wood: ['#6f6d66', '#77746c', '#686660', '#7c786e', '#625f59'],
+    dark: ['#504e48', '#47453f', '#56544c'],
+    tar: ['#3e3c38', '#45423d', '#383632'],
+    paint: ['#6a7466', '#7a6458', '#6b6f75'],
+    canvas: ['#9a9484', '#8c8676'],
+    rope: '#8f8466',
+    rust: ['#6e4a36', '#5f4232'],
+    stone: ['#5a5853', '#64615b', '#4f4d49'],
+    salt: '#8f8d85',
+    moss: '#4f6a34',
+    path: '#5a564f',
+    pathDark: 1.08,
+  },
+  // Pascoe's yard: new oak and old, shavings, tar.
+  yard: {
+    wood: ['#a08a68', '#957f5e', '#ab9472', '#8c7656', '#b39c78'],
+    dark: ['#5e4e3c', '#54463a', '#66553f'],
+    tar: ['#3a3530', '#433d36', '#35302b'],
+    paint: ['#5f6f78', '#8a5a48', '#7a7a62'],
+    canvas: ['#b8aa8c', '#a99b7c'],
+    rope: '#ad9568',
+    rust: ['#7a4f35', '#6b4430'],
+    stone: ['#8a8478', '#7c776c'],
+    salt: '#cdc8bb',
+    moss: '#5c6b3e',
+    path: '#c4b48e',
+    pathDark: 0.9,
+  },
 };
 
 const _m = new THREE.Matrix4();
@@ -109,8 +157,9 @@ export class Kit {
    * ragged tops, the odd salvaged painted one and a patch nailed over.
    * holes: [{ a0, a1, b0, b1 }] in metres along u and up v.
    */
-  wall(o, u, v, n, W, H, { across = false, holes = [], t = 0.05, base = 0.2, salvage = 0.18, colors = null } = {}) {
+  wall(o, u, v, n, W, H, { across = false, holes = [], t = 0.05, base = 0.2, salvage = 0.18, colors = null, odd = null, missing = 0 } = {}) {
     const woods = colors ?? this.pal.wood;
+    const odds = odd ?? this.pal.paint;
     const inHole = (a0, a1, b0, b1) => holes.filter((h) => a1 > h.a0 && a0 < h.a1 && b1 > h.b0 && b0 < h.b1);
     const at = (a, b, out = 0) => o.clone().addScaledVector(u, a).addScaledVector(v, b).addScaledVector(n, out);
     if (!across) {
@@ -119,7 +168,8 @@ export class Kit {
         const a0 = a + 0.006;
         const a1 = a + w - 0.006;
         const am = (a0 + a1) / 2;
-        const color = this.rand() < salvage ? this.col(this.pal.paint, 0.05) : this.col(woods);
+        const color = this.rand() < salvage ? this.col(odds, 0.05) : this.col(woods);
+        const gone = this.rand() < missing;
         const bottom = this.r(-0.04, 0.02);
         const top = H + this.r(-0.07, 0.05);
         // Cut round any opening.
@@ -128,7 +178,9 @@ export class Kit {
           spans = spans.flatMap(([s0, s1]) => [[s0, Math.min(s1, h.b0)], [Math.max(s0, h.b1), s1]]).filter(([s0, s1]) => s1 - s0 > 0.05);
         }
         const out = this.r(0, 0.012);
-        for (const [s0, s1] of spans) this.board(at(am, s0, out), at(am, s1, out), a1 - a0, t, n, color);
+        // A ruin's lost boards: gone altogether, or just the top half.
+        if (gone && this.rand() < 0.5) spans = spans.map(([s0, s1]) => [s0, s0 + (s1 - s0) * this.r(0.2, 0.6)]);
+        if (!(gone && this.rand() < 0.6)) for (const [s0, s1] of spans) this.board(at(am, s0, out), at(am, s1, out), a1 - a0, t, n, color);
         a += w;
       }
       // Battens across the inside, and now and then a board nailed over a gap.
@@ -144,8 +196,9 @@ export class Kit {
         const b0 = b + 0.005;
         const b1 = b + h - 0.005;
         const bm = (b0 + b1) / 2;
-        const color = this.rand() < salvage ? this.col(this.pal.paint, 0.05) : this.col(woods);
+        const color = this.rand() < salvage ? this.col(odds, 0.05) : this.col(woods);
         let spans = [[this.r(-0.05, 0.02), W + this.r(-0.02, 0.06)]];
+        if (this.rand() < missing) spans = spans.map(([s0, s1]) => (this.rand() < 0.5 ? [s0, s0 + (s1 - s0) * this.r(0.3, 0.7)] : [s0 + (s1 - s0) * this.r(0.3, 0.7), s1]));
         for (const ho of inHole(0, W, b0, b1)) {
           spans = spans.flatMap(([s0, s1]) => [[s0, Math.min(s1, ho.a0)], [Math.max(s0, ho.a1), s1]]).filter(([s0, s1]) => s1 - s0 > 0.05);
         }
@@ -163,12 +216,22 @@ export class Kit {
    * along ±`across` to S, from ridge height rh down to eaves eh. The ridge
    * sags in the middle; boards are tarred, with a patch of old sail.
    */
-  roof(c, along, across, L, S, rh, eh, { sag = 0.08, overhang = 0.35, patch = 'sail', material = 'tar', rakeOver = 0.25 } = {}) {
+  roof(c, along, across, L, S, rh, eh, { sag = 0.08, overhang = 0.35, patch = 'sail', material = 'tar', rakeOver = 0.25, keep = [1, 1] } = {}) {
     const up = V(0, 1, 0);
     const half = L / 2 + rakeOver;
-    const mats = material === 'tar' ? this.pal.tar : material === 'canvas' ? this.pal.canvas : this.pal.wood;
+    const mats = material === 'tar' ? this.pal.tar : material === 'canvas' ? this.pal.canvas : material === 'shingle' ? this.pal.wood : this.pal.wood;
     for (const side of [-1, 1]) {
       const out = across.clone().multiplyScalar(side);
+      const kept = keep[side < 0 ? 0 : 1];
+      // A roof that's falling in: the rafters show where the boards have gone.
+      if (kept < 1) {
+        for (let a = -half + 0.2; a < half; a += 0.62) {
+          const s = (a + half) / (2 * half);
+          const top = c.clone().addScaledVector(along, a).setY(c.y + rh - sag * 4 * s * (1 - s));
+          const bot = c.clone().addScaledVector(along, a).addScaledVector(out, S + 0.15).setY(c.y + eh - 0.05 - this.r(0, 0.2) * (1 - kept));
+          this.post(top, bot, 0.045, this.col(this.pal.dark), 4);
+        }
+      }
       // Boards running down the slope, side by side along the ridge.
       for (let a = -half; a < half - 0.02; ) {
         const w = Math.min(half - a, this.r(0.18, 0.3));
@@ -177,14 +240,25 @@ export class Kit {
         const ridge = rh - sag * 4 * s * (1 - s);
         const eave = eh - sag * 0.5 * 4 * s * (1 - s) - this.r(0, 0.04);
         const reach = S + overhang + this.r(-0.05, 0.08);
+        a += w;
+        // Ruins lose boards in runs, from the eaves up.
+        if (kept < 1 && hash2(Math.floor(am * 1.6), side, 31) > kept) {
+          if (this.rand() < 0.35) {
+            // What's left: a stub at the ridge.
+            const stub = this.r(0.25, 0.6);
+            const top = c.clone().addScaledVector(along, am).addScaledVector(out, -0.02).setY(c.y + ridge + 0.02);
+            const bot = c.clone().addScaledVector(along, am).addScaledVector(out, S * stub).setY(c.y + ridge - (rh - eh) * stub);
+            this.board(top, bot, w - 0.012, 0.045, up, this.col(mats, 0.08));
+          }
+          continue;
+        }
         const top = c.clone().addScaledVector(along, am).addScaledVector(out, -0.02).setY(c.y + ridge + 0.02);
         const bot = c.clone().addScaledVector(along, am).addScaledVector(out, reach).setY(c.y + eave - (overhang * (rh - eh)) / S);
         const nrm = up.clone().multiplyScalar(S).addScaledVector(out, rh - eh).normalize();
-        this.board(top, bot, w - 0.012, 0.045, nrm, this.col(mats, 0.06), { sag: this.r(0, 0.02) });
-        a += w;
+        this.board(top, bot, w - 0.012, 0.045, nrm, this.col(mats, 0.06), { sag: this.r(0, 0.02) + (kept < 1 ? this.r(0, 0.06) : 0) });
       }
       // A patch: old sailcloth tied over a leak, or a few odd boards.
-      if (patch && this.rand() < 0.75) {
+      if (patch && kept >= 1 && this.rand() < 0.75) {
         const a0 = this.r(-half * 0.7, half * 0.2);
         const len = this.r(0.6, 1.1);
         const d0 = this.r(0.15, S * 0.4);
@@ -435,6 +509,77 @@ export const SHAPES = {
     g.scale(1, 0.6, 0.85);
     return mergeParts([paint(g, '#ffffff')]);
   },
+  sack() {
+    // A hessian sack, slumped, the top gathered and tied.
+    const g = new THREE.SphereGeometry(0.26, 9, 7);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      let x = p.getX(i);
+      let y = p.getY(i);
+      let z = p.getZ(i);
+      // Squarer in the middle, flat where it sits, drawn in at the top.
+      const sq = 1 + 0.18 * (1 - Math.abs(y) / 0.26);
+      x *= sq;
+      z *= sq * 0.8;
+      if (y < -0.12) y = -0.12 - (y + 0.12) * 0.25;
+      if (y > 0.12) {
+        const k = 1 - Math.min(0.75, (y - 0.12) * 4.5);
+        x *= k;
+        z *= k;
+      }
+      p.setXYZ(i, x * (1 + 0.04 * Math.sin(y * 31)), y * 1.25, z);
+    }
+    g.translate(0, 0.17, 0);
+    const tuft = new THREE.ConeGeometry(0.07, 0.12, 6);
+    tuft.rotateX(Math.PI);
+    tuft.translate(0, 0.55, 0);
+    const tie = new THREE.TorusGeometry(0.05, 0.015, 3, 8);
+    tie.rotateX(Math.PI / 2);
+    tie.translate(0, 0.49, 0);
+    return mergeParts([paint(g, '#ffffff'), paint(tuft, '#e8e2d4'), paint(tie, '#6f6250')]);
+  },
+  coil() {
+    // A coil of rope lying flat.
+    const parts = [];
+    for (let i = 0; i < 4; i++) {
+      const t = new THREE.TorusGeometry(0.3 - i * 0.03, 0.04, 4, 14);
+      t.rotateX(Math.PI / 2);
+      t.translate(0, 0.04 + i * 0.065, 0);
+      parts.push(paint(t, i % 2 ? '#ffffff' : '#e6dccb'));
+    }
+    return mergeParts(parts);
+  },
+  plant() {
+    // Something leafy in a garden row.
+    const parts = [];
+    for (let i = 0; i < 5; i++) {
+      const leaf = new THREE.SphereGeometry(0.11, 5, 3);
+      leaf.scale(1, 0.45, 0.6);
+      leaf.translate(0.1, 0.09 + (i % 2) * 0.04, 0);
+      leaf.rotateZ(0.5);
+      leaf.rotateY((i / 5) * TAU);
+      parts.push(paint(leaf, i % 2 ? '#ffffff' : '#dfe6d6'));
+    }
+    return mergeParts(parts);
+  },
+  bramble() {
+    // A clump of bramble and nettle growing up against something.
+    const parts = [];
+    for (let i = 0; i < 6; i++) {
+      const b = new THREE.IcosahedronGeometry(0.22 + (i % 3) * 0.06, 0);
+      b.scale(1, 0.8, 1);
+      b.translate(Math.cos(i * 2.1) * 0.3, 0.15 + (i % 3) * 0.2, Math.sin(i * 2.1) * 0.22);
+      parts.push(paint(b, i % 2 ? '#ffffff' : '#d6dccb'));
+    }
+    return mergeParts(parts);
+  },
+  jar() {
+    const g = new THREE.CylinderGeometry(0.07, 0.075, 0.18, 8);
+    g.translate(0, 0.09, 0);
+    const lid = new THREE.CylinderGeometry(0.075, 0.075, 0.03, 8);
+    lid.translate(0, 0.195, 0);
+    return mergeParts([paint(g, '#ffffff'), paint(lid, '#b9ad94')]);
+  },
   tuft() {
     const parts = [];
     for (let i = 0; i < 4; i++) {
@@ -617,7 +762,7 @@ export function signTexture(kind) {
   }
   // The picture, painted thick and a bit wobbly, faded.
   const wob = (v) => v + (rand() - 0.5) * 3;
-  const paintColour = { fish: '#a5583f', pot: '#2f3b45', barrel: '#7a4a2a', loaf: '#b07a3a', cup: '#3f5a6a', bowl: '#8a5a3a' }[kind] ?? '#a5583f';
+  const paintColour = { fish: '#a5583f', pot: '#2f3b45', barrel: '#7a4a2a', loaf: '#b07a3a', cup: '#3f5a6a', bowl: '#8a5a3a', rope: '#9a7f4a', scales: '#3f4f5a', boat: '#5a3a2a', sack: '#8a6a3a' }[kind] ?? '#a5583f';
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.strokeStyle = '#e6dcc4';
@@ -650,6 +795,38 @@ export function signTexture(kind) {
     } else if (kind === 'loaf') {
       ctx.moveTo(wob(64), wob(90));
       ctx.bezierCurveTo(wob(60), wob(30), wob(196), wob(30), wob(192), wob(90));
+      ctx.closePath();
+    } else if (kind === 'rope') {
+      // A coil, from above.
+      for (const r of [44, 32, 20]) ctx.ellipse(128, 64, r * 1.3, r, 0, 0, TAU);
+    } else if (kind === 'scales') {
+      ctx.moveTo(wob(128), wob(20));
+      ctx.lineTo(wob(128), wob(100));
+      ctx.moveTo(wob(70), wob(36));
+      ctx.lineTo(wob(186), wob(36));
+      ctx.moveTo(wob(56), wob(70));
+      ctx.bezierCurveTo(wob(60), wob(92), wob(100), wob(92), wob(104), wob(70));
+      ctx.closePath();
+      ctx.moveTo(wob(152), wob(70));
+      ctx.bezierCurveTo(wob(156), wob(92), wob(196), wob(92), wob(200), wob(70));
+      ctx.closePath();
+      ctx.moveTo(wob(96), wob(108));
+      ctx.lineTo(wob(160), wob(108));
+    } else if (kind === 'boat') {
+      ctx.moveTo(wob(40), wob(70));
+      ctx.lineTo(wob(216), wob(70));
+      ctx.bezierCurveTo(wob(200), wob(104), wob(80), wob(108), wob(52), wob(92));
+      ctx.closePath();
+      ctx.moveTo(wob(128), wob(66));
+      ctx.lineTo(wob(128), wob(14));
+      ctx.lineTo(wob(176), wob(62));
+      ctx.closePath();
+    } else if (kind === 'sack') {
+      ctx.moveTo(wob(96), wob(34));
+      ctx.bezierCurveTo(wob(60), wob(60), wob(64), wob(112), wob(128), wob(112));
+      ctx.bezierCurveTo(wob(192), wob(112), wob(196), wob(60), wob(160), wob(34));
+      ctx.lineTo(wob(140), wob(22));
+      ctx.lineTo(wob(116), wob(22));
       ctx.closePath();
     } else {
       ctx.ellipse(128, 70, 56, 30, 0, 0, TAU);
@@ -750,7 +927,8 @@ export function cat(color = '#3a332d') {
   };
 }
 
-export function gull() {
+/** A gull (or, crow = true, a crow) standing about, turning its head. */
+export function gull(crow = false) {
   const g = new THREE.Group();
   const parts = [];
   const body = new THREE.SphereGeometry(0.1, 7, 5);
@@ -761,8 +939,8 @@ export function gull() {
   const tail = new THREE.ConeGeometry(0.05, 0.12, 3);
   tail.rotateX(-Math.PI / 2);
   tail.translate(0, 0.15, -0.22);
-  parts.push(paint(body, '#e9e8e2'), paint(wing, '#9ea3a6'), paint(tail, '#2e3032'));
-  for (const s of [-1, 1]) parts.push(paint(segment(V(s * 0.03, 0, 0), V(s * 0.03, 0.08, 0.01), 0.008, 0.008, 3), '#c99a46'));
+  parts.push(paint(body, crow ? '#26262a' : '#e9e8e2'), paint(wing, crow ? '#1c1c20' : '#9ea3a6'), paint(tail, crow ? '#1c1c20' : '#2e3032'));
+  for (const s of [-1, 1]) parts.push(paint(segment(V(s * 0.03, 0, 0), V(s * 0.03, 0.08, 0.01), 0.008, 0.008, 3), crow ? '#2a2a2a' : '#c99a46'));
   const m = new THREE.Mesh(mergeParts(parts), kitMat);
   m.castShadow = true;
   g.add(m);
@@ -770,12 +948,12 @@ export function gull() {
   head.position.set(0, 0.24, 0.13);
   const hm = new THREE.Mesh(
     mergeParts([
-      paint(new THREE.SphereGeometry(0.06, 6, 5), '#efeee8'),
+      paint(new THREE.SphereGeometry(0.06, 6, 5), crow ? '#26262a' : '#efeee8'),
       (() => {
         const b = new THREE.ConeGeometry(0.018, 0.08, 4);
         b.rotateX(Math.PI / 2);
         b.translate(0, -0.01, 0.08);
-        return paint(b, '#d8a33a');
+        return paint(b, crow ? '#2e2e30' : '#d8a33a');
       })(),
     ]),
     kitMat,
