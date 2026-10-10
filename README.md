@@ -372,6 +372,7 @@ src/decorate.js        moving things about the cabin, the locker, visits
 src/player.js          the bear's controller: walk, swim, jump, ledges, nets, ropes
 src/bear.js            the bear's model and animation
 src/boat.js            the sloop's model, stations, lights and colliders
+src/seakeeping.js      how she rides the sea: buoyancy along the hull, heave, pitch and roll
 src/collision.js       collision world: statics, moving bodies, ground probes
 src/islands.js         island props; src/terrain.js island meshes; src/vegetation.js grass and trees
 src/fishing.js         rod, float, bites and the catch log

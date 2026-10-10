@@ -161,7 +161,12 @@ export class CollisionWorld {
    * Push a sphere out of everything. Returns the deepest upward-facing
    * contact (for "standing on" checks): { normal, collider } or null.
    */
-  resolveSphere(c, r, { terrain = true, skip = null } = {}) {
+  /**
+   * Push a sphere out of whatever it's in. upright: floors on moving bodies
+   * (a deck) push straight up rather than along their slope, so standing on a
+   * tilting deck doesn't slide you downhill a little every frame.
+   */
+  resolveSphere(c, r, { terrain = true, skip = null, upright = false } = {}) {
     let ground = null;
     let groundNy = 0;
     const list = this.nearby(c.x, c.z, r + 1, _list);
@@ -176,7 +181,8 @@ export class CollisionWorld {
           hit.normal.set(0, 0, Math.sign(_l.z) || 1).applyMatrix3(col.rot).normalize();
           hit.depth = Math.min(hit.depth, 0.06);
         }
-        c.addScaledVector(hit.normal, hit.depth);
+        if (upright && col.body && hit.normal.y > 0.7 && !col.rail) c.y += Math.min(hit.depth / hit.normal.y, hit.depth * 1.5);
+        else c.addScaledVector(hit.normal, hit.depth);
         if (hit.normal.y > 0.55 && hit.normal.y >= groundNy && !col.rail) {
           groundNy = hit.normal.y;
           ground = { normal: hit.normal.clone(), collider: col };

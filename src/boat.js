@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { BOAT, createBoat, stepBoat } from '../shared/boat.js';
-import { heightAt } from '../shared/waves.js';
 import { smoothstep, clamp } from '../shared/noise.js';
 import { loftHull, loftDeck, canvasTexture } from './hull.js';
 import { segment, paint, mergeParts } from './props.js';
 import { makeBox } from './collision.js';
+import { Seakeeping } from './seakeeping.js';
 
 // The player's boat: an 11.4 m sloop in the spirit of your photos (white hull,
 // navy cove and boot stripes, teak decks, furling genoa). Physics lives in
@@ -60,6 +60,8 @@ export const LAYOUT = {
   forestay: { tack: new THREE.Vector3(5.62, 1.35, 0), head: new THREE.Vector3(1.45, 16.35, 0) },
 };
 
+const _hold = new THREE.Vector3();
+
 /** The mainsheet traveller, across the cockpit under the end of the boom. */
 const TRAVELLER = { x: -3.05, half: 0.8 };
 
@@ -110,7 +112,7 @@ const vOfY = (y) => (V_TOP - y) / V_RANGE;
 let tex = null;
 function textures() {
   if (tex) return tex;
-  const hull = canvasTexture(1024, 256, (ctx, w, h) => {
+  const hull = canvasTexture(2048, 512, (ctx, w, h) => {
     const Y = (y) => vOfY(y) * h;
     ctx.fillStyle = '#f4f3ef';
     ctx.fillRect(0, 0, w, h);
@@ -141,16 +143,36 @@ function textures() {
     ctx.fillStyle = '#1a1f29';
     ctx.fillRect(0, Y(0.03), w, h - Y(0.03));
   });
-  const teak = canvasTexture(512, 256, (ctx, w, h) => {
-    ctx.fillStyle = '#b8895a';
-    ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 90; i++) {
-      ctx.fillStyle = `rgba(${120 + (i % 5) * 9}, ${84 + (i % 3) * 6}, 50, 0.18)`;
-      ctx.fillRect((i * 71) % w, (i * 29) % h, 40 + (i % 7) * 12, 7);
+  // Teak: planks running fore and aft with black caulking between, butt
+  // joints staggered, grain in each. One tile is 2.4 m long by 1.2 m across
+  // (plankUV maps every teak surface the same way, so they all match).
+  const teak = canvasTexture(1024, 1024, (ctx, w, h) => {
+    let seed = 7;
+    const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const planks = 20;
+    const ph = h / planks;
+    for (let i = 0; i < planks; i++) {
+      const y0 = i * ph;
+      const tone = 0.9 + r() * 0.18;
+      const base = [184 * tone, 137 * tone, 90 * tone].map(Math.round);
+      ctx.fillStyle = `rgb(${base})`;
+      ctx.fillRect(0, y0, w, ph);
+      // Grain: long thin streaks along the plank.
+      for (let k = 0; k < 22; k++) {
+        const gy = y0 + 2 + r() * (ph - 4);
+        const d = r() < 0.5 ? -1 : 1;
+        ctx.fillStyle = `rgba(${d > 0 ? '120,82,48' : '214,170,118'}, ${0.12 + r() * 0.14})`;
+        ctx.fillRect(r() * w, gy, 60 + r() * 260, 1 + r() * 1.5);
+      }
+      // A butt joint somewhere along it.
+      const bx = r() * w;
+      ctx.fillStyle = 'rgba(40,28,18,0.9)';
+      ctx.fillRect(bx, y0, 2, ph);
+      // Caulking.
+      ctx.fillStyle = '#2b2018';
+      ctx.fillRect(0, y0, w, 3);
     }
-    ctx.fillStyle = '#3a2a1c';
-    for (let y = 0; y < h; y += 8) ctx.fillRect(0, y, w, 1.5);
-  }, { repeat: [3, 1] });
+  }, { repeat: [1, 1] });
   const sail = canvasTexture(256, 256, (ctx, w, h) => {
     ctx.fillStyle = '#f5f2ea';
     ctx.fillRect(0, 0, w, h);
@@ -201,6 +223,38 @@ function sideStrip(x0, x1, inner, outer, height, n = 10) {
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setIndex(idx);
   g.computeVertexNormals();
+  return g;
+}
+
+/**
+ * Teak laid the way it is on a boat: planks fore and aft, the same size on
+ * every surface (deck, side decks, cockpit sole, benches, the platform), so
+ * they meet without the grain jumping. Overwrites the geometry's UVs.
+ */
+function plankUV(g) {
+  if (!g.attributes.normal) g.computeVertexNormals();
+  const p = g.attributes.position;
+  const n = g.attributes.normal;
+  const uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) {
+    const ax = Math.abs(n.getX(i));
+    const ay = Math.abs(n.getY(i));
+    const az = Math.abs(n.getZ(i));
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    if (ay >= ax && ay >= az) {
+      uv[i * 2] = x / 2.4;
+      uv[i * 2 + 1] = z / 1.2;
+    } else if (az >= ax) {
+      uv[i * 2] = x / 2.4;
+      uv[i * 2 + 1] = y / 1.2;
+    } else {
+      uv[i * 2] = z / 2.4;
+      uv[i * 2 + 1] = y / 1.2;
+    }
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   return g;
 }
 
@@ -308,12 +362,12 @@ function buildStatic() {
     m.userData.cut = true;
     return m;
   };
-  add(loftDeck({ length: L, u0: 0, u1: uOf(below.x1), stations: 4, halfBreadth: hb, sheer: sheerY, camber: 0.03 }), teakMat);
-  cut(add(loftDeck({ length: L, u0: uOf(below.x1), u1: uOf(c.x1), stations: 6, halfBreadth: hb, sheer: sheerY, camber: 0.03 }), teakCut));
-  cut(add(sideStrip(c.x0, c.x1, cabinHalf, halfAt, deckAt), teakCut));
-  add(sideStrip(k.x0, k.x1, () => k.half, halfAt, deckAt), teakMat);
+  add(plankUV(loftDeck({ length: L, u0: 0, u1: uOf(below.x1), stations: 4, halfBreadth: hb, sheer: sheerY, camber: 0.03 })), teakMat);
+  cut(add(plankUV(loftDeck({ length: L, u0: uOf(below.x1), u1: uOf(c.x1), stations: 6, halfBreadth: hb, sheer: sheerY, camber: 0.03 })), teakCut));
+  cut(add(plankUV(sideStrip(c.x0, c.x1, cabinHalf, halfAt, deckAt)), teakCut));
+  add(plankUV(sideStrip(k.x0, k.x1, () => k.half, halfAt, deckAt)), teakMat);
   // Cockpit sole and walls.
-  add(quad([k.x0, k.sole, -k.half], [k.x0, k.sole, k.half], [k.x1, k.sole, k.half], [k.x1, k.sole, -k.half]), teakMat);
+  add(plankUV(quad([k.x0, k.sole, -k.half], [k.x0, k.sole, k.half], [k.x1, k.sole, k.half], [k.x1, k.sole, -k.half])), teakMat);
   for (const side of [-1, 1]) {
     const n = 8;
     for (let i = 0; i < n; i++) {
@@ -332,13 +386,13 @@ function buildStatic() {
   for (const side of [-1, 1]) {
     const bench = new THREE.BoxGeometry(k.x1 - k.benchX0, k.benchTop - k.sole, k.half - k.benchIn);
     bench.translate((k.x1 + k.benchX0) / 2, (k.benchTop + k.sole) / 2, side * (k.half + k.benchIn) / 2);
-    add(bench, teakMat);
+    add(plankUV(bench), teakMat);
   }
   // Swim platform.
   const p = LAYOUT.platform;
   const plat = new THREE.BoxGeometry(p.x1 - p.x0, 0.1, p.half * 2);
   plat.translate((p.x0 + p.x1) / 2, p.y - 0.05, 0);
-  add(plat, teakMat);
+  add(plankUV(plat), teakMat);
 
   // Coachroof, with the companionway open at its after end: the hatch slid
   // forward and the washboards out, so you can walk down the steps.
@@ -373,6 +427,16 @@ function buildStatic() {
       parts.push(paint(segment(V(x, deckAt(x), z), V(x, deckAt(x) + 0.62, z), 0.02, 0.02, 4), METAL));
     }
   }
+  // A teak toe rail round the edge of the deck, bow to stern, over the ends of the planks.
+  for (const side of [-1, 1]) {
+    const n = 30;
+    for (let i = 0; i < n; i++) {
+      const a = -5.6 + (11.27 * i) / n;
+      const b = -5.6 + (11.27 * (i + 1)) / n;
+      const at = (x) => V(x, deckAt(x) + 0.028, side * Math.max(0.02, halfAt(x) - 0.04));
+      parts.push(paint(segment(at(a), at(b), 0.034, 0.034, 5), '#8f5f36'));
+    }
+  }
   const pulpitY = deckAt(5.2) + 0.62;
   parts.push(paint(segment(V(4.85, pulpitY, -(halfAt(4.85) - 0.06)), V(5.45, pulpitY, 0), 0.022, 0.022, 4), METAL));
   parts.push(paint(segment(V(4.85, pulpitY, halfAt(4.85) - 0.06), V(5.45, pulpitY, 0), 0.022, 0.022, 4), METAL));
@@ -391,13 +455,44 @@ function buildStatic() {
     parts.push(paint(segment(V(-3.55, deckAt(-3.55), side * 1.62), V(-3.55, deckAt(-3.55) + 0.17, side * 1.62), 0.1, 0.08, 10), METAL));
     roofParts.push(paint(segment(V(-0.95, roofTop(-0.95), side * 0.72), V(-0.95, roofTop(-0.95) + 0.17, side * 0.72), 0.1, 0.08, 10), METAL));
   }
-  // Windlass and the anchor in its bow roller.
-  const wl = new THREE.BoxGeometry(0.35, 0.22, 0.3);
-  wl.translate(4.95, deckAt(4.95) + 0.11, 0);
-  parts.push(paint(wl, METAL));
-  const anchor = new THREE.BoxGeometry(0.45, 0.12, 0.3);
-  anchor.translate(5.75, 1.25, 0);
-  parts.push(paint(anchor, '#7d8288'));
+  // The windlass: a base on the deck, its drum, the gypsy the chain runs over.
+  {
+    const wx = 4.95;
+    const wy = deckAt(wx);
+    const base = new THREE.BoxGeometry(0.3, 0.05, 0.26);
+    base.translate(wx, wy + 0.025, 0);
+    parts.push(paint(base, DARK));
+    parts.push(paint(segment(V(wx, wy + 0.05, 0), V(wx, wy + 0.2, 0), 0.085, 0.08, 12), METAL));
+    parts.push(paint(segment(V(wx, wy + 0.2, 0), V(wx, wy + 0.25, 0), 0.105, 0.105, 12), METAL));
+    parts.push(paint(segment(V(wx, wy + 0.25, 0), V(wx, wy + 0.29, 0), 0.05, 0.03, 8), METAL));
+  }
+  // The bow roller: a plate bolted to the foredeck running out past the stem,
+  // two cheeks with the roller between them at the end, and the anchor lying
+  // in it, its plough hanging down in front of the stem.
+  {
+    const dy = deckAt(5.4);
+    const plate = new THREE.BoxGeometry(0.82, 0.03, 0.17);
+    plate.translate(5.6, dy + 0.02, 0);
+    parts.push(paint(plate, METAL));
+    for (const sz of [-0.075, 0.075]) {
+      const cheek = new THREE.BoxGeometry(0.62, 0.13, 0.014);
+      cheek.rotateZ(-0.1);
+      cheek.translate(5.78, dy - 0.0, sz);
+      parts.push(paint(cheek, METAL));
+    }
+    const roller = new THREE.CylinderGeometry(0.048, 0.048, 0.13, 12);
+    roller.rotateX(Math.PI / 2);
+    roller.translate(6.02, dy - 0.05, 0);
+    parts.push(paint(roller, DARK));
+    // The anchor: shank along the roller, plough over the end.
+    parts.push(paint(segment(V(5.3, dy + 0.07, 0), V(6.0, dy + 0.02, 0), 0.028, 0.028, 6), '#7d8288'));
+    const plough = new THREE.ConeGeometry(0.15, 0.4, 4);
+    plough.rotateY(Math.PI / 4);
+    plough.scale(0.55, 1, 1);
+    plough.rotateZ(-0.35);
+    plough.translate(6.1, dy - 0.2, 0);
+    parts.push(paint(plough, '#7d8288'));
+  }
   // The gooseneck the boom swings on, the mainsheet traveller across the
   // cockpit, and the genoa's furling drum at the stemhead.
   const goose = new THREE.BoxGeometry(0.12, 0.1, 0.09);
@@ -531,10 +626,20 @@ function buildStatic() {
     wire.push(paint(plate, METAL));
   };
   const top = V(m.x, m.top - 0.1, 0);
-  const stern = V(-5.62, deckAt(-5.6) + 0.1, 0);
   line(LAYOUT.forestay.tack, LAYOUT.forestay.head, 0.012);
-  line(top, stern, 0.011);
-  screw(stern, top);
+  // The backstay: down from the masthead, then split in two (the middle of
+  // the transom is the gate to the swim platform, with nothing to tie to)
+  // into legs to chainplates on each quarter.
+  const split = onBackstay(deckAt(-5.6) + 1.75);
+  line(top, split, 0.011);
+  const yoke = new THREE.BoxGeometry(0.05, 0.12, 0.09);
+  yoke.translate(split.x, split.y - 0.03, 0);
+  wire.push(paint(yoke, METAL));
+  for (const side of [-1, 1]) {
+    const foot = V(-5.5, deckAt(-5.5) + 0.06, side * 1.2);
+    line(split, foot, 0.009);
+    screw(foot, split);
+  }
   const cap = new THREE.BoxGeometry(0.22, 0.06, 0.13);
   cap.translate(m.x, m.top + 0.02, 0);
   wire.push(paint(cap, METAL));
@@ -824,18 +929,37 @@ export class Boat {
     this.jib = new SailMesh(6, 9, sailMat);
     this.root.add(this.main.mesh, this.jib.mesh);
 
-    // Boom with the lazy bag on top.
+    // The boom: a bare spar. When the main's down it lies furled along the
+    // top, tied with sail ties (this.stowed).
     this.boom = new THREE.Group();
     this.boom.position.set(LAYOUT.boom.x, LAYOUT.boom.y, 0);
     const boomParts = [
       paint(segment(new THREE.Vector3(0, 0, 0), new THREE.Vector3(-LAYOUT.boom.len, 0, 0), 0.075, 0.06, 8), METAL),
     ];
-    const bag = new THREE.BoxGeometry(LAYOUT.boom.len - 0.3, 0.32, 0.26);
-    bag.translate(-LAYOUT.boom.len / 2 - 0.1, 0.2, 0);
-    boomParts.push(paint(bag, NAVY));
     const boomMesh = new THREE.Mesh(mergeParts(boomParts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true }));
     boomMesh.castShadow = true;
     this.boom.add(boomMesh);
+    {
+      const furled = [];
+      const n = 10;
+      for (let i = 0; i < n; i++) {
+        // Flaked sail: fatter in the middle, a little lumpy.
+        const a = -0.25 - (i / n) * (LAYOUT.boom.len - 0.45);
+        const b2 = -0.25 - ((i + 1) / n) * (LAYOUT.boom.len - 0.45);
+        const r = (k) => 0.07 + 0.06 * Math.sin(Math.PI * (0.15 + 0.7 * k)) + 0.012 * Math.sin(k * 37);
+        furled.push(paint(segment(new THREE.Vector3(a, 0.13, 0), new THREE.Vector3(b2, 0.13, 0), r(i / n), r((i + 1) / n), 7), '#efe9db'));
+      }
+      for (let i = 0; i < 5; i++) {
+        const x = -0.6 - i * 0.85;
+        const tie = new THREE.TorusGeometry(0.135, 0.01, 4, 12);
+        tie.rotateY(Math.PI / 2);
+        tie.translate(x, 0.1, 0);
+        furled.push(paint(tie, '#c8b98e'));
+      }
+      this.stowed = new THREE.Mesh(mergeParts(furled), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true }));
+      this.stowed.castShadow = true;
+      this.boom.add(this.stowed);
+    }
     this.root.add(this.boom);
 
     // Furled genoa: a slim roll up the forestay with its navy sun strip.
@@ -846,7 +970,7 @@ export class Boat {
     );
     this.root.add(this.furl);
     this.ropes = new Ropes(this.root, 120);
-    this.fadeMats = [this.main.mesh.material, this.jib.mesh.material, boomMesh.material, this.furl.material, this.ropes.mesh.material];
+    this.fadeMats = [this.main.mesh.material, this.jib.mesh.material, boomMesh.material, this.stowed.material, this.furl.material, this.ropes.mesh.material];
 
     // Wheel.
     this.wheel = new THREE.Group();
@@ -989,6 +1113,7 @@ export class Boat {
 
     // Smoothed visual state.
     this.vis = { heave: 0, heaveV: 0, pitch: 0, roll: 0, boom: 0, boomV: 0, jib: 0, fillM: 0, fillJ: 0 };
+    this.sea = new Seakeeping();
     this.matrix = new THREE.Matrix4();
     this.prevMatrix = new THREE.Matrix4();
     this.colliders = buildColliders();
@@ -1028,6 +1153,22 @@ export class Boat {
     }
   }
 
+  /**
+   * Is a world point inside her hull, below the deck? (Dry, however far under
+   * the sea outside it is: the cabin and the cockpit.)
+   */
+  holds(p) {
+    if (this.holdInvFor !== this.matrixStamp) {
+      (this.holdInv ??= new THREE.Matrix4()).copy(this.matrix).invert();
+      this.holdInvFor = this.matrixStamp;
+    }
+    _hold.copy(p).applyMatrix4(this.holdInv);
+    const x = _hold.x;
+    const y = _hold.y;
+    if (x < -L / 2 + 0.15 || x > L / 2 - 0.3 || y > deckAt(x) + 0.25 || y < -1.0) return false;
+    return Math.abs(_hold.z) < hullZ(x, Math.max(y, -0.4)) + 0.05;
+  }
+
   /** Show what the yard has done to her (list of shared/upgrades.js ids). */
   setUpgrades(list = []) {
     for (const id of list) {
@@ -1058,20 +1199,14 @@ export class Boat {
     const v = this.vis;
     // Follow the water on world time, so a slow frame can't leave the hull
     // behind the swell.
+    // (Buoyancy along the whole hull: src/seakeeping.js.)
     const dw = this.time === undefined ? dt : Math.min(Math.max(t - this.time, 0), 1);
     this.time = t;
-    const c = Math.cos(b.heading);
-    const s = Math.sin(b.heading);
-    const at = (lx, lz) => heightAt(b.x + c * lx - s * lz, b.z + s * lx + c * lz, t, waveScale);
-    const hBow = at(4.2, 0);
-    const hStern = at(-4.2, 0);
-    const hPort = at(0, -1.7);
-    const hStar = at(0, 1.7);
-    const heave = (hBow + hStern + hPort + hStar) / 4;
+    const sea = this.sea.step(b, t, waveScale);
     const k = 1 - Math.exp(-dw * 4);
-    v.heave += (heave - v.heave) * k;
-    v.pitch += (Math.atan2(hBow - hStern, 8.4) * 0.85 - v.pitch) * k;
-    v.roll += (Math.atan2(hPort - hStar, 3.4) * 0.6 - v.roll) * k;
+    v.heave = sea.y;
+    v.pitch = sea.pitch;
+    v.roll = sea.roll;
 
     this.prevMatrix.copy(this.matrix);
     this.root.position.set(b.x, v.heave - 0.02, b.z);
@@ -1081,6 +1216,7 @@ export class Boat {
     this.root.quaternion.copy(_qYaw).multiply(_qPitch).multiply(_qRoll);
     this.root.updateMatrixWorld(true);
     this.matrix.copy(this.root.matrixWorld);
+    this.matrixStamp = (this.matrixStamp ?? 0) + 1;
 
     // Boom swings with some weight to it (a gybe slams across).
     const maxRate = 2.6;
@@ -1184,8 +1320,9 @@ export class Boat {
       R.seg(blk, _q6.set(ball.x, ball.y + 0.32, ball.z), 0.006, '#d6d0c0');
       R.seg(_q6.set(ball.x, ball.y - 0.32, ball.z), _q4.set(2.85, deckAt(2.85) + 0.05, 0.12), 0.006, '#d6d0c0');
     }
-    // The anchor chain, link-heavy, down from the roller.
+    // The anchor chain, link-heavy: off the windlass, over the roller and down.
     if (this.chain.visible) {
+      R.seg(_q5.set(4.95, deckAt(4.95) + 0.22, 0), _q6.set(6.02, deckAt(5.4) + 0.0, 0), 0.016, '#4a4f54');
       const p = this.chain.geometry.attributes.position;
       for (let i = 0; i + 1 < p.count; i++) R.seg(_q5.fromBufferAttribute(p, i), _q6.fromBufferAttribute(p, i + 1), 0.016, '#4a4f54');
     }
@@ -1197,10 +1334,13 @@ export class Boat {
     const v = this.vis;
     const h = b.mainHoist;
     this.main.mesh.visible = h > 0.02;
+    // Furled on the boom while it's down; gone once it's most of the way up.
+    this.stowed.visible = h < 0.85;
+    this.stowed.scale.set(1, 0.4 + 0.6 * (1 - h), 0.4 + 0.6 * (1 - h));
     if (!this.main.mesh.visible) return;
     const luff = (this.luff ?? 12.9) * REEF_LUFF[b.reef] * h;
     const boomLen = this.boomLen ?? LAYOUT.boom.len;
-    const y0 = LAYOUT.boom.y + 0.12;
+    const y0 = LAYOUT.boom.y + 0.06;
     const twist = 0.06 + 0.3 * b.mainSheet;
     const side = Math.sign(v.boom) || 1;
     const fill = v.fillM;
@@ -1334,7 +1474,7 @@ export class Boat {
     this.chain.visible = out > 0.3;
     if (!this.chain.visible) return;
     // From the roller, sagging down and away toward the anchor (in boat frame).
-    const start = _tmp1.set(5.75, 1.2, 0);
+    const start = _tmp1.set(6.04, deckAt(5.4) - 0.02, 0);
     let ax = 1;
     let az = 0;
     if (b.anchor.set) {

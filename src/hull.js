@@ -123,7 +123,7 @@ export function canvasTexture(w, h, draw, { repeat = null } = {}) {
   const tex = new THREE.CanvasTexture(c);
   tex.flipY = false; // canvas row 0 = v 0 (the sheer line on hulls)
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8; // (the renderer clamps to what the GPU can do) sharp up close and at a slant
   if (repeat) {
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;

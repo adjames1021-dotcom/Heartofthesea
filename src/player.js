@@ -190,8 +190,14 @@ export class Player {
     this.heading += d * (1 - Math.exp(-dt * rate));
   }
 
+  /** Is the sea where we are? (Not inside a boat's hull, below her waterline: that's dry.) */
+  #seaAt(ctx) {
+    if (ctx.dryAt?.(this.pos)) return -1e4;
+    return heightAt(this.pos.x, this.pos.z, ctx.t, ctx.waveScale);
+  }
+
   #walk(dt, input, ctx) {
-    const water = heightAt(this.pos.x, this.pos.z, ctx.t, ctx.waveScale);
+    const water = this.#seaAt(ctx);
     const wading = water - this.pos.y;
     // A startled hop carries on regardless of the keys for a moment.
     this.startleT = Math.max(0, (this.startleT ?? 0) - dt);
@@ -211,12 +217,16 @@ export class Player {
     let dx = 0;
     let dz = 0;
     if (this.platform?.matrix && this.deckUp && this.grounded) {
-      const lean = Math.hypot(this.deckUp.x, this.deckUp.z);
+      // Only her heel (side to side) does it: pitching in a sea doesn't walk you aft.
+      const side = _c.setFromMatrixColumn(this.platform.matrix, 2);
+      side.y = 0;
+      side.normalize();
+      const lat = this.deckUp.x * side.x + this.deckUp.z * side.z;
       // (Below decks there's always something to hold on to.)
-      const push = Math.max(0, lean - 0.09) * (this.steady ? 0.6 : 4) * (this.sheltered ? 0.1 : 1);
+      const push = Math.max(0, Math.abs(lat) - 0.2) * (this.steady ? 0.4 : 1.6) * (this.sheltered ? 0.1 : 1);
       if (push > 0) {
-        dx = (this.deckUp.x / lean) * push;
-        dz = (this.deckUp.z / lean) * push;
+        dx = side.x * Math.sign(lat) * push;
+        dz = side.z * Math.sign(lat) * push;
       }
     }
     this.vel.x += (wish.x * speed + dx - this.vel.x) * k;
@@ -233,8 +243,16 @@ export class Player {
       this.jumpBuffer = 0;
       this.coyote = 0;
       this.grounded = false;
-      this.#leavePlatform();
+      // Off a deck you keep going with her while she's still under you (so
+      // a jump below decks in a seaway can't leave the hull to sweep past you).
+      if (!this.platform?.matrix) this.#leavePlatform();
       this.emit('jump');
+    }
+
+    // In the air over a deck: once she's not under you any more, you're on your own.
+    if (!this.grounded && this.platform?.matrix) {
+      const under = this.world.probeDown(this.pos.x, this.pos.z, this.pos.y + 0.2, 4);
+      if (under?.collider?.body !== this.platform) this.#leavePlatform();
     }
 
     // Half the gravity before moving and half after: the same arc at any
@@ -271,7 +289,7 @@ export class Player {
       // moment; into the water it's just a splash. Nothing worse.
       if (this.fallStart !== null && this.fallStart !== undefined) {
         const drop = this.fallStart - this.pos.y;
-        const wet = heightAt(this.pos.x, this.pos.z, ctx.t, ctx.waveScale) - this.pos.y > 0.3;
+        const wet = this.#seaAt(ctx) - this.pos.y > 0.3;
         if (drop > 4.5 && !wet) {
           this.flopT = 0.9;
           this.emit('flop');
@@ -285,7 +303,8 @@ export class Player {
     }
 
     // In the air: a rope, a net, or a ledge within reach? Grab it.
-    if (!this.grounded && this.grabCooldown <= 0 && !this.carrying && this.vel.y < 3) {
+    // (Below decks there's nothing to climb out over: the way out is the steps.)
+    if (!this.grounded && this.grabCooldown <= 0 && !this.carrying && this.vel.y < 3 && !this.sheltered) {
       if (this.#tryRope()) return;
       if (this.#tryNet(null)) return;
       const sp = Math.hypot(this.vel.x, this.vel.z);
@@ -318,7 +337,7 @@ export class Player {
     // Keep walking into something waist to head high with a flat top and
     // you pull yourself up onto it. (Not on boats: bumping into the wheel
     // shouldn't put you on top of it.)
-    const pushing = this.grounded && wish.len > 0.5 && !this.carrying && moved < speed * dt * 0.4 && wading < 0.5;
+    const pushing = this.grounded && wish.len > 0.5 && !this.carrying && moved < speed * dt * 0.4 && wading < 0.5 && !this.sheltered;
     this.pushT = pushing ? (this.pushT ?? 0) + dt : 0;
     if (pushing && this.pushT > 0.25) {
       const ledge = this.#findLedge(wish.x, wish.z, this.pos.y + 0.45, this.pos.y + 1.35);
@@ -333,7 +352,7 @@ export class Player {
     }
 
     // Into deep water? Floats that get dragged under wash you off sooner.
-    const depth = heightAt(this.pos.x, this.pos.z, ctx.t, ctx.waveScale) - this.pos.y;
+    const depth = this.#seaAt(ctx) - this.pos.y;
     // Caught on the Horseshoe's shelf by a sea: it takes you off into the water.
     const surf = depth > 0.45 && !this.platform ? surfAt(this.pos.x, this.pos.z) : null;
     if (surf) {
@@ -380,6 +399,13 @@ export class Player {
   }
 
   #swim(dt, input, ctx) {
+    // Somehow in the water inside her (a wave over the side as you went below): you're dry, on your feet.
+    if (ctx.dryAt?.(this.pos)) {
+      this.mode = 'air';
+      this.grounded = false;
+      this.vel.y = 0;
+      return;
+    }
     const water = this.#waterAt(ctx);
     const wish = this.#wish(input, ctx);
     const fast = input.held('ShiftLeft', 'ShiftRight');
@@ -850,7 +876,7 @@ export class Player {
   /** Resolve the feet and body spheres; returns the standing contact. */
   #collide() {
     const feet = _a.copy(this.pos).add(new THREE.Vector3(0, R, 0));
-    const ground = this.world.resolveSphere(feet, R);
+    const ground = this.world.resolveSphere(feet, R, { upright: true });
     this.pos.copy(feet).sub(new THREE.Vector3(0, R, 0));
     const body = _a.copy(this.pos).add(new THREE.Vector3(0, 0.95, 0));
     const before = body.clone();
@@ -877,8 +903,11 @@ export class Player {
 
   #leavePlatform() {
     if (this.platform && this.platformVel) {
-      this.vel.x += this.platformVel.x;
-      this.vel.z += this.platformVel.z;
+      // (Capped: a slow frame on a lively deck shouldn't fling you.)
+      const sp = Math.hypot(this.platformVel.x, this.platformVel.z);
+      const k = sp > 7 ? 7 / sp : 1;
+      this.vel.x += this.platformVel.x * k;
+      this.vel.z += this.platformVel.z * k;
     }
     this.platform = null;
   }

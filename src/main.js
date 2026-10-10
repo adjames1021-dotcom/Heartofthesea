@@ -228,7 +228,13 @@ if (camMode === 'free' || camMode === 'island') {
 }
 
 // ---------- Post ----------
-const composer = new EffectComposer(renderer);
+// Rendered with multisampling (the renderer's own antialias doesn't reach a
+// composer's targets): without it thin things shimmer, rigging, lifelines,
+// the seams in the deck.
+const composer = new EffectComposer(
+  renderer,
+  new THREE.WebGLRenderTarget(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio(), { type: THREE.HalfFloatType, samples: 4 }),
+);
 composer.addPass(new RenderPass(scene, camera));
 // Only the sun, its glints and lamps should bloom; white paint in daylight shouldn't.
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.28, 0.55, 1.4);
@@ -669,7 +675,7 @@ function frame(now) {
     if (input.pressed('ArrowLeft')) treasure.flip(-1);
   }
   player.sheltered = interior.inside;
-  player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis() });
+  player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis(), dryAt: (p) => boat.holds(p) });
   fishing.update(dt, { t, waveScale: swell, night: atmosphere.uniforms.uNight.value > 0.5, camYaw: follow.yaw });
   treasure.update(dt, { t, waveScale: swell, boatBody: boat.body, player });
   puzzles.update(player);
@@ -728,7 +734,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { heightAt, waveNow, shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {

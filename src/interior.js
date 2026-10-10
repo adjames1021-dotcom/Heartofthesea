@@ -351,9 +351,10 @@ export class Interior {
           const a = xu[i];
           const b = xu[i + 1];
           if (Math.abs(z) > Math.min(side(a, 0), side(b, 0)) - 0.02) continue;
-          const g = new THREE.BoxGeometry(b - a, 0.004, 0.012);
+          // (Wide and soft enough not to flicker from the camera up above as she moves.)
+          const g = new THREE.BoxGeometry(b - a, 0.004, 0.024);
           g.translate((a + b) / 2, 0.002, z);
-          parts.push(paint(g, HOLLY));
+          parts.push(paint(g, '#c9a97c'));
         }
       }
       // The bilge board in the saloon floor, with its brass ring.
@@ -370,16 +371,19 @@ export class Interior {
 
     // Bulkheads: the cockpit end (open in the middle for the steps), the one
     // between the saloon and the forecabin (with its door), the chain locker's.
-    const aft = section(AFT - 0.06);
+    // (Its back face stays a couple of centimetres forward of the cockpit's
+    // white bulkhead, so the two never show through each other.)
+    const aftX = AFT - 0.03;
+    const aft = section(aftX);
     for (const s of [-1, 1]) {
       const piece = clip(aft, 0, s * DOOR, s > 0);
-      parts.push(board(piece.map(([z, y]) => [z, Math.min(y, deckUnder(AFT))]), AFT - 0.06, 0.06, TEAK));
+      parts.push(board(piece.map(([z, y]) => [z, Math.min(y, deckUnder(AFT))]), aftX, 0.05, TEAK));
     }
-    parts.push(board(clip(clip(aft, 0, -DOOR, true), 0, DOOR, false).map(([z, y]) => [z, Math.min(y, SOLE - 0.02)]), AFT - 0.06, 0.06, TEAK));
+    parts.push(board(clip(clip(aft, 0, -DOOR, true), 0, DOOR, false).map(([z, y]) => [z, Math.min(y, SOLE - 0.02)]), aftX, 0.05, TEAK));
     // (Above the side decks, the companionway's sides: part of the deckhead.)
     for (const s of [-1, 1]) {
       const piece = clip(clip(aft, 0, s * DOOR, s > 0), 1, deckUnder(AFT) - 0.01, true);
-      const b = board(piece, AFT - 0.06, 0.06, CREAM);
+      const b = board(piece, aftX, 0.05, CREAM);
       if (b) ceil.push(b);
     }
     const mid = section(BH);
@@ -467,12 +471,14 @@ export class Interior {
           for (const s of [-1, 1]) rod(V(x, y, s * DOOR), V(x, y, s * (edge(x) - 0.02)), 0.025, TEAK, ceil, 4);
         } else rod(V(x, y, -(edge(x) - 0.02)), V(x, y, edge(x) - 0.02), 0.025, TEAK, ceil, 4);
       }
-      // The companionway's sides, through the coachroof.
+      // The companionway's sides, through the coachroof: a teak lining just
+      // inside the white sides of the opening (not in the same plane).
       for (const s of [-1, 1]) {
-        const a = [AFT - 0.06, deckUnder(AFT), s * DOOR];
-        const b = [B.hatchX, deckUnder(B.hatchX), s * DOOR];
-        const cc = [B.hatchX, roofUnder(B.hatchX) + 0.07, s * DOOR];
-        const d = [AFT - 0.06, roofUnder(AFT) + 0.07, s * DOOR];
+        const z = s * (DOOR - 0.018);
+        const a = [AFT - 0.02, deckUnder(AFT), z];
+        const b = [B.hatchX, deckUnder(B.hatchX), z];
+        const cc = [B.hatchX, roofUnder(B.hatchX) + 0.07, z];
+        const d = [AFT - 0.02, roofUnder(AFT) + 0.07, z];
         ceil.push(quads([a, b, cc, d], TEAK_LIGHT, INWARD));
       }
     }
@@ -534,9 +540,9 @@ export class Interior {
       w.translate(x + 0.01, y + 0.001, 0);
       parts.push(paint(w, '#7d5434'));
     }
-    // The sill at the top.
-    const sill = new THREE.BoxGeometry(AFT + 0.06 - x0 + 0.1, 0.06, 2 * DOOR);
-    sill.translate((x0 + AFT) / 2, SOLE - 0.03, 0);
+    // The sill at the top: a threshold standing a little proud of the cockpit sole.
+    const sill = new THREE.BoxGeometry(AFT + 0.06 - x0 + 0.1, 0.075, 2 * DOOR - 0.02);
+    sill.translate((x0 + AFT) / 2, SOLE - 0.025, 0);
     parts.push(paint(sill, TEAK_DARK));
     // Stringers each side, and a handrail on posts.
     for (const s of [-1, 1]) {
