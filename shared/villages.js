@@ -22,6 +22,8 @@ export const VILLAGES = {
       { id: 'oda', at: [-46.5, 4], face: 0, stilts: true, floor: 2.1 },
       { id: 'tam', at: [-45.5, 31], face: 0, stilts: true, floor: 2.0 },
       { id: 'gwen', at: [-31, 30.5], face: -Math.PI / 2, stilts: false, floor: 2.6 },
+      // Jenefer Kitto's shack: she lives in it and cooks out the front.
+      { id: 'kitto', at: [-25.8, 19.6], face: -Math.PI / 2, stilts: false, floor: 2.9 },
     ],
     dock: { from: [-38.5, 18], to: [-62, 18], y: 1.3, width: 2.2 },
     racks: [[-38, 8, 0.2], [-37, 27.5, -0.3]],
@@ -43,7 +45,18 @@ export const VILLAGES = {
       odaBed: { at: [-47.2, 4.4], via: [[-42.6, 4], [-45.1, 4, 2.1]], y: 2.1, lie: 0 },
       tamBed: { at: [-46.2, 31.4], via: [[-41.6, 31], [-44.1, 31, 2.0]], y: 2.0, lie: 0 },
       gwenBed: { at: [-30.6, 31.25], via: [[-31, 26.6], [-31, 29.1, 2.6]], y: 2.6, lie: -Math.PI / 2 },
+      // Kitto's: Jenefer behind her counter, a seat round the back, her bunk;
+      // and the benches either side of the two tables out front.
+      shack: { at: [-28.9, 20.1], face: [-36, 20.1], via: [] },
+      shackSit: { at: [-25.6, 22.3], face: [-40, 22.3], via: [], bench: true },
+      kittoBed: { at: [-25.4, 20.3], via: [[-25.8, 15.7], [-25.8, 18.2, 2.9]], y: 2.9, lie: -Math.PI / 2 },
+      kitto1: { at: [-32.95, 16.4], face: [-32.2, 16.4], via: [], bench: true },
+      kitto2: { at: [-31.45, 17.0], face: [-32.2, 17.0], via: [], bench: true },
+      kitto3: { at: [-32.95, 19.7], face: [-32.2, 19.7], via: [], bench: true },
+      kitto4: { at: [-31.45, 19.1], face: [-32.2, 19.1], via: [], bench: true },
     },
+    // The tables out front of Kitto's: [x, z] of each table's middle (long side along z).
+    tables: [[-32.2, 16.7], [-32.2, 19.4]],
   },
   // The trading village on Green Island: a store, a quay, a ropewalk, and
   // Abel's bench under the big tree.
@@ -158,8 +171,10 @@ export const VILLAGERS = {
     routine: [
       [4.5, 'dock', 'work'],
       [7, 'dockEnd', 'fish'],
-      [12, 'nets', 'work'],
-      [17.5, 'fire1', 'sit'],
+      [12, 'kitto1', 'sit'],
+      [13, 'nets', 'work'],
+      [17.5, 'kitto1', 'sit'],
+      [19, 'fire1', 'sit'],
       [21.5, 'odaBed', 'sleep'],
     ],
   },
@@ -173,8 +188,11 @@ export const VILLAGERS = {
     routine: [
       [5.5, 'dock', 'work'],
       [8, 'dockEnd2', 'fish'],
+      [12.5, 'kitto2', 'sit'],
+      [13.5, 'dockEnd2', 'fish'],
       [15.5, 'rack2', 'work'],
-      [18, 'fire2', 'sit'],
+      [18, 'kitto3', 'sit'],
+      [19.5, 'fire2', 'sit'],
       [22.5, 'tamBed', 'sleep'],
     ],
   },
@@ -188,8 +206,25 @@ export const VILLAGERS = {
     routine: [
       [6, 'fire3', 'sit'],
       [8.5, 'rack1', 'work'],
-      [17, 'fire3', 'sit'],
+      [17, 'kitto4', 'sit'],
+      [18.5, 'fire3', 'sit'],
       [21, 'gwenBed', 'sleep'],
+    ],
+  },
+  jenefer: {
+    name: 'Jenefer Kitto',
+    village: 'cove',
+    job: 'cooks at the shack on the shingle, and has opinions about it',
+    look: { fur: '#b07a52', patch: '#f2e2c8', ear: '#d29a72', ink: '#4a2e1c' },
+    wears: 'apron',
+    tint: '#7a8a8c',
+    size: 1.04,
+    // Breakfast, lunch and supper over the counter; the afternoon off round the side.
+    routine: [
+      [5.5, 'shack', 'work'],
+      [14.5, 'shackSit', 'sit'],
+      [17, 'shack', 'work'],
+      [21.5, 'kittoBed', 'sleep'],
     ],
   },
   silas: {

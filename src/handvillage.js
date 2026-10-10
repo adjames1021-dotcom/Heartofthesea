@@ -4,7 +4,7 @@ import { VILLAGERS } from '../shared/villages.js';
 import { mulberry32 } from '../shared/noise.js';
 import { paint, mergeParts, segment, rock } from './props.js';
 import { Kit, Instances, SHAPES, PALETTES, kitMat, signBoard, cat, gull, laundry } from './kit.js';
-import { stall, handcart, derrick, bollards, ropewalk, garden, overgrowth, shed, timber, logs, sawhorse, steambox, capstan, bench } from './handpieces.js';
+import { stall, handcart, derrick, bollards, ropewalk, garden, overgrowth, shed, timber, logs, sawhorse, steambox, capstan, bench, kitchen } from './handpieces.js';
 import { groundColorAt } from './terrain.js';
 
 // Villages built by hand (src/kit.js): every hut its own, nothing square,
@@ -28,9 +28,12 @@ const DRESS = {
     barrels: [[-42.3, 20.4], [-42.8, 21.2]],
     laundry: { from: [-29.3, 32.3], fromY: 4.4, to: [-25.4, 34.6], pole: true, colors: ['#8a8072', '#6f7d86', '#a49a86', '#7a5e52'] },
     cat: { hut: 'tam', along: 0.4 },
-    gulls: [['dock', 0.92], ['dock', 0.8], ['ridge', 'oda', 0.3], ['rack', 0]],
+    gulls: [['dock', 0.92], ['dock', 0.8], ['ridge', 'oda', 0.3], ['rack', 0], ['at', -30.22, 18.7, 2.3]],
     signs: [{ kind: 'fish', at: [-38.0, 16.3], face: -0.7, post: true }, { kind: 'barrel', hut: 'gwen' }],
     chair: [-29.4, 27.0, 0.6],
+    // Kitto's: the lean-to off the side of Jenefer's shack (the shack's wall is
+    // `wall` behind the counter), her fire, the board for what's on.
+    kitchen: { at: [-29.6, 20.1], face: Math.PI, wall: 2.1, span: [-1.4, 1.8], counter: [-1.0, 1.25], floor: 2.9, grill: [-28.6, 22.25], board: [-30.4, 17.3, -2.72], owner: 'jenefer' },
     oars: { hut: 'oda' },
     floats: { hut: 'oda' },
     netPile: [-42.6, -0.9],
@@ -40,11 +43,12 @@ const DRESS = {
       [[-36.5, 15], [-38.5, 18]],
       [[-36.5, 15], [-39.5, 9], [-42.6, 4]],
       [[-36.5, 15], [-39, 24], [-41.6, 31]],
-      [[-36.5, 15], [-33.5, 21], [-31, 26.6]],
+      [[-36.5, 15], [-34.7, 20.6], [-31, 26.6]],
+      [[-36.5, 15], [-33.6, 18.1], [-30.6, 19.8]],
       [[-36.5, 15], [-39, 6], [-40, -1.8]],
     ],
-    walls: { oda: 'boards', tam: 'planks', gwen: 'boards' },
-    patches: { oda: 'sail', tam: 'boards', gwen: 'sail' },
+    walls: { oda: 'boards', tam: 'planks', gwen: 'boards', kitto: 'planks' },
+    patches: { oda: 'sail', tam: 'boards', gwen: 'sail', kitto: 'boards' },
   },
   // The Landing: every house its own faded colour, Hester's stall under an
   // old sail out front of the store, goods about, a derrick on the quay.
@@ -619,6 +623,14 @@ export function handVillage(b, id, v, netMesh) {
   // The rest of what the place does (src/handpieces.js).
   const bk = kit();
   extras.goods = dress.stall ? stall(b, bk, dress.stall, inst) : null;
+  extras.kitchen = dress.kitchen ? kitchen(b, bk, dress.kitchen, v.tables, inst) : null;
+  if (extras.kitchen) {
+    const sg = signBoard('pot', 0.7);
+    sg.position.copy(extras.kitchen.sign.at);
+    sg.lookAt(extras.kitchen.sign.at.clone().add(extras.kitchen.sign.face));
+    sg.rotateZ(0.04);
+    detail.add(sg);
+  }
   if (dress.handcart) handcart(b, bk, ...dress.handcart);
   if (dress.derrick) derrick(b, bk, dress.derrick);
   if (dress.bollards) bollards(b, bk, dress.bollards, dress.bollardY);
@@ -768,8 +780,10 @@ export function handVillage(b, id, v, netMesh) {
     const sleep = def.routine.find((r) => r[2] === 'sleep');
     if (sleep) bed[vid] = sleep[0];
   }
-  for (const w of windows) w.bed = bed[w.owner] ?? 22;
-  return { detail, far, windows, chimneys, life, hub: wp(b, ...v.hub), goods: extras.goods };
+  // (A house not named for who lives in it.)
+  const LIVES = { kitto: 'jenefer', store: 'hester' };
+  for (const w of windows) w.bed = bed[w.owner] ?? bed[LIVES[w.owner]] ?? 22;
+  return { detail, far, windows, chimneys, life, hub: wp(b, ...v.hub), goods: extras.goods, kitchen: extras.kitchen };
 }
 
 // Make sure the seeded random is used for anything left over.

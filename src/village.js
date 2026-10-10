@@ -945,9 +945,10 @@ class Villager {
     r.position.copy(this.pos);
     r.rotation.set(0, this.heading, 0);
     if (mode === 'sleep') {
-      // Lying on the bunk on one side.
+      // Lying on the bunk on one side, along it (bunks run across the hut,
+      // so a quarter turn from the way the house faces; head on Ned's pillow).
       const d = this.#spotDef(this.spot);
-      const lie = this.b.yaw - (d.lie ?? 0);
+      const lie = this.b.yaw - (d.lie ?? 0) - Math.PI / 2;
       r.rotation.set(0, lie, Math.PI / 2);
       r.position.y += 0.42;
     }

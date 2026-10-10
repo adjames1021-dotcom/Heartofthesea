@@ -18,6 +18,13 @@
 //   ['pay']                you hand over the first thing of value you've got
 //   ['upgrade', what]      something's done to your boat (shared/upgrades.js)
 //   ['learn', recipe]      you know how to make something now
+//   ['sell'], ['sellFish'] Hester buys something of value, or your catch
+//   ['dine', place, dish]  you eat at a cook's (shared/restaurants.js), and pay
+//
+// `when`, `say` and `needs` get (s, h, t): t is the world time, for the
+// season and the day. A reply with an `id` is picked by it (so a menu that
+// changed between you seeing it and the server hearing back can't give you
+// something else).
 //
 // Rules for the writing: short lines, people talk like people (a bit
 // distracted, sometimes off the point), nobody gives speeches, no
@@ -26,6 +33,7 @@
 import { ITEMS, countOf } from './items.js';
 import { UPGRADES } from './upgrades.js';
 import { NED_FEE, VALUE, words, fishValue } from './trade.js';
+import { PLACES, menuAt, onMenu, willTeach, askFor, allDishes, cheapest, cookIn, mealAt } from './restaurants.js';
 
 const q = (s, id) => s?.quests?.[id] ?? null; // a quest's state, or null if never started
 const met = (s, who) => !!s?.met?.[who];
@@ -65,6 +73,61 @@ const job = (up) => [...UPGRADES[up].needs.map(([k, n]) => ['takeN', k, n]), ['p
 const done = (s, id) => !!q(s, id)?.done;
 const stage = (s, id) => q(s, id)?.stage ?? -1;
 const solved = (s, id) => (s?.solved ?? []).includes(id);
+
+/**
+ * A cook's conversations (shared/restaurants.js): ordering while there's food
+ * on (a reply for each dish on now that you can pay for), what they say once
+ * you've eaten, showing you their dish when they've reason to, and what they
+ * say at the counter between meals.
+ */
+function kitchen(place) {
+  const p = PLACES[place];
+  const w = p.says;
+  const teachReply = { say: w.ask, to: 'teach', needs: (st) => willTeach(place, st), do: [['learn', p.teaches]] };
+  const ate = Object.fromEntries(allDishes(place).map((dish) => [`ate:${dish}`, { say: p.after[dish], replies: [teachReply, { say: w.thanks }] }]));
+  return [
+    {
+      id: 'order',
+      when: (s, h, t) => !!menuAt(place, t, h),
+      lines: {
+        0: {
+          say: (s, h, t) => w.serving[menuAt(place, t, h)?.meal ?? mealAt(h)] ?? w.serving.supper,
+          replies: [
+            ...allDishes(place).map((dish) => ({
+              id: dish,
+              say: (st, h, t) => askFor(dish, onMenu(place, dish, t, h)?.price ?? 0),
+              needs: (st, h, t) => {
+                const d = onMenu(place, dish, t, h);
+                return !!d && (st?.pence ?? 0) >= d.price;
+              },
+              to: `ate:${dish}`,
+              do: [['met', p.cook], ['dine', place, dish]],
+            })),
+            { say: "I've nothing to pay with.", to: 'broke', needs: (st, h, t) => (st?.pence ?? 0) < (cheapest(place, t, h) ?? 0) },
+            teachReply,
+            { say: 'Just looking.', do: [['met', p.cook]] },
+          ],
+        },
+        ...ate,
+        broke: { say: w.broke, replies: [{ say: 'Right.' }] },
+        teach: { say: w.teach, replies: [{ say: w.learnt }] },
+      },
+    },
+    {
+      id: 'teach',
+      when: (s) => willTeach(place, s),
+      lines: {
+        0: { say: w.offer, replies: [{ say: 'Go on, then.', to: 1, do: [['met', p.cook], ['learn', p.teaches]] }, { say: 'Another time.' }] },
+        1: { say: w.teach, replies: [{ say: w.learnt }] },
+      },
+    },
+    {
+      id: 'between',
+      when: (s, h) => cookIn(place, h),
+      lines: { 0: { say: (s, h) => w.between(h), replies: [{ say: "I'll come back.", do: [['met', p.cook]] }] } },
+    },
+  ];
+}
 
 export const TALK = {
   oda: [
@@ -540,6 +603,16 @@ export const TALK = {
       { if: any, say: 'Everyone went to the mainland. The fish went too, near enough.', reply: 'Not all of them.' },
     ]),
   ],
+  jenefer: [
+    ...kitchen('kitto'),
+    chat('jenefer', [
+      { if: (s) => !met(s, 'jenefer'), say: "You're off the yacht. Jenefer. I feed this lot. Somebody has to.", reply: "I'll be in." },
+      { if: (s, h) => h >= 14 && h < 17, say: "My feet. Don't ask me about my feet.", reply: "I won't." },
+      { if: (s) => knows(s, 'pilchards-oatmeal'), say: 'Did you leave them alone? In the pan?', reply: 'Mostly.' },
+      { if: (s) => done(s, 'nets'), say: "Oda's nets come in whole now. More fish than I know what to do with. I know exactly what to do with them.", reply: 'Pilchards?' },
+      { if: any, say: "Gwen thinks she can cook. Gwen can salt. It's not the same thing.", reply: "I won't tell her." },
+    ]),
+  ],
   dorcas: [
     {
       id: 'recipe',
@@ -572,19 +645,20 @@ export const WANTS = {
   mags: (s) => (met(s, 'mags') && stage(s, 'sail') === 0) || (stage(s, 'sail') === 2 && !done(s, 'sail')),
   ben: (s) => (met(s, 'ben') && !q(s, 'lamp')) || (stage(s, 'lamp') === 1 && has(s, 'oil')),
   dorcas: (s) => met(s, 'dorcas') && !knows(s, 'saltfish-plantain'),
+  jenefer: (s) => willTeach('kitto', s),
 };
 
-/** The conversation someone opens with, for this state and hour. */
-export function openingFor(who, s, h) {
-  return (TALK[who] ?? []).find((c) => c.when(s, h)) ?? null;
+/** The conversation someone opens with, for this state, hour and world time. */
+export function openingFor(who, s, h, t) {
+  return (TALK[who] ?? []).find((c) => c.when(s, h, t)) ?? null;
 }
 
-/** A line's text (lines can depend on your state and the hour). */
-export function lineText(line, s, h) {
-  return typeof line.say === 'function' ? line.say(s, h) : line.say;
+/** A line's text (lines can depend on your state, the hour and the day). */
+export function lineText(line, s, h, t) {
+  return typeof line.say === 'function' ? line.say(s, h, t) : line.say;
 }
 
-/** The replies on offer at a line (some need you to have something). */
-export function repliesAt(line, s) {
-  return (line.replies ?? []).filter((r) => !r.needs || r.needs(s));
+/** The replies on offer at a line (some need you to have something, or it to be the right time). */
+export function repliesAt(line, s, h, t) {
+  return (line.replies ?? []).filter((r) => !r.needs || r.needs(s, h, t));
 }

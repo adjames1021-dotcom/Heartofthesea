@@ -139,7 +139,7 @@ Three villages, each its own sort of place, and a boatyard:
 
 | Where | Who |
 | --- | --- |
-| **Head Cove**, on Old Head. Fishing: stilt huts of driftwood and old ship's timber, a dock, drying racks hung with split fish, nets, a gutting table, gulls. | Oda Penhale (nets), Tam Ruddock (fishes off the dock, talks), Gwen Tallack (salts the catch), and Silas Hendy, who keeps the light up the hill. |
+| **Head Cove**, on Old Head. Fishing: stilt huts of driftwood and old ship's timber, a dock, drying racks hung with split fish, nets, a gutting table, gulls, and Kitto's, a lean-to off the side of a shack with a fire and two tables on the sand. | Oda Penhale (nets), Tam Ruddock (fishes off the dock, talks), Gwen Tallack (salts the catch), Jenefer Kitto (cooks, and has opinions), and Silas Hendy, who keeps the light up the hill. |
 | **The Landing**, on Green Island. Trading: every house its own faded colour, Hester's stall under an old sail, goods about, a derrick on the quay, a ropewalk. | Hester Pengelly (the store), her boy Jory, Abel Trounson (under the big tree), Martha Vosper (rope). |
 | **Kettle Strand**, below the notch on Kettle Island. Half empty: cottages falling in and overgrown, a jetty with boards missing, Dorcas's fenced garden. | Mags Rowe (goats, cheese, her own boat), Ben and Dorcas Clemo. |
 | **Pascoe's yard**, on the west side of the bay on Saddle. A tarred shed open to the slip, timber seasoning, a steam box, a capstan. | Ned Pascoe, shipwright. |
@@ -198,6 +198,16 @@ what it comes to. Pay at the counter, or walk off and it goes back. What's out
 changes every day and with the season, and when it's gone it's gone till
 tomorrow. She sells food and things to cook with, nothing else. Ned will take
 coin for his time instead of something of value.
+
+**Eating out.** Jenefer Kitto cooks at Head Cove: breakfast from half six,
+dinner from half eleven, supper from half five. What's on is chalked on the
+board by her counter, and changes with the meal and the season (crab in
+spring, squid in summer); she calls it out as you go past. Talk to her to ask
+for something and pay. It does you the same good as the dish would if you'd
+cooked it yourself, and it's how you get to try things you can't make yet.
+Eat there three times, or help someone in the cove, and she'll show you how
+she does her pilchards. The cove eats there too: busy at supper, a couple in
+at dinner, nobody in the afternoon while she sits round the back.
 
 **The cabin.** Everything you find is on show below. Walk up to something
 and press E to pick it up; the mouse moves it over whatever's under it (a
@@ -336,15 +346,17 @@ shared/villages.js     villages, people and their days; shared/talk.js what they
 shared/quests.js       the steps of things people ask that are out in the world
 shared/food.js         cooking times, recipes, what eating does, going off
 shared/trade.js        money, what Hester pays, the shops and what's out each day
+shared/restaurants.js  places to eat: the cooks, their menus by meal and season, who they'll teach
 shared/gather.js       where fruit, driftwood and iron are; shared/upgrades.js the yard
 shared/decor.js        what can go about the cabin, and where finds first go
 src/main.js            renderer, loop, interactions, keys
 src/progress.js        your save code, and asking the server to do things
 src/village.js         villages and the yard, and the people walking their day
-src/handvillage.js     the villages built by hand; src/handpieces.js the stall, shed, garden and the rest; src/kit.js boards, walls, roofs, weathering
+src/handvillage.js     the villages built by hand; src/handpieces.js the stall, kitchen, shed, garden and the rest; src/kit.js boards, walls, roofs, weathering
 src/talk.js            the talk card; shared/talk.js has everything people say
 src/journal.js         the journal (J)
 src/shops.js           shops you walk round; src/goods3d.js the goods and price tags
+src/restaurants.js     the cook's board, their calls, the fire, bowls on the tables
 src/questworld.js      things out in the world for quests (the copper, the bales)
 src/cooking.js         stove, pans, pot and fires; src/food3d.js food models
 src/gather.js          fruit trees, driftwood and old iron

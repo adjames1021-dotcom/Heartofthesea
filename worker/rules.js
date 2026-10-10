@@ -16,6 +16,7 @@ import { GATHER, gatherWorld, ripe } from '../shared/gather.js';
 import { VESSELS, ROOM, EFFECTS, RECIPES, cookable, goneOff, doneness, recipeFor } from '../shared/food.js';
 import { SHOPS, VALUE, FISH_PRICE, NED_FEE, sellableFish, stockFor, openNow } from '../shared/trade.js';
 import { dayAt, seasonAt } from '../shared/environment.js';
+import { PLACES, onMenu } from '../shared/restaurants.js';
 
 /** A brand-new player. */
 export function freshState(now) {
@@ -339,6 +340,17 @@ function effects(s, list, now) {
       const fish = sellableFish(s);
       s.pence = (s.pence ?? 0) + fish.reduce((t, i) => t + FISH_PRICE[i.kind], 0);
       s.items = s.items.filter((i) => !fish.includes(i));
+    } else if (what === 'dine') {
+      // At a cook's: it has to be on now, and you pay for it. It does you the
+      // same good as the dish would if you'd cooked it yourself.
+      const d = Object.hasOwn(PLACES, a) ? onMenu(a, b, now) : null;
+      if (d && (s.pence ?? 0) >= d.price) {
+        s.pence -= d.price;
+        s.meals ??= {};
+        s.meals[a] = (s.meals[a] ?? 0) + 1;
+        const effect = RECIPES[b]?.effect;
+        if (effect) s.fed = { effect, until: now + (EFFECTS[effect].hours * DAY_LENGTH) / 24 };
+      }
     } else if (what === 'upgrade') {
       s.upgrades ??= [];
       if (UPGRADES[a] && !s.upgrades.includes(a)) s.upgrades.push(a);
@@ -409,15 +421,18 @@ ACTIONS.talk = async (s, a, { now, secret }) => {
   const convo = TALK[a.who].find((c) => c.id === a.convo);
   const at = String(a.line);
   if (!convo) return fail('what');
+  const h = hoursAt(now);
   if (at === '0') {
-    if (!convo.when(s, hoursAt(now))) return fail('not now');
+    if (!convo.when(s, h, now)) return fail('not now');
   } else {
     const t = s.talking;
     if (!t || t.who !== a.who || t.convo !== a.convo || t.line !== at) return fail('not now');
   }
   const line = Object.hasOwn(convo.lines, at) ? convo.lines[at] : null;
   if (!line) return fail('what');
-  const reply = repliesAt(line, s)[a.pick];
+  // By its id if it has one (a dish on a menu), else by where it is in the list.
+  const list = repliesAt(line, s, h, now);
+  const reply = typeof a.rid === 'string' ? list.find((r) => r.id === a.rid) : list[a.pick];
   if (!reply) return fail('no such reply');
   effects(s, reply.do, now);
   // A treasure map, from someone who couldn't make it out.

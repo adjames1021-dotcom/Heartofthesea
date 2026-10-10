@@ -477,3 +477,83 @@ test('Ned will take ten shillings instead of something of value', async () => {
   assert.ok(s.upgrades.includes('hull'));
   assert.equal(s.pence, 5);
 });
+
+// ---------------------------------------------------------------------------
+// Kitto's: eating out
+// ---------------------------------------------------------------------------
+
+import { PLACES, menuAt, willTeach } from '../shared/restaurants.js';
+import { VILLAGERS, routineAt } from '../shared/villages.js';
+
+// World times: supper (18:00), lunch (12:30) and the empty afternoon (15:30) on
+// day 0 (spring); and supper a week on (summer).
+const SUPPER = 660;
+const LUNCH = 330;
+const AFTERNOON = 510;
+const SUMMER_SUPPER = 7 * 1440 + 660;
+
+/** Order a dish from Jenefer at time t (by the dish, the way the game does). */
+const order = (s, t, dish) => apply(s, { type: 'talk', who: 'jenefer', convo: 'order', line: '0', pick: 0, rid: dish }, ctx(t));
+
+test("Kitto's: what's on depends on the meal and the season, and the kitchen shuts between", () => {
+  assert.equal(Math.round(hoursAt(SUPPER)), 18);
+  assert.equal(seasonAt(SUPPER), 0);
+  assert.equal(seasonAt(SUMMER_SUPPER), 1);
+  const supper = menuAt('kitto', SUPPER).dishes.map((d) => d.dish);
+  const lunch = menuAt('kitto', LUNCH).dishes.map((d) => d.dish);
+  assert.ok(supper.includes('pilchards-oatmeal') && supper.includes('crab-rice'));
+  assert.ok(lunch.includes('fish-soup') && !lunch.includes('pilchards-oatmeal'));
+  const summer = menuAt('kitto', SUMMER_SUPPER).dishes.map((d) => d.dish);
+  assert.ok(!summer.includes('crab-rice') && summer.includes('squid-coconut'), 'crab in spring, squid in summer');
+  assert.equal(menuAt('kitto', AFTERNOON), null, 'nothing in the afternoon');
+  assert.equal(menuAt('kitto', 1000), null, 'nor at night');
+});
+
+test("Kitto's: you ask for a dish, pay for it, and it does you good", async () => {
+  let s = { ...freshState(0), pence: 20 };
+  assert.equal(openingFor('jenefer', s, hoursAt(SUPPER), SUPPER).id, 'order');
+  const r = await order(s, SUPPER, 'pilchards-oatmeal');
+  assert.ok(r.reply.ok, r.reply.why);
+  assert.equal(r.reply.to, 'ate:pilchards-oatmeal');
+  s = r.state;
+  assert.equal(s.pence, 20 - 6);
+  assert.equal(s.meals.kitto, 1);
+  assert.equal(s.fed.effect, RECIPES['pilchards-oatmeal'].effect);
+  assert.ok(s.met.jenefer);
+  // Not on at supper; not at all in the afternoon; not without the money.
+  assert.equal((await order(s, SUPPER, 'kedgeree')).reply.why, 'no such reply');
+  assert.equal((await order(s, AFTERNOON, 'fish-soup')).reply.why, 'not now');
+  const broke = { ...freshState(0), pence: 3 };
+  assert.equal((await order(broke, SUPPER, 'pilchards-oatmeal')).reply.why, 'no such reply');
+  const said = repliesAt(TALK.jenefer[0].lines[0], broke, hoursAt(SUPPER), SUPPER).map((x) => x.say);
+  assert.ok(said.includes("I've nothing to pay with."), 'you can say so');
+});
+
+test('Jenefer shows you her pilchards after three meals, or once you have helped the cove', async () => {
+  let s = { ...freshState(0), pence: 60 };
+  for (const t of [LUNCH, SUPPER, SUPPER]) s = (await order(s, t, menuAt('kitto', t).dishes[0].dish)).state;
+  assert.equal(s.meals.kitto, 3);
+  assert.ok(willTeach('kitto', s));
+  // After the third, she offers.
+  const ate = TALK.jenefer[0].lines[`ate:${menuAt('kitto', SUPPER).dishes[0].dish}`];
+  const picks = repliesAt(ate, s, hoursAt(SUPPER), SUPPER);
+  assert.equal(picks[0].to, 'teach');
+  // Outside mealtimes she comes and tells you.
+  assert.equal(openingFor('jenefer', s, hoursAt(AFTERNOON), AFTERNOON).id, 'teach');
+  const r = await apply(s, { type: 'talk', who: 'jenefer', convo: 'teach', line: '0', pick: 0 }, ctx(AFTERNOON));
+  assert.ok(r.reply.ok);
+  assert.ok(r.state.recipes.includes(PLACES.kitto.teaches));
+  assert.ok(!willTeach('kitto', r.state), 'once');
+  // Or: Oda's nets sorted, and she'll show you without your eating there.
+  const helped = { ...freshState(0), quests: { nets: { stage: 1, done: true } } };
+  assert.ok(willTeach('kitto', helped));
+});
+
+test("Kitto's is busy at supper and empty in the afternoon", () => {
+  const at = (h) => Object.entries(VILLAGERS).filter(([, d]) => /^kitto\d$/.test(routineAt(d, h).spot)).map(([id]) => id);
+  assert.ok(at(18).length >= 3, `supper: ${at(18)}`);
+  assert.ok(at(12.6).length >= 2, `lunch: ${at(12.6)}`);
+  assert.equal(at(15.5).length, 0);
+  assert.equal(routineAt(VILLAGERS.jenefer, 18).spot, PLACES.kitto.spot);
+  assert.equal(routineAt(VILLAGERS.jenefer, 15.5).act, 'sit');
+});

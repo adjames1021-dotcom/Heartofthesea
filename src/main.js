@@ -41,6 +41,7 @@ import { WANTS } from '../shared/talk.js';
 import { Finds } from './finds.js';
 import { Decorating } from './decorate.js';
 import { Shops } from './shops.js';
+import { Restaurants } from './restaurants.js';
 import { WreckCourse } from './course.js';
 import { HatchPuzzle } from './hatch.js';
 import { StackClimb } from './stack.js';
@@ -145,6 +146,7 @@ let hoursNow = 12;
 const talk = new Talk({ progress, hours: () => hoursNow });
 const journal = new Journal({ progress });
 const shops = new Shops({ villages, progress, talk });
+const restaurants = new Restaurants({ scene, villages, progress, talk });
 const questWorld = new QuestWorld({ scene, progress });
 const gathering = new Gathering({ scene, world, progress });
 const stormFx = new Storm({ scene, audio });
@@ -549,6 +551,7 @@ function frame(now) {
   villages.update(dt, { t, hours: hoursNow, player, night: atmosphere.uniforms.uNight.value, camera, wind: env.wind });
   talk.update(input, player);
   shops.update(dt, { player, hours: hoursNow });
+  restaurants.update(dt, { player, hours: hoursNow, wind: env.wind, night: atmosphere.uniforms.uNight.value });
   gathering.update(dt);
   decorating.update(dt, { input, boat, player, inside: interior.inside });
   cooking.update(dt, { input, player, inside: interior.inside });
@@ -725,7 +728,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { shops, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {

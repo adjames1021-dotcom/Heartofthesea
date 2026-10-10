@@ -4,6 +4,7 @@
 
 import { VILLAGERS } from '../shared/villages.js';
 import { openingFor, lineText, repliesAt } from '../shared/talk.js';
+import { worldTime } from './clock.js';
 
 export class Talk {
   constructor({ progress, hours }) {
@@ -35,7 +36,7 @@ export class Talk {
   /** Start talking to a villager. */
   begin(v) {
     const s = this.progress.state;
-    const convo = openingFor(v.id, s, this.hours());
+    const convo = openingFor(v.id, s, this.hours(), worldTime());
     if (!convo) return;
     clearTimeout(this.sayT);
     this.v = v;
@@ -55,14 +56,15 @@ export class Talk {
   #render() {
     const s = this.progress.state;
     const h = this.hours();
+    const t = worldTime();
     const line = this.convo.lines[this.line];
-    this.replies = repliesAt(line, s);
+    this.replies = repliesAt(line, s, h, t);
     const name = VILLAGERS[this.v.id].name.split(' ')[0];
     this.el.innerHTML = `
       <div class="who">${name}</div>
-      <p class="said">${lineText(line, s, h)}</p>
+      <p class="said">${lineText(line, s, h, t)}</p>
       <div class="replies">${this.replies
-        .map((r, i) => `<button type="button" data-pick="${i}"><kbd>${i + 1}</kbd>${typeof r.say === 'function' ? r.say(s, h) : r.say}</button>`)
+        .map((r, i) => `<button type="button" data-pick="${i}"><kbd>${i + 1}</kbd>${typeof r.say === 'function' ? r.say(s, h, t) : r.say}</button>`)
         .join('')}</div>`;
     this.el.classList.add('show');
   }
@@ -73,7 +75,7 @@ export class Talk {
     this.busy = true;
     let res = null;
     try {
-      res = await this.progress.act('talk', { who: this.v.id, convo: this.convo.id, line: this.line, pick: i });
+      res = await this.progress.act('talk', { who: this.v.id, convo: this.convo.id, line: this.line, pick: i, ...(r.id ? { rid: r.id } : {}) });
     } catch {
       res = null;
     }
@@ -91,7 +93,10 @@ export class Talk {
   update(input, player) {
     if (!this.v) return;
     for (let i = 0; i < 9; i++) if (input.pressed(`Digit${i + 1}`, `Numpad${i + 1}`)) this.choose(i);
-    if (input.pressed('Escape')) this.close();
+    if (input.pressed('Escape')) {
+      this.close();
+      return;
+    }
     const d = Math.hypot(player.pos.x - this.v.pos.x, player.pos.z - this.v.pos.z);
     if (d > 4.5 || !this.v.awakeNow) this.close();
   }
