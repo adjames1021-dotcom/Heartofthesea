@@ -608,3 +608,28 @@ test('the Cellar: no breakfast, dinner and supper, and Kettle eats there at supp
   assert.ok(willTeach('cellar', helped));
   assert.equal(openingFor('loveday', helped, hoursAt(AFTERNOON), AFTERNOON).id, 'teach');
 });
+
+test('places on the chart: ticked off only from there, and only once', async () => {
+  const { landmarkAt } = await import('../shared/landmarks.js');
+  const s = freshState(0);
+  assert.deepEqual(s.visited, []);
+  const lh = landmarkAt('light');
+  let r = await apply(s, { type: 'visit', id: 'light', x: lh.x + 200, z: lh.z }, ctx());
+  assert.equal(r.reply.ok, false, 'not from a distance');
+  assert.equal(r.state, s);
+  r = await apply(s, { type: 'visit', id: 'light', x: lh.x + 5, z: lh.z }, ctx());
+  assert.ok(r.reply.ok && r.state.visited.includes('light'));
+  const again = await apply(r.state, { type: 'visit', id: 'light', x: lh.x, z: lh.z }, ctx());
+  assert.equal(again.reply.ok, false);
+  assert.equal(again.state, r.state, 'twice changes nothing');
+  // An island: once you're on it.
+  assert.ok((await apply(s, { type: 'visit', id: 'kettle', x: -777, z: 413 }, ctx())).reply.ok);
+  assert.equal((await apply(s, { type: 'visit', id: 'kettle', x: 0, z: 0 }, ctx())).reply.ok, false);
+  // Nonsense.
+  for (const id of ['nowhere', 'constructor', '__proto__', 7, null]) assert.equal((await apply(s, { type: 'visit', id, x: 0, z: 0 }, ctx())).reply.ok, false);
+  // Old saves without the list get one.
+  const old = { ...freshState(0) };
+  delete old.visited;
+  r = await apply(old, { type: 'visit', id: 'saddle', x: 0, z: 0 }, ctx());
+  assert.deepEqual(r.state.visited, ['saddle']);
+});

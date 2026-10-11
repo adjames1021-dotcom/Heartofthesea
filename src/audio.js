@@ -182,9 +182,13 @@ export class OceanAudio {
       src.start();
       this.sizzle = { g, hp };
     }
-    // A sizzle is never steady: it spits.
-    const level = sizzle * (0.7 + 0.3 * Math.random());
-    this.sizzle.g.gain.setTargetAtTime(0.16 * level, now, 0.05);
+    // A sizzle is never steady: it spits (a new level every 30 ms or so,
+    // however often the frames come).
+    this.spitT = (this.spitT ?? 0) - dt;
+    if (this.spitT <= 0) {
+      this.spitT = 0.03;
+      this.sizzle.g.gain.setTargetAtTime(0.16 * sizzle * (0.7 + 0.3 * Math.random()), now, 0.05);
+    }
     this.sizzle.hp.frequency.setTargetAtTime(2600 - 900 * crackle, now, 0.2);
     // Pops when it's catching.
     if (Math.random() < crackle * dt * 9) this.splash(0.12 + 0.2 * Math.random(), 1800 + Math.random() * 2500, 0.04 + Math.random() * 0.05);

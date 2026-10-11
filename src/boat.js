@@ -1127,6 +1127,8 @@ export class Boat {
     // Smoothed visual state.
     this.vis = { heave: 0, heaveV: 0, pitch: 0, roll: 0, boom: 0, boomV: 0, jib: 0, fillM: 0, fillJ: 0 };
     this.sea = new Seakeeping();
+    // Where she's drawn this frame (see update).
+    this.pose = { x: this.state.x, z: this.state.z, heading: this.state.heading, heel: 0, rudder: 0, sog: 0 };
     this.matrix = new THREE.Matrix4();
     this.prevMatrix = new THREE.Matrix4();
     this.colliders = buildColliders();
@@ -1136,7 +1138,24 @@ export class Boat {
 
   /** Fixed-step physics. */
   step(dt, env) {
-    stepBoat(this.state, dt, env);
+    const b = this.state;
+    // (Where she was before it, to draw her between the two: see update.)
+    const p = (this.before ??= {});
+    p.x = b.x;
+    p.z = b.z;
+    p.heading = b.heading;
+    p.heel = b.heel;
+    p.rudder = b.rudder;
+    stepBoat(b, dt, env);
+    // Knocked down or keel-up, her sails are in the water: she stops.
+    if (this.sea.phase) {
+      const k = Math.exp(-dt * 1.4);
+      b.u *= k;
+      b.v *= k;
+      b.r *= k;
+      b.heel *= Math.exp(-dt * 2);
+      b.heelRate = 0;
+    }
   }
 
   /**
@@ -1207,25 +1226,41 @@ export class Boat {
     this.main.mesh.material.color.set(big ? '#f4e9cf' : '#ffffff');
   }
 
-  update(dt, t, waveScale, storm = 0) {
+  /**
+   * Each frame. alpha: how far this frame is from the last fixed step to the
+   * next (src/main.js steps her 60 times a second, whatever the screen does):
+   * she's drawn that far between where the last step had her before and
+   * after, so she moves smoothly at 30, 60, 144 or 240 frames a second
+   * alike, and so does everything she carries.
+   */
+  update(dt, t, waveScale, storm = 0, alpha = 1) {
     const b = this.state;
     const v = this.vis;
+    const P = this.pose;
+    const B = this.before ?? b;
+    const a = clamp(alpha, 0, 1);
+    P.x = B.x + (b.x - B.x) * a;
+    P.z = B.z + (b.z - B.z) * a;
+    P.heading = B.heading + Math.atan2(Math.sin(b.heading - B.heading), Math.cos(b.heading - B.heading)) * a;
+    P.heel = B.heel + (b.heel - B.heel) * a;
+    P.rudder = B.rudder + (b.rudder - B.rudder) * a;
+    P.sog = b.sog;
     // Follow the water on world time, so a slow frame can't leave the hull
     // behind the swell.
     // (Buoyancy along the whole hull: src/seakeeping.js.)
     const dw = this.time === undefined ? dt : Math.min(Math.max(t - this.time, 0), 1);
     this.time = t;
-    const sea = this.sea.step(b, t, waveScale, storm);
+    const sea = this.sea.step(P, t, waveScale, storm);
     const k = 1 - Math.exp(-dw * 4);
     v.heave = sea.y;
     v.pitch = sea.pitch;
     v.roll = sea.roll;
 
     this.prevMatrix.copy(this.matrix);
-    this.root.position.set(b.x, v.heave - 0.02, b.z);
-    _qYaw.setFromAxisAngle(_Y, -b.heading);
+    this.root.position.set(P.x, v.heave - 0.02, P.z);
+    _qYaw.setFromAxisAngle(_Y, -P.heading);
     _qPitch.setFromAxisAngle(_Z, v.pitch);
-    _qRoll.setFromAxisAngle(_X, b.heel + v.roll);
+    _qRoll.setFromAxisAngle(_X, P.heel + v.roll);
     this.root.quaternion.copy(_qYaw).multiply(_qPitch).multiply(_qRoll);
     this.root.updateMatrixWorld(true);
     this.matrix.copy(this.root.matrixWorld);
@@ -1243,7 +1278,7 @@ export class Boat {
     this.#buildJib(t);
     this.furl.scale.set(1 - b.jibOut * 0.6, 1, 1 - b.jibOut * 0.6);
 
-    this.wheel.rotation.x = b.rudder * 2.4;
+    this.wheel.rotation.x = P.rudder * 2.4;
     this.windex.rotation.y = -b.awa; // points into the apparent wind
     this.#updateTelltales(t);
     this.#buildPennant(t);

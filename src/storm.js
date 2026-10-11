@@ -1,35 +1,280 @@
 import * as THREE from 'three';
+import { LAYOUT, deckAt, halfAt, roofTop, cabinHalf } from './boat.js';
 
 // What a storm looks and sounds like up close: rain driven on the wind,
 // lightning forking down onto the sea with the sky lighting up behind it,
 // and thunder arriving a few seconds later from however far away it struck.
 // Purely local, like the birds: the storm itself (wind, sea, cloud) comes
 // from the shared clock in shared/environment.js.
+//
+// The rain is three things: streaks falling past you (soft, tapering, slanted
+// by the wind, worked out on the GPU from the time so they fall the same at
+// any frame rate), rings where drops hit the sea round you and splashes on
+// her deck, and grey sheets of it drifting across further off.
 
-const DROPS = 2200;
-const BOX = 34; // half-size of the box of rain that follows the camera
+const DROPS = 14000;
+const BOX = 18; // half-size across of the box of rain round the camera
+const TALL = 30; // and its height
+const RINGS = 96; // on the sea round you at once
+const DECK_RINGS = 48; // on her deck
 const TAU = Math.PI * 2;
 
+const STREAK_VERT = /* glsl */ `
+  attribute vec4 aSeed;
+  attribute vec2 aCorner;
+  uniform float uTime, uBox, uTall, uFall, uLen, uWidth, uAmount;
+  uniform vec3 uCam;
+  uniform vec2 uWind;
+  varying float vAlong, vAcross, vFade;
+  void main() {
+    // Only as many drops as the storm calls for.
+    if (fract(aSeed.w * 13.37) > uAmount) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+    float speed = uFall * (0.8 + 0.4 * aSeed.w);
+    vec3 vel = vec3(uWind.x, -speed, uWind.y);
+    // Falling through a box that wraps round the camera: fixed in the world
+    // (so it slides past as you move), always round you.
+    vec3 p = aSeed.xyz * vec3(2.0 * uBox, uTall, 2.0 * uBox) + vel * uTime;
+    p.x = uCam.x + mod(p.x - uCam.x + uBox, 2.0 * uBox) - uBox;
+    p.z = uCam.z + mod(p.z - uCam.z + uBox, 2.0 * uBox) - uBox;
+    p.y = uCam.y + mod(p.y - uCam.y + uTall * 0.6, uTall) - uTall * 0.6;
+    // A streak: how far it falls while the eye takes it in, behind the drop.
+    vec3 dir = normalize(vel);
+    float len = length(vel) * uLen * (0.7 + 0.6 * fract(aSeed.w * 7.31));
+    vec3 pos = p - dir * len * aCorner.y;
+    vec3 toCam = normalize(uCam - pos);
+    vec3 side = normalize(cross(dir, toCam));
+    float dist = distance(uCam, p);
+    // (Never thinner than about a pixel, however far.)
+    pos += side * aCorner.x * uWidth * max(1.0, dist / 12.0);
+    vAlong = aCorner.y;
+    vAcross = aCorner.x;
+    // Not the ones right in your face, and thinning out toward the box's edge.
+    vFade = smoothstep(0.7, 2.2, dist) * (1.0 - smoothstep(uBox * 0.55, uBox, length(p.xz - uCam.xz)));
+    gl_Position = projectionMatrix * viewMatrix * vec4(pos, 1.0);
+  }
+`;
+const STREAK_FRAG = /* glsl */ `
+  uniform vec3 uColor;
+  uniform float uOpacity;
+  varying float vAlong, vAcross, vFade;
+  void main() {
+    // Bright at the drop, tailing off behind it; soft at the sides.
+    float a = pow(1.0 - vAlong, 0.8) * (1.0 - vAcross * vAcross) * vFade * uOpacity;
+    if (a < 0.003) discard;
+    gl_FragColor = vec4(uColor, a);
+  }
+`;
+
+const RING_VERT = /* glsl */ `
+  attribute vec4 iPos; // xyz, and when it landed
+  attribute vec2 iSize; // how big it spreads, how long it lasts
+  attribute vec2 iSlope; // the water's slope there (dy/dx, dy/dz), so it lies on it
+  uniform float uTime;
+  varying vec2 vUv;
+  varying float vAge;
+  void main() {
+    float age = (uTime - iPos.w) / iSize.y;
+    if (age < 0.0 || age > 1.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+    vAge = age;
+    vUv = position.xy;
+    // Flat on the water (or her deck), spreading as it goes.
+    float r = iSize.x * (0.25 + 0.75 * sqrt(age));
+    vec2 o = position.xy * r;
+    vec3 p = iPos.xyz + vec3(o.x, dot(iSlope, o), o.y);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  }
+`;
+const RING_FRAG = /* glsl */ `
+  uniform vec3 uColor;
+  uniform float uOpacity, uRing, uSplash;
+  varying vec2 vUv;
+  varying float vAge;
+  void main() {
+    float d = length(vUv);
+    float ring = smoothstep(0.5, 0.82, d) * (1.0 - smoothstep(0.82, 1.0, d));
+    // A little splash in the middle at first.
+    float splash = (1.0 - smoothstep(0.0, 0.4, d)) * (1.0 - smoothstep(0.0, 0.3, vAge));
+    float a = (uRing * ring * pow(1.0 - vAge, 2.0) + uSplash * splash) * uOpacity;
+    if (a < 0.003) discard;
+    gl_FragColor = vec4(uColor, a);
+  }
+`;
+
+const SHEET_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const SHEET_FRAG = /* glsl */ `
+  uniform float uTime, uOpacity, uSlant;
+  uniform vec3 uColor;
+  varying vec2 vUv;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  // Value noise that wraps every 'per' across (the cylinder's seam).
+  float noise(vec2 p, float per) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float x0 = mod(i.x, per);
+    float x1 = mod(i.x + 1.0, per);
+    return mix(mix(hash(vec2(x0, i.y)), hash(vec2(x1, i.y)), f.x), mix(hash(vec2(x0, i.y + 1.0)), hash(vec2(x1, i.y + 1.0)), f.x), f.y);
+  }
+  void main() {
+    // Fine streaks, falling and slanted with the wind...
+    float sx = vUv.x * 700.0 + vUv.y * uSlant * 60.0;
+    float streak = smoothstep(0.5, 0.95, noise(vec2(sx, vUv.y * 7.0 + uTime * 2.2), 700.0));
+    // ...in broad sheets of heavier rain that drift round with it.
+    float sheet = smoothstep(0.3, 0.85, noise(vec2(vUv.x * 9.0 + uTime * 0.03, uTime * 0.06), 9.0));
+    float fade = smoothstep(0.02, 0.12, vUv.y) * (1.0 - smoothstep(0.45, 1.0, vUv.y));
+    float a = uOpacity * fade * (0.2 + 0.8 * sheet) * (0.55 + 0.45 * streak);
+    gl_FragColor = vec4(uColor, a);
+  }
+`;
+
+/** Where her deck is, in her own frame, at (x, z): the coachroof, down in the cockpit, or the deck. */
+function deckTop(x, z) {
+  const c = LAYOUT.cabin;
+  const k = LAYOUT.cockpit;
+  if (x > c.x0 && x < c.x1 && Math.abs(z) < cabinHalf(x) - 0.1) return roofTop(x);
+  if (x > k.x0 && x < k.x1 && Math.abs(z) < k.half - 0.05) return k.sole;
+  return deckAt(x);
+}
+
+/** A pool of splash rings: spawn(x, y, z) and they spread and fade by themselves. */
+class Rings {
+  constructor(n, parent, { size, life, ring = 0.8, splash = 0.7 }) {
+    this.n = n;
+    this.next = 0;
+    this.size = size;
+    this.life = life;
+    const g = new THREE.InstancedBufferGeometry();
+    const quad = new THREE.PlaneGeometry(2, 2);
+    g.index = quad.index;
+    g.setAttribute('position', quad.attributes.position);
+    this.pos = new THREE.InstancedBufferAttribute(new Float32Array(n * 4).fill(-1e5), 4);
+    this.siz = new THREE.InstancedBufferAttribute(new Float32Array(n * 2).fill(1), 2);
+    this.slope = new THREE.InstancedBufferAttribute(new Float32Array(n * 2), 2);
+    this.pos.setUsage(THREE.DynamicDrawUsage);
+    this.slope.setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('iPos', this.pos);
+    g.setAttribute('iSize', this.siz);
+    g.setAttribute('iSlope', this.slope);
+    g.instanceCount = n;
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color() }, uOpacity: { value: 0.5 }, uRing: { value: ring }, uSplash: { value: splash } },
+      vertexShader: RING_VERT,
+      fragmentShader: RING_FRAG,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this.mesh = new THREE.Mesh(g, this.mat);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 9;
+    this.mesh.visible = false;
+    parent.add(this.mesh);
+  }
+
+  spawn(x, y, z, now) {
+    const i = this.next;
+    this.next = (i + 1) % this.n;
+    this.pos.setXYZW(i, x, y, z, now);
+    this.siz.setXY(i, this.size * (0.6 + 0.8 * Math.random()), this.life * (0.75 + 0.5 * Math.random()));
+    this.pos.needsUpdate = true;
+    this.siz.needsUpdate = true;
+  }
+
+  /** Keep the live ones on the water as it rises, falls and tilts. */
+  follow(waterAt, now) {
+    const p = this.pos.array;
+    const sl = this.slope.array;
+    const e = 0.25;
+    for (let i = 0; i < this.n; i++) {
+      if (now - p[i * 4 + 3] > this.life * 1.3) continue;
+      const x = p[i * 4];
+      const z = p[i * 4 + 2];
+      const h = waterAt(x, z);
+      sl[i * 2] = (waterAt(x + e, z) - h) / e;
+      sl[i * 2 + 1] = (waterAt(x, z + e) - h) / e;
+      p[i * 4 + 1] = h + 0.05;
+    }
+    this.pos.needsUpdate = true;
+    this.slope.needsUpdate = true;
+  }
+}
+
 export class Storm {
-  constructor({ scene, audio = null }) {
+  constructor({ scene, audio = null, boat = null }) {
     this.audio = audio;
     this.flash = 0; // 0..1, how lit up the sky is right now
+    this.time = 0; // the rain's own clock (frame time, wrapped)
 
-    // Rain: short streaks, each a line from its head back along its fall.
-    this.drops = new Float32Array(DROPS * 3);
+    // Rain: streaks, each a quad from the drop back along its fall.
+    const seeds = new Float32Array(DROPS * 16);
+    const corners = new Float32Array(DROPS * 8);
+    const index = new Uint32Array(DROPS * 6);
     for (let i = 0; i < DROPS; i++) {
-      this.drops[i * 3] = (Math.random() * 2 - 1) * BOX;
-      this.drops[i * 3 + 1] = Math.random() * 2 * BOX;
-      this.drops[i * 3 + 2] = (Math.random() * 2 - 1) * BOX;
+      const sd = [Math.random(), Math.random(), Math.random(), Math.random()];
+      for (let k = 0; k < 4; k++) {
+        seeds.set(sd, (i * 4 + k) * 4);
+        corners.set([k % 2 ? 1 : -1, k < 2 ? 0 : 1], (i * 4 + k) * 2);
+      }
+      index.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4 + 2, i * 4 + 1, i * 4 + 3], i * 6);
     }
     const geo = new THREE.BufferGeometry();
-    this.rainPos = new THREE.BufferAttribute(new Float32Array(DROPS * 6), 3);
-    this.rainPos.setUsage(THREE.DynamicDrawUsage);
-    geo.setAttribute('position', this.rainPos);
-    this.rain = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: '#c9d3db', transparent: true, opacity: 0.4, depthWrite: false }));
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(DROPS * 12), 3));
+    geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 4));
+    geo.setAttribute('aCorner', new THREE.BufferAttribute(corners, 2));
+    geo.setIndex(new THREE.BufferAttribute(index, 1));
+    this.rainMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uCam: { value: new THREE.Vector3() },
+        uWind: { value: new THREE.Vector2() },
+        uBox: { value: BOX },
+        uTall: { value: TALL },
+        uFall: { value: 9 },
+        uLen: { value: 0.05 },
+        uWidth: { value: 0.009 },
+        uAmount: { value: 0 },
+        uColor: { value: new THREE.Color() },
+        uOpacity: { value: 0.4 },
+      },
+      vertexShader: STREAK_VERT,
+      fragmentShader: STREAK_FRAG,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide, // (they face whichever way the wind turns them)
+    });
+    this.rain = new THREE.Mesh(geo, this.rainMat);
     this.rain.frustumCulled = false;
+    this.rain.renderOrder = 10;
     this.rain.visible = false;
     scene.add(this.rain);
+
+    // Rings on the sea round you, and splashes on her deck (in her frame, so they go with her).
+    this.seaRings = new Rings(RINGS, scene, { size: 0.36, life: 0.5 });
+    this.boat = boat;
+    this.deckRings = boat ? new Rings(DECK_RINGS, boat.root, { size: 0.09, life: 0.22, ring: 0.35, splash: 1 }) : null;
+    this.ringAcc = 0;
+    this.deckAcc = 0;
+
+    // Sheets of rain further off: the inside of a tall ring round the camera.
+    this.sheetMat = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uOpacity: { value: 0 }, uSlant: { value: 0 }, uColor: { value: new THREE.Color() } },
+      vertexShader: SHEET_VERT,
+      fragmentShader: SHEET_FRAG,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.BackSide,
+    });
+    this.sheets = new THREE.Mesh(new THREE.CylinderGeometry(70, 70, 80, 48, 1, true), this.sheetMat);
+    this.sheets.frustumCulled = false;
+    this.sheets.renderOrder = 8;
+    this.sheets.visible = false;
+    scene.add(this.sheets);
 
     // Lightning: one bolt mesh, rebuilt for each strike.
     this.boltMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 2.6, 3.0), fog: false, transparent: true });
@@ -44,14 +289,15 @@ export class Storm {
   /**
    * storm: 0..1. camera: the scene camera. wind: { x, z, speed }. inside: in
    * the cabin (no rain indoors, and thunder sounds muffled but still comes).
+   * waterAt(x, z): the sea's height there now, for the rings. fog: the
+   * scene's fog colour, which the far-off sheets take.
    * Returns the flash (0..1) for the sky and lights.
    */
-  update(dt, { storm, camera, wind, inside = false, night = 0 }) {
+  update(dt, { storm, camera, wind, inside = false, night = 0, waterAt = null, fog = null }) {
     const cam = camera.position;
-    this.#rain(dt, storm, cam, wind, inside);
     // Rain is grey streaks by day, barely there at night until the lightning catches it.
-    const lit = 1 - 0.75 * night + 0.75 * this.flash;
-    this.rain.material.color.setRGB(0.79 * lit, 0.83 * lit, 0.86 * lit);
+    const lit = 1 - 0.8 * night + 0.75 * this.flash;
+    this.#rain(dt, storm, cam, wind, inside, lit, waterAt, fog);
 
     // Lightning, once it's properly blowing.
     this.nextStrike -= dt;
@@ -83,43 +329,67 @@ export class Storm {
     return this.flash;
   }
 
-  #rain(dt, storm, cam, wind, inside) {
+  #rain(dt, storm, cam, wind, inside, lit, waterAt, fog) {
     const on = storm > 0.25 && !inside;
+    const amount = Math.min(1, (storm - 0.25) / 0.6);
     this.rain.visible = on;
+    this.seaRings.mesh.visible = on && !!waterAt;
+    if (this.deckRings) this.deckRings.mesh.visible = on;
+    this.sheets.visible = on && cam.y < 70 && storm > 0.4;
     if (!on) return;
-    const count = Math.floor(DROPS * Math.min(1, (storm - 0.25) / 0.6));
-    const fall = 15;
-    const wx = wind.x * wind.speed * 0.7;
-    const wz = wind.z * wind.speed * 0.7;
-    const len = 0.06; // seconds of fall each streak shows
-    const d = this.drops;
-    const p = this.rainPos.array;
-    for (let i = 0; i < count; i++) {
-      let x = d[i * 3] + wx * dt;
-      let y = d[i * 3 + 1] - fall * dt;
-      let z = d[i * 3 + 2] + wz * dt;
-      // Keep the box round the camera: wrap anything that leaves it.
-      if (y < -4) y += 2 * BOX;
-      if (x > BOX) x -= 2 * BOX;
-      else if (x < -BOX) x += 2 * BOX;
-      if (z > BOX) z -= 2 * BOX;
-      else if (z < -BOX) z += 2 * BOX;
-      const rx = x + cam.x;
-      const rz = z + cam.z;
-      d[i * 3] = x;
-      d[i * 3 + 1] = y;
-      d[i * 3 + 2] = z;
-      const ry = y + cam.y - BOX * 0.6;
-      p[i * 6] = rx;
-      p[i * 6 + 1] = ry;
-      p[i * 6 + 2] = rz;
-      p[i * 6 + 3] = rx - wx * len;
-      p[i * 6 + 4] = ry + fall * len;
-      p[i * 6 + 5] = rz - wz * len;
+    this.time = (this.time + dt) % 600;
+    const T = this.time;
+    // Driven on the wind (a gale lays it right over).
+    const drift = Math.min(wind.speed * 0.65, 12);
+    const u = this.rainMat.uniforms;
+    u.uTime.value = T;
+    u.uCam.value.copy(cam);
+    u.uWind.value.set(wind.x * drift, wind.z * drift);
+    u.uAmount.value = amount;
+    u.uOpacity.value = 0.22 + 0.24 * storm;
+    u.uColor.value.setRGB(0.82 * lit, 0.86 * lit, 0.9 * lit);
+
+    // Drops landing round you: rings on the sea, splashes on her deck.
+    const near = 13;
+    if (waterAt) {
+      const sr = this.seaRings;
+      sr.mat.uniforms.uTime.value = T;
+      sr.mat.uniforms.uColor.value.setRGB(0.85 * lit, 0.9 * lit, 0.94 * lit);
+      sr.mat.uniforms.uOpacity.value = 0.28 + 0.2 * storm;
+      this.ringAcc += dt * 190 * amount;
+      for (; this.ringAcc >= 1; this.ringAcc--) {
+        const a = Math.random() * TAU;
+        const r = near * Math.sqrt(Math.random());
+        const x = cam.x + Math.cos(a) * r;
+        const z = cam.z + Math.sin(a) * r;
+        sr.spawn(x, waterAt(x, z) + 0.05, z, T);
+      }
+      sr.follow(waterAt, T);
     }
-    this.rain.geometry.setDrawRange(0, count * 2);
-    this.rainPos.needsUpdate = true;
-    this.rain.material.opacity = 0.25 + 0.25 * storm;
+    const boat = this.boat;
+    if (this.deckRings && boat && boat.root.position.distanceTo(cam) < 30) {
+      const dr = this.deckRings;
+      dr.mat.uniforms.uTime.value = T;
+      dr.mat.uniforms.uColor.value.setRGB(0.9 * lit, 0.92 * lit, 0.95 * lit);
+      dr.mat.uniforms.uOpacity.value = 0.45 + 0.3 * storm;
+      this.deckAcc += dt * 70 * amount;
+      for (; this.deckAcc >= 1; this.deckAcc--) {
+        const x = -5.5 + Math.random() * 11;
+        const z = (Math.random() * 2 - 1) * (halfAt(x) - 0.12);
+        dr.spawn(x, deckTop(x, z) + 0.012, z, T);
+      }
+    }
+
+    // Sheets of it further off, drifting round with the wind.
+    if (this.sheets.visible) {
+      this.sheets.position.set(cam.x, 34, cam.z);
+      const su = this.sheetMat.uniforms;
+      su.uTime.value = T;
+      su.uSlant.value = Math.min(1.2, drift / 9);
+      su.uOpacity.value = 0.32 * THREE.MathUtils.smoothstep(storm, 0.4, 0.95) * (1 - THREE.MathUtils.smoothstep(cam.y, 40, 70));
+      if (fog) su.uColor.value.copy(fog).multiplyScalar(1.08 + 0.4 * this.flash);
+      else su.uColor.value.setRGB(0.55 * lit, 0.58 * lit, 0.62 * lit);
+    }
   }
 
   #newStrike(cam, storm) {

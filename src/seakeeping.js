@@ -83,14 +83,30 @@ export class Seakeeping {
     return (b.heel ?? 0) + this.roll;
   }
 
-  /** Columns' positions in the world (plan view; tilt is small for this). */
-  #sample(b, t, scale) {
-    const c = Math.cos(b.heading);
-    const s = Math.sin(b.heading);
+  /**
+   * The sea at the columns (plan view; tilt is small for this), with her f of
+   * the way from where she was at the last step to where she is now: so the
+   * water under her changes evenly from substep to substep, however many
+   * substeps a frame has (a jump all at once reads as the sea leaping).
+   */
+  #sample(b, t, scale, f = 1) {
+    const L = this.last ?? b;
+    const x = L.x + (b.x - L.x) * f;
+    const z = L.z + (b.z - L.z) * f;
+    const hd = L.heading + Math.atan2(Math.sin(b.heading - L.heading), Math.cos(b.heading - L.heading)) * f;
+    const c = Math.cos(hd);
+    const s = Math.sin(hd);
     for (let i = 0; i < COLS.length; i++) {
       const col = COLS[i];
-      this.h[i] = heightAt(b.x + c * col.x - s * col.z, b.z + s * col.x + c * col.z, t, scale);
+      this.h[i] = heightAt(x + c * col.x - s * col.z, z + s * col.x + c * col.z, t, scale);
     }
+  }
+
+  #remember(b) {
+    const L = (this.last ??= {});
+    L.x = b.x;
+    L.z = b.z;
+    L.heading = b.heading;
   }
 
   /** Straight onto the water as it is (first frame, or after a long gap). */
@@ -123,7 +139,9 @@ export class Seakeeping {
   step(b, t, scale, storm = 0) {
     this.events.length = 0;
     if (this.t === undefined || t - this.t > 0.6 || t < this.t) {
+      this.last = null;
       this.#settle(b, t, scale);
+      this.#remember(b);
       this.phase = null;
       this.t = t;
       return this;
@@ -136,7 +154,7 @@ export class Seakeeping {
     for (let k = 1; k <= n; k++) {
       const tk = this.t + h * k;
       prev.set(this.h);
-      this.#sample(b, tk, scale);
+      this.#sample(b, tk, scale, k / n);
       let F = -M * G;
       let Mp = TRIM;
       let Mr = 0;
@@ -178,11 +196,19 @@ export class Seakeeping {
       const phi = this.total(b);
       if (!capsized && Math.abs(phi) > 0.5) Mr -= KEEL * Math.sin(phi) * smooth(0.5, 1.1, Math.abs(phi));
       // Over a crest (the sea under her stops rising and starts to fall)?
-      if (vw > 0.45) this.rising = true;
-      else if (this.rising && vw < 0) {
+      // Which way it came at her is how the face of it sloped across her on
+      // the way up (at the very top it's level).
+      const lat = (port - stbd) / (COLS.length / 2);
+      const lon = (fore - aft) / (COLS.length / 2);
+      if (vw > 0.45) {
+        if (!this.rising) this.face = { lat: 0, lon: 0 };
+        this.rising = true;
+        if (Math.abs(lat) > Math.abs(this.face.lat)) this.face.lat = lat;
+        if (Math.abs(lon) > Math.abs(this.face.lon)) this.face.lon = lon;
+      } else if (this.rising && vw < 0) {
         this.rising = false;
         // (Only with her in the water: not again on the way up.)
-        if (storm > 0.3 && !this.phase && this.wet > 0.6) this.#crest(b, storm, (port - stbd) / (COLS.length / 2), (fore - aft) / (COLS.length / 2));
+        if (storm > 0.3 && !this.phase && this.wet > 0.6) this.#crest(b, storm, this.face.lat, this.face.lon);
       }
       // Aground: the keel sits on the bottom.
       const keel = this.y - BOAT.contacts[0].draft;
@@ -216,6 +242,7 @@ export class Seakeeping {
     // Keep the angles sane (a wave never stands her on end).
     this.pitch = Math.max(-0.45, Math.min(0.45, this.pitch));
     this.t = t;
+    this.#remember(b);
     return this;
   }
 
@@ -228,8 +255,8 @@ export class Seakeeping {
     const sog = b.sog ?? 0;
     const now = this.t ?? 0;
     // Driving hard over the top of one, now and then she takes off.
-    if (sog > 4 && this.vy > 0.4 && now - (this.lastLaunch ?? -1e9) > 4) {
-      const chance = Math.min(1, (sog - 4) / 5) * storm * 0.35;
+    if (sog > 3.5 && this.vy > -0.1 && now - (this.lastLaunch ?? -1e9) > 4) {
+      const chance = Math.min(1, (sog - 3.5) / 3) * storm * 0.95;
       if (this.random() < chance) {
         this.vy += Math.min(2.0, (0.5 + 0.4 * this.random()) * (1 + 0.15 * sog) * storm);
         this.vp += 0.18 * storm;
@@ -241,7 +268,7 @@ export class Seakeeping {
     const beamOn = Math.abs(lat) / (Math.abs(lat) + 0.5 * Math.abs(lon) + 0.05);
     const side = Math.sign(lat) || 1; // a higher sea to port puts her starboard side down
     const pressed = Math.sign(b.heel ?? 0) === side && Math.abs(b.heel ?? 0) > 0.35;
-    const chance = storm * storm * smooth(0.45, 0.85, beamOn) * 0.1 + (pressed ? 0.04 * storm : 0);
+    const chance = storm * storm * smooth(0.35, 0.8, beamOn) * 0.45 + (pressed ? 0.15 * storm : 0);
     if (this.random() < chance) {
       this.vr += side * (1.6 + 3.3 * this.random() ** 1.5 + (pressed ? 0.9 : 0)) * storm;
       this.events.push('breaker');

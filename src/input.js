@@ -39,8 +39,9 @@ export class Input {
     });
   }
 
+  /** Down now, or tapped since the last frame (a tap quicker than a frame still counts once). */
   held(...codes) {
-    return codes.some((c) => this.down.has(c));
+    return codes.some((c) => this.down.has(c) || this.hits.has(c));
   }
 
   pressed(...codes) {

@@ -127,7 +127,8 @@ function soar(b, dt, time, center) {
     b.flapping = !b.flapping;
     b.flapT = b.flapping ? 0.8 + Math.random() * 1.2 : 2 + Math.random() * 4;
   }
-  poseWings(b, dt, b.flapping || vy > 0.05 ? 'flap' : 'glide');
+  // (Climbing faster than 3 m/s takes flapping: a speed, not a step, so it's the same at any frame rate.)
+  poseWings(b, dt, b.flapping || vy > 3 * dt ? 'flap' : 'glide');
 }
 
 // ---------------------------------------------------------------------------
@@ -441,7 +442,7 @@ export class Wildlife {
     for (const b of this.flyers) {
       const r = b.model.root;
       if (b.boat && boat) {
-        b.center.set(boat.state.x, 0, boat.state.z);
+        b.center.set(boat.pose.x, 0, boat.pose.z); // (where she's drawn, so they keep station smoothly)
       }
       const far = !near(r.position, 700);
       r.visible = !far;

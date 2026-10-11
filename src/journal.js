@@ -34,12 +34,12 @@ export class Journal {
     }
   }
 
-  /** Arrow keys scroll the notes too. */
-  update(input) {
+  /** Arrow keys scroll the notes too (480 px a second, whatever the frame rate). */
+  update(input, dt = 1 / 60) {
     if (!this.open) return;
     const page = this.el.querySelector('.page');
-    if (input.held('ArrowDown')) page.scrollTop += 8;
-    if (input.held('ArrowUp')) page.scrollTop -= 8;
+    if (input.held('ArrowDown')) page.scrollTop += 480 * dt;
+    if (input.held('ArrowUp')) page.scrollTop -= 480 * dt;
   }
 
   /** Notes grouped by what they're about: things still going on first. */

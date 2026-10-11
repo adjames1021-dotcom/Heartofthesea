@@ -1,9 +1,159 @@
 import { ISLANDS, groundAt } from '../shared/world.js';
+import { LANDMARKS, landmarkAt, PLACE_IDS } from '../shared/landmarks.js';
 import { HAND } from './mapview.js';
 import { CHANGES, VERSION, BUILD } from './version.js';
 
 // Two screens you can call up: the controls (H), with a plan of the boat
-// showing where each station is, and the chart (Tab) of the whole sea.
+// showing where each station is, and the chart (Tab) of the whole sea, with
+// its landmarks, and a tick by every place you've been (src/chartmarks.js).
+
+const INK = '#3a2c1c';
+const RED = '#7d2a18';
+
+/** A landmark's little drawing on the chart, centred on (x, y), in ink. */
+function glyph(ctx, kind, x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = INK;
+  ctx.fillStyle = INK;
+  ctx.lineWidth = 1.6;
+  ctx.lineJoin = 'round';
+  const house = (dx, dy, w, h) => {
+    ctx.beginPath();
+    ctx.moveTo(dx - w / 2, dy);
+    ctx.lineTo(dx - w / 2, dy - h);
+    ctx.lineTo(dx, dy - h - w * 0.55);
+    ctx.lineTo(dx + w / 2, dy - h);
+    ctx.lineTo(dx + w / 2, dy);
+    ctx.closePath();
+  };
+  switch (kind) {
+    case 'village':
+      // A few roofs together.
+      for (const [dx, dy] of [[-4, 3], [3, 4], [0, -1]]) {
+        house(dx, dy, 5.5, 3.5);
+        ctx.fillStyle = '#e9dfc4';
+        ctx.fill();
+        ctx.stroke();
+      }
+      break;
+    case 'hut':
+      house(0, 4, 7, 4);
+      ctx.stroke();
+      break;
+    case 'cottage':
+      // Burnt: no roof left, a cross through it.
+      ctx.strokeRect(-4, -3, 8, 7);
+      ctx.beginPath();
+      ctx.moveTo(-4, -3);
+      ctx.lineTo(4, 4);
+      ctx.moveTo(4, -3);
+      ctx.lineTo(-4, 4);
+      ctx.stroke();
+      break;
+    case 'yard':
+      // A hull up on the slip.
+      ctx.beginPath();
+      ctx.moveTo(-7, -1);
+      ctx.quadraticCurveTo(0, 6, 7, -1);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-8, 5);
+      ctx.lineTo(8, 5);
+      ctx.stroke();
+      break;
+    case 'light':
+      // The tower, and its beams.
+      ctx.beginPath();
+      ctx.moveTo(-3, 6);
+      ctx.lineTo(-1.6, -6);
+      ctx.lineTo(1.6, -6);
+      ctx.lineTo(3, 6);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      for (const a of [-0.5, 0, 0.5]) {
+        ctx.moveTo(4 * Math.cos(a), -8 + 4 * Math.sin(a));
+        ctx.lineTo(10 * Math.cos(a), -8 + 10 * Math.sin(a));
+        ctx.moveTo(-4 * Math.cos(a), -8 + 4 * Math.sin(a));
+        ctx.lineTo(-10 * Math.cos(a), -8 + 10 * Math.sin(a));
+      }
+      ctx.stroke();
+      break;
+    case 'tree':
+      ctx.beginPath();
+      ctx.moveTo(0, 6);
+      ctx.lineTo(0, -1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, -3, 4.5, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    case 'crater':
+      ctx.beginPath();
+      ctx.arc(0, 0, 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        ctx.moveTo(7 * Math.cos(a), 7 * Math.sin(a));
+        ctx.lineTo(4.5 * Math.cos(a), 4.5 * Math.sin(a));
+      }
+      ctx.stroke();
+      break;
+    case 'cairn':
+      ctx.beginPath();
+      ctx.moveTo(-5, 4);
+      ctx.lineTo(0, -5);
+      ctx.lineTo(5, 4);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-2.5, 0);
+      ctx.lineTo(2.5, 0);
+      ctx.stroke();
+      break;
+    case 'buoy':
+      ctx.beginPath();
+      ctx.arc(0, 2, 3, 0, Math.PI * 2);
+      ctx.moveTo(0, -1);
+      ctx.lineTo(0, -7);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, -8, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    case 'wreck':
+      // A hull on its side, the mast broken off.
+      ctx.beginPath();
+      ctx.moveTo(-7, 1);
+      ctx.quadraticCurveTo(0, 7, 7, 1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-1, 2);
+      ctx.lineTo(3, -6);
+      ctx.moveTo(3, -6);
+      ctx.lineTo(1, -3);
+      ctx.stroke();
+      break;
+  }
+  ctx.restore();
+}
+
+/** A red tick: been there. */
+function tick(ctx, x, y) {
+  ctx.save();
+  ctx.strokeStyle = RED;
+  ctx.lineWidth = 2.4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + 3.5, y + 4);
+  ctx.lineTo(x + 10, y - 6);
+  ctx.stroke();
+  ctx.restore();
+}
 
 const ROWS = {
   'On foot': [
@@ -153,11 +303,6 @@ export class Screens {
     ctx.fillStyle = '#3a2c1c';
     ctx.font = `24px ${HAND}`;
     ctx.textAlign = 'center';
-    for (const isl of ISLANDS) {
-      const [x, y] = this.#toPx(isl.x, isl.z);
-      const below = isl.id === 'saddle' ? 0 : Math.min(isl.land, 90) * (c.width / (2 * this.R)) * 0.75 + 18;
-      ctx.fillText(isl.name, x, y + below);
-    }
     // Frame and north arrow.
     ctx.strokeStyle = '#3a2c1c';
     ctx.lineWidth = 3;
@@ -173,12 +318,57 @@ export class Screens {
     this.base = c;
   }
 
-  /** Redraw the chart with the boat, the bear and the wind. */
-  update({ boat, player, wind, aboard = false, catchLog = [], finds = null }) {
+  /**
+   * The islands' names and the landmarks, each ticked if you've been there
+   * (the ones you haven't are fainter: still to see).
+   */
+  #places(ctx, visited) {
+    const scale = this.canvas.width / (2 * this.R);
+    ctx.textBaseline = 'alphabetic';
+    for (const isl of ISLANDS) {
+      const [x, y0] = this.#toPx(isl.x, isl.z);
+      const y = y0 + (isl.id === 'saddle' ? 0 : Math.min(isl.land, 90) * scale * 0.75 + 18);
+      const been = visited.has(isl.id);
+      ctx.font = `24px ${HAND}`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = INK;
+      ctx.globalAlpha = been ? 1 : 0.62;
+      ctx.fillText(isl.name, x, y);
+      ctx.globalAlpha = 1;
+      if (been) tick(ctx, x + ctx.measureText(isl.name).width / 2 + 5, y - 7);
+    }
+    this.marks ??= Object.entries(LANDMARKS).map(([id, m]) => ({ id, m, at: landmarkAt(id) }));
+    ctx.font = `17px ${HAND}`;
+    for (const { id, m, at } of this.marks) {
+      const [x, y] = this.#toPx(at.x, at.z);
+      const been = visited.has(id);
+      ctx.globalAlpha = been ? 1 : 0.6;
+      glyph(ctx, m.kind, x, y);
+      const [dx, dy, side] = m.label;
+      ctx.textAlign = side;
+      ctx.fillStyle = INK;
+      ctx.fillText(m.name, x + dx, y + dy);
+      ctx.globalAlpha = 1;
+      if (been) tick(ctx, x + 3, y - 12); // (on the mark itself, so it's clear whose it is)
+    }
+    // How much of it you've seen.
+    const n = PLACE_IDS.filter((id) => visited.has(id)).length;
+    ctx.font = `22px ${HAND}`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = INK;
+    ctx.fillText(`Been to ${n} of the ${PLACE_IDS.length} places marked`, this.canvas.width / 2, 40);
+    tick(ctx, this.canvas.width / 2 - 104, 58);
+    ctx.font = `17px ${HAND}`;
+    ctx.fillText("been there (faint: not yet)", this.canvas.width / 2 + 6, 62);
+  }
+
+  /** Redraw the chart with the boat, the bear, the wind, and where you've been. */
+  update({ boat, player, wind, aboard = false, catchLog = [], finds = null, visited = new Set() }) {
     if (!this.chart.classList.contains('open')) return;
     if (!this.base) this.#drawBase();
     const ctx = this.canvas.getContext('2d');
     ctx.drawImage(this.base, 0, 0);
+    this.#places(ctx, visited);
     // The boat: an arrow along her heading.
     const b = boat.state;
     const [bx, by] = this.#toPx(b.x, b.z);

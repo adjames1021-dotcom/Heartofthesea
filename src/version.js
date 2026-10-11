@@ -2,6 +2,7 @@
 // "version" in package.json) with every update, newest first.
 
 export const CHANGES = [
+  ['0.14', 'Rain that looks like rain; smooth at any refresh rate (120, 144, 240 Hz); villagers sit on their benches; landmarks and where you have been on the chart'],
   ['0.13', 'The cabin inside the hull; rigging that holds together; every village and the yard rebuilt by hand; money, and three shops you walk round; two places to eat, with cooks who teach'],
   ['0.12', 'Progress kept on the server (with a save code); three villages and the people in them; things they ask of you, in a journal (J); a boatyard and five things it can do to your boat; fruit, cooking and dishes; a cabin you can arrange and show to visitors'],
   ['0.11', 'The bear leans with the boat, steadier walking on deck, a smaller, cosier cabin, more life on the islands, version numbers'],

@@ -313,9 +313,9 @@ export class Loose {
     _yaw.setFromAxisAngle(_up, -this.yaw);
     if (this.ground && this.ground.y > 0.6) {
       _tilt.setFromUnitVectors(_up, this.ground);
-      this.tilt.slerp(_tilt, 0.25);
+      this.tilt.slerp(_tilt, 1 - Math.exp(-dt * 17));
     } else {
-      this.tilt.slerp(_noTilt, 0.1);
+      this.tilt.slerp(_noTilt, 1 - Math.exp(-dt * 6.3));
     }
     this.object.quaternion.copy(this.tilt).multiply(_yaw);
   }

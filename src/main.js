@@ -9,6 +9,7 @@ import { heightAt, setWaveDamping } from '../shared/waves.js';
 import { dampingAt, groundAt, ISLAND_BY_ID, toWorld, gannetNest } from '../shared/world.js';
 import { hoursAt, swellScaleAt, cloudCoverAt, windAt, stormAt, nextStormIn, forceStorm } from '../shared/environment.js';
 import { Storm } from './storm.js';
+import { ChartMarks } from './chartmarks.js';
 import { VERSION, BUILD } from './version.js';
 import { Progress } from './progress.js';
 import { BOAT } from '../shared/boat.js';
@@ -136,6 +137,7 @@ player.bear.setShovel(false, shovelModel());
 const input = new Input(renderer.domElement);
 const follow = new FollowCamera(camera);
 const hud = new Hud();
+const chartMarks = new ChartMarks({ progress, hud });
 const finds = new Finds({ scene, world, hud, progress });
 const audio = new OceanAudio();
 const fishing = new Fishing({ scene, hud, player, audio, progress });
@@ -149,7 +151,7 @@ const shops = new Shops({ villages, progress, talk });
 const restaurants = new Restaurants({ scene, villages, progress, talk });
 const questWorld = new QuestWorld({ scene, progress });
 const gathering = new Gathering({ scene, world, progress });
-const stormFx = new Storm({ scene, audio });
+const stormFx = new Storm({ scene, audio, boat });
 if (dev.storm !== null) forceStorm(dev.storm);
 const weather = { warned: false, wild: false };
 await progressReady;
@@ -337,7 +339,7 @@ function putDown() {
   c.pos.copy(player.pos).addScaledVector(f, 0.75);
   c.pos.y += player.mode === 'swim' ? 0.6 : 0.35;
   c.vel.set(player.vel.x * 0.5, 0, player.vel.z * 0.5);
-  if (player.platformVel) c.vel.add(new THREE.Vector3(player.platformVel.x, 0, player.platformVel.z));
+  // (On a deck it rides along with her from here: no need to give it her speed too.)
   c.platform = player.platform;
   player.carrying = null;
 }
@@ -518,15 +520,7 @@ function seaEvents(dt) {
     }
   }
   sea.wasOver = sea.phase === 'over' || sea.phase === 'righting' || (sea.wasOver && sea.phase);
-  // Knocked down or keel-up, her sails are in the water: she stops.
-  if (sea.phase) {
-    const k = Math.exp(-dt * 1.4);
-    b.u *= k;
-    b.v *= k;
-    b.r *= k;
-    b.heel *= Math.exp(-dt * 2);
-    b.heelRate = 0;
-  }
+  // (While she's knocked down or keel-up she stops: see Boat.step.)
 }
 
 // A word before a storm, and when it's over.
@@ -570,10 +564,22 @@ const STEP = 1 / 60;
 let started = false;
 let simT = null;
 
+// The world clock, read smoothly: Date.now() isn't in step with the frames
+// (and some browsers round it to tens of milliseconds), so the sea would
+// judder on a fast screen. Run it on the frames' own time instead, and only
+// ease back toward the real clock (or jump, if it's far out).
+let smoothT = null;
+function frameTime(dt) {
+  const real = worldTime();
+  if (smoothT === null || Math.abs(real - smoothT) > 0.5) smoothT = real;
+  else smoothT += dt + (real - smoothT) * Math.min(1, dt * 2);
+  return smoothT;
+}
+
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
-  let t = worldTime();
+  let t = frameTime(dt);
   if (dev.simTime) {
     simT = (simT ?? t) + dt;
     t = simT;
@@ -624,8 +630,18 @@ function frame(now) {
   env.kick = storm * (0.6 * Math.sin(t * 0.83) + 0.4 * Math.sin(t * 2.1 + 1.3));
 
   // The storm itself: rain, lightning, a dark sea, the wind howling.
-  const flash = stormFx.update(dt, { storm, camera, wind: env.wind, inside: interior.inside, night: atmosphere.uniforms.uNight.value });
+  const flash = stormFx.update(dt, {
+    storm,
+    camera,
+    wind: env.wind,
+    inside: interior.inside,
+    night: atmosphere.uniforms.uNight.value,
+    waterAt: (x, z) => heightAt(x, z, t, swell),
+    fog: atmosphere.fog.color,
+  });
   atmosphere.setWeather(storm, flash);
+  // (The sea takes the storm's thicker fog too, not just the islands and the sky.)
+  ocean.uniforms.uFogDensity.value = atmosphere.fog.density;
   // Below decks: the deck over you keeps the sun off (its shadow does that)
   // and much of the sky's light; the lamps and the companionway do the rest.
   atmosphere.hemi.intensity *= 1 - 0.35 * interior.cutK;
@@ -638,7 +654,7 @@ function frame(now) {
     boat.step(STEP, env);
     acc -= STEP;
   }
-  boat.update(dt, t, swell, storm);
+  boat.update(dt, t, swell, storm, acc / STEP);
   boat.body.setMatrix(boat.matrix, boat.prevMatrix);
   seaEvents(dt);
   ocean.uniforms.uHullInv.value.copy(boat.matrix).invert();
@@ -695,7 +711,7 @@ function frame(now) {
     journal.toggle();
   }
   if (journal.open && input.pressed('Escape')) journal.toggle(false);
-  journal.update(input);
+  journal.update(input, dt);
   // Lights: L anywhere aboard. They come on by themselves at dusk and go off at dawn.
   const nightNow = atmosphere.uniforms.uNight.value > 0.5;
   if (nightNow !== wasNight) {
@@ -715,7 +731,8 @@ function frame(now) {
     journal.toggle(false);
     screens.toggleChart();
   }
-  screens.update({ boat, player, wind: env.wind, aboard: interior.inside, catchLog: fishing.summary(), finds: finds.summary() });
+  chartMarks.update(dt, { player, boatBody: boat.body });
+  screens.update({ boat, player, wind: env.wind, aboard: interior.inside, catchLog: fishing.summary(), finds: finds.summary(), visited: screens.open ? chartMarks.visited : undefined });
   if (player.station !== 'helm') {
     if (input.pressed('ArrowRight')) treasure.flip(1);
     if (input.pressed('ArrowLeft')) treasure.flip(-1);

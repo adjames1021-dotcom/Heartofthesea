@@ -32,7 +32,8 @@ export class FollowCamera {
     this.yaw -= input.mouse.dx * this.sensitivity;
     this.pitch = Math.min(1.25, Math.max(-0.25, this.pitch + input.mouse.dy * this.sensitivity));
     if (input.mouse.wheel) {
-      this.zoom[context] = Math.min(24, Math.max(2.5, this.zoom[context] * (1 + input.mouse.wheel * 0.12)));
+      // (Per notch, however many land in one frame.)
+      this.zoom[context] = Math.min(24, Math.max(2.5, this.zoom[context] * Math.pow(1.12, input.mouse.wheel)));
     }
     this.context = context;
     const want = this.zoom[context];

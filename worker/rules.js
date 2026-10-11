@@ -17,6 +17,7 @@ import { VESSELS, ROOM, EFFECTS, RECIPES, cookable, goneOff, doneness, recipeFor
 import { SHOPS, VALUE, FISH_PRICE, NED_FEE, sellableFish, stockFor, openNow } from '../shared/trade.js';
 import { dayAt, seasonAt } from '../shared/environment.js';
 import { PLACES, onMenu } from '../shared/restaurants.js';
+import { PLACE_IDS, isAt } from '../shared/landmarks.js';
 
 /** A brand-new player. */
 export function freshState(now) {
@@ -46,6 +47,7 @@ export function freshState(now) {
     pence: 0, // money, in pence (shared/trade.js)
     shops: {}, // what you've bought today: { [shop]: { day, bought: { [slot]: n } } }
     meals: {}, // how many times you've eaten at each place (shared/restaurants.js)
+    visited: [], // islands set foot on and landmarks been to, for the chart (shared/landmarks.js)
     nextId: 1,
   };
 }
@@ -401,6 +403,16 @@ ACTIONS.buy = async (s, a, { now }) => {
 };
 
 /** Something out in the world for a quest (shared/quests.js): only counts at the right stage. */
+/** Been somewhere new: an island (ashore) or a landmark (close by). Only from there, and only once. */
+ACTIONS.visit = async (s, a) => {
+  if (typeof a.id !== 'string' || !PLACE_IDS.includes(a.id) || !finite(a.x, a.z)) return fail('what');
+  if (!isAt(a.id, a.x, a.z, 8)) return fail('where');
+  s.visited ??= [];
+  if (s.visited.includes(a.id)) return fail('already');
+  s.visited.push(a.id);
+  return { ok: true };
+};
+
 ACTIONS.quest = async (s, a, { now }) => {
   const qd = Object.hasOwn(QUESTS, a.id) ? QUESTS[a.id] : null;
   const step = qd && Object.hasOwn(qd.steps, a.step) ? qd.steps[a.step] : null;

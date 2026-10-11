@@ -35,7 +35,9 @@ everyone at once. About half the time there's one somewhere in each
 "The glass is falling" is your warning, a minute ahead. Then the wind gets up to 30–45 knots
 and swings about, the sea builds to big breaking swells, the sky closes
 over, rain drives across, and lightning comes down onto the sea, with the
-thunder arriving later the further away it struck. The lighthouse on Old
+thunder arriving later the further away it struck. The rain comes slanting
+in on the wind, rings the sea round you and splashes on the deck, and
+further off it hangs in grey sheets that drift across. The lighthouse on Old
 Head lights up at night and in storms.
 
 Sailing in a storm is fast and wild: she gets up and planes at 15–20 knots,
@@ -104,8 +106,14 @@ At the helm a card at the top shows the wind (the dial: your boat in the
 middle, the red mark is where the wind comes from, the shaded arc is too
 close to sail), speed, heading and depth.
 
-H shows the controls and a plan of the boat; Tab shows the chart. The
-anchor's state is always shown top left while you're aboard, and a black
+H shows the controls and a plan of the boat; Tab shows the chart, with the
+villages, the lighthouse, the wreck and the other landmarks inked on it. Each
+island gets a red tick once you've been ashore on it, and each landmark once
+you've been close; the ones you haven't seen yet are fainter, and the top of
+the chart says how many you've been to. (Kept with the rest of your progress
+on the server.)
+
+The anchor's state is always shown top left while you're aboard, and a black
 ball goes up on its halyard in front of the mast when it's holding.
 Telltales knotted to the shrouds and the backstay, and the pennant on the
 backstay, show where the wind's coming from. The rig is all joined up:
@@ -113,7 +121,8 @@ the mainsheet runs from the end of the boom to a traveller in the cockpit,
 the jib sheets to the cockpit winches, the halyards back along the
 coachroof, and it all moves as she sails. The lights come on by themselves at dusk:
 navigation lights under way, the anchor light at anchor, and a floodlight
-on the mast and a lamp over the companionway so you can see the deck.
+on the mast and a lamp each side of the companionway so you can see the
+deck.
 
 Sailing is arcade by default: the sails trim themselves and she's quick and
 forgiving. Settings → Sailing switches to realistic, where you trim the
@@ -394,6 +403,7 @@ src/fishing.js         rod, float, bites and the catch log
 src/islandlife.js      crabs, sandpipers, butterflies, goats, lizards, fireflies
 src/version.js         version number and what each version changed
 src/storm.js           rain, lightning and the flash; the storm's strength is shared/environment.js
+shared/landmarks.js    the landmarks on the chart; src/chartmarks.js notices where you've been
 src/lighthouse.js      the lighthouse, the crater lake and the big tree
 src/wildlife.js        birds, dolphins, turtles, seals, shoals (the shoals are drawn in src/ocean.js)
 src/finds.js           the hut, cairn, ruin, dinghy, anchor and the things to find
