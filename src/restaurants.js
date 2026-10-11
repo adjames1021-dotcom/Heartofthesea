@@ -22,14 +22,14 @@ function nextMeal(h) {
   return (order.find(([, [a]]) => a > h) ?? order[0])[0];
 }
 
-/** A bowl of something, from above it's mostly the stew. */
+/** A bowl of something, from above it's mostly the stew. Its bottom's at y = 0. */
 function bowlModel() {
   const g = new THREE.Group();
   const b = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 4, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#7a5a40', side: THREE.DoubleSide }));
-  b.position.y = 0.085;
-  const stew = new THREE.Mesh(new THREE.CircleGeometry(0.088, 10), new THREE.MeshLambertMaterial({ color: '#a2703e' }));
+  b.position.y = 0.1;
+  const stew = new THREE.Mesh(new THREE.CircleGeometry(0.09, 10), new THREE.MeshLambertMaterial({ color: '#a2703e' }));
   stew.rotation.x = -Math.PI / 2;
-  stew.position.y = 0.07;
+  stew.position.y = 0.084;
   g.add(b, stew);
   return g;
 }
@@ -180,7 +180,7 @@ class Kitchen {
       const q = t.c.clone().addScaledVector(t.along, THREE.MathUtils.clamp(p.pos.clone().sub(t.c).dot(t.along), -0.65, 0.65));
       const out = V(p.pos.x - q.x, 0, p.pos.z - q.z).normalize();
       bowl.position.copy(q).addScaledVector(out, 0.2);
-      bowl.position.y = t.c.y + 0.01;
+      bowl.position.y = t.c.y + 0.004; // (c is just over the boards' middle; their tops are a hair under)
       bowl.visible = true;
     }
   }

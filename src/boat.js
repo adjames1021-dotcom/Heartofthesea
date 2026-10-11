@@ -1029,15 +1029,16 @@ export class Boat {
     // carries them: red and green on the bow flanks, white on the stern
     // rail, a steaming light on the front of the mast, the anchor light on top.
     const housingMat = new THREE.MeshLambertMaterial({ color: '#1c1e20' });
-    const lamp = (color, pos, housing = null) => {
+    const lamp = (color, pos, housing = null, r = 0.075) => {
       const mat = new THREE.MeshBasicMaterial({ color: '#333333' });
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), mat);
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), mat);
       m.position.copy(pos);
       this.root.add(m);
       let h = null;
       if (housing) {
         h = new THREE.Mesh(new THREE.BoxGeometry(...housing.size), housingMat);
         h.position.copy(pos).add(housing.offset);
+        h.rotation.z = housing.tilt ?? 0;
         this.root.add(h);
       }
       // Bright enough to bloom a little, not enough to glare.
@@ -1057,21 +1058,33 @@ export class Boat {
       steaming: lamp('#fff3d6', new THREE.Vector3(LAYOUT.mast.x + 0.16, 9.2, 0), { size: [0.1, 0.14, 0.14], offset: new THREE.Vector3(-0.07, 0, 0) }),
       anchor: lamp('#fff3d6', new THREE.Vector3(LAYOUT.mast.x + 0.07, LAYOUT.mast.top + 0.15, 0), { size: [0.05, 0.12, 0.05], offset: new THREE.Vector3(0, -0.09, 0) }),
       // Working lights so you can see the deck: a floodlight on the front of
-      // the mast under the spreaders, and a lamp over the companionway.
+      // the mast under the spreaders, and a bulkhead lamp each side of the
+      // companionway, on the after end of the coachroof (it leans forward a
+      // little, so they do too), lighting the cockpit.
       deck: lamp('#ffe6b8', new THREE.Vector3(LAYOUT.mast.x + 0.17, 6.85, 0), { size: [0.12, 0.1, 0.2], offset: new THREE.Vector3(-0.05, 0.05, 0) }),
-      cockpit: lamp('#ffd9a0', new THREE.Vector3(LAYOUT.cabin.x0 - 0.06, deckAt(LAYOUT.cabin.x0) + LAYOUT.cabin.h + 0.02, 0), { size: [0.1, 0.06, 0.22], offset: new THREE.Vector3(0.02, 0.05, 0) }),
+      ...(() => {
+        const c = LAYOUT.cabin;
+        const y0 = deckAt(c.x0) - 0.05;
+        const lean = 0.1 / (c.h + 0.05); // the after end: x0 at the deck to x0 + 0.1 at the roof
+        const y = deckAt(c.x0) + 0.38;
+        const x = c.x0 + lean * (y - y0);
+        const at = (s) => lamp('#ffd9a0', new THREE.Vector3(x - 0.045, y, s * 0.64), { size: [0.05, 0.15, 0.11], offset: new THREE.Vector3(0.022, 0, 0), tilt: -Math.atan(lean) }, 0.042);
+        return { cockpit: at(1), cockpitPort: at(-1) };
+      })(),
     };
-    // The lamp over the companionway sits on the coachroof, so it goes with it when that's cut away.
-    for (const o of this.lamps.cockpit.meshes) {
-      if (o.material === housingMat) o.material = housingMat.clone();
-      o.userData.cut = true;
+    // The companionway lamps are on the coachroof, so they go with it when that's cut away.
+    for (const l of [this.lamps.cockpit, this.lamps.cockpitPort]) {
+      for (const o of l.meshes) {
+        if (o.material === housingMat) o.material = housingMat.clone();
+        o.userData.cut = true;
+      }
     }
     // The real light they throw. Kept in the scene and dimmed rather than
     // removed, so switching them doesn't make every material recompile.
     this.deckLight = new THREE.PointLight('#ffe2b0', 0, 13, 1.4);
     this.deckLight.position.set(LAYOUT.mast.x + 0.4, 6.6, 0);
     this.cockpitLight = new THREE.PointLight('#ffcf8a', 0, 7, 1.5);
-    this.cockpitLight.position.set(LAYOUT.cabin.x0 - 0.4, deckAt(LAYOUT.cabin.x0) + LAYOUT.cabin.h - 0.05, 0);
+    this.cockpitLight.position.set(LAYOUT.cabin.x0 - 0.35, deckAt(LAYOUT.cabin.x0) + 0.42, 0);
     this.root.add(this.deckLight, this.cockpitLight);
 
     // Telltales: wool ribbons on the shrouds and the stern rail that stream
@@ -1462,6 +1475,7 @@ export class Boat {
     set(L.anchor, on && anchored);
     set(L.deck, on);
     set(L.cockpit, on);
+    set(L.cockpitPort, on);
     this.deckLight.intensity = on ? 5 : 0;
     this.cockpitLight.intensity = on ? 3 : 0;
     if (this.upgrades.lantern?.visible) this.upgrades.lantern.userData.light(on);

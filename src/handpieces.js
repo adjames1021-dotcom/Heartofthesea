@@ -863,8 +863,8 @@ export function kitchen(b, kit, k, tables, inst) {
   const cvo = e > 0 ? cv1 : cv0;
   const cmid = (cv0 + cv1) / 2;
   for (let i = 0; i < 4; i++) {
-    const p = F.at(-0.05, cvo - e * 0.35, ch + 0.035 + i * 0.016);
-    const plate = new THREE.CylinderGeometry(0.13, 0.11, 0.014, 12);
+    const p = F.at(-0.05, cvo - e * 0.35, ch + 0.03 + i * 0.016);
+    const plate = new THREE.CylinderGeometry(0.13, 0.11, 0.012, 12);
     plate.translate(p.x + kit.r(-0.01, 0.01), p.y, p.z + kit.r(-0.01, 0.01));
     kit.parts.push(paint(plate, kit.col(['#9a9a92', '#8a8a84'], 0.04).getStyle()));
   }
@@ -876,7 +876,7 @@ export function kitchen(b, kit, k, tables, inst) {
   kit.block(F.at(-0.12, cmid + e * 0.3, ch + 0.035), 0.24, 0.02, 0.07, '#8a8f93', b.yaw - k.face + 0.3);
   kit.block(F.at(-0.12, cmid + e * 0.12, ch + 0.04), 0.12, 0.035, 0.04, kit.col(pal.dark), b.yaw - k.face + 0.3);
   inst.put('jar', SHAPES.jar, F.at(-0.15, cvo - e * 0.75, ch + 0.03), kit.r(0, 6), '#b8b2a2', 0.9);
-  const plate = F.at(0.05, cmid - e * 0.15, ch + 0.03);
+  const plate = F.at(0.05, cmid - e * 0.15, ch + 0.024); // on the counter boards (their tops are at ch + 0.0225)
 
   // Fish on a bar under the beam, and a string of onions.
   const ha = F.at(front - 0.02, vf + e * 0.4, lo - 0.35);

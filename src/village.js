@@ -21,6 +21,8 @@ const HAND = new Set(['cove', 'landing', 'strand', 'yard']);
 // says who does what, when).
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const _seat = new THREE.Vector3();
+const _lift = new THREE.Vector3(0, 0.085, 0);
 const TAU = Math.PI * 2;
 const mat = deepenShadows(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
 const WOOD = '#8c7a62';
@@ -859,7 +861,37 @@ class Villager {
     this.spot = spot;
     this.act = act;
     this.path = [];
+    this.seatK = act === 'sit' ? 1 : 0;
     this.#faceSpot();
+  }
+
+  /**
+   * Where someone sat at a spot sits, in the world (y: what they sit on): the
+   * plank of its bench (src/handpieces.js bench, 0.15 behind the spot and 0.4
+   * up; a little forward of its middle, so the legs clear the edge), the log
+   * by the fire (built in Villages, 0.45 toward the fire and 0.33 up), or the
+   * ground.
+   */
+  #seat(name) {
+    const d = this.#spotDef(name);
+    if (!d) return this.pos.clone();
+    const groundY = (p) => d.y ?? groundAt(p.x, p.z);
+    if (d.bench && d.face) {
+      const f = Math.atan2(d.face[1] - d.at[1], d.face[0] - d.at[0]);
+      const mid = this.b.w(d.at[0] - Math.cos(f) * 0.15, d.at[1] - Math.sin(f) * 0.15);
+      const p = this.b.w(d.at[0] - Math.cos(f) * 0.09, d.at[1] - Math.sin(f) * 0.09);
+      return V(p.x, groundY(mid) + 0.4, p.z);
+    }
+    const fire = this.village.fire;
+    if (fire && /^fire\d$/.test(name) && this.village.spots?.[name] === d) {
+      const fp = this.b.w(...fire);
+      const sp = this.b.w(...d.at);
+      const l = Math.hypot(sp.x - fp.x, sp.z - fp.z) || 1;
+      const ox = sp.x - ((sp.x - fp.x) / l) * 0.45;
+      const oz = sp.z - ((sp.z - fp.z) / l) * 0.45;
+      return V(ox - ((sp.x - fp.x) / l) * 0.03, groundAt(ox, oz) + 0.33, oz - ((sp.z - fp.z) / l) * 0.03);
+    }
+    return this.pos.clone();
   }
 
   #faceSpot() {
@@ -917,6 +949,7 @@ class Villager {
     // Someone with something to say turns to you and waves now and then;
     // anyone awake glances at you when you're close.
     let look = null;
+    let wave = false;
     const awakeNow = (awake(this.def, h) && !this.path.length) || this.listening;
     if (player && awakeNow) {
       const dx = player.pos.x - this.pos.x;
@@ -929,10 +962,16 @@ class Villager {
         else this.heading += Math.atan2(Math.sin(toYou - this.heading), Math.cos(toYou - this.heading)) * Math.min(1, dt * 5);
         if (this.act === 'work' || this.act === 'fish') mode = 'idle';
       } else if (this.wantsToTalk && d < 14) {
-        this.heading += Math.atan2(Math.sin(toYou - this.heading), Math.cos(toYou - this.heading)) * Math.min(1, dt * 3);
+        // (Sat down, they stay sat and turn their head; up, they turn round.)
+        const seated = mode === 'sit';
+        if (seated) look = Math.max(-1.1, Math.min(1.1, Math.atan2(Math.sin(toYou - this.heading), Math.cos(toYou - this.heading))));
+        else this.heading += Math.atan2(Math.sin(toYou - this.heading), Math.cos(toYou - this.heading)) * Math.min(1, dt * 3);
         this.waveT -= dt;
         if (this.waveT < -4.5) this.waveT = 1.6;
-        if (this.waveT > 0 && d > 3) mode = 'wave';
+        if (this.waveT > 0 && d > 3) {
+          if (seated) wave = true;
+          else mode = 'wave';
+        }
       } else if (d < 7) {
         look = Math.atan2(Math.sin(toYou - this.heading), Math.cos(toYou - this.heading));
         if (Math.abs(look) > 1.6) look = null;
@@ -944,6 +983,15 @@ class Villager {
     r.visible = this.act !== 'away' || this.path.length > 0;
     r.position.copy(this.pos);
     r.rotation.set(0, this.heading, 0);
+    // Sat down: up onto the seat itself (and back down off it when they go).
+    // The sitting pose drops the body so its bottom is 0.11 under the feet;
+    // lift it that much, less a little for sinking in, onto what they sit on.
+    if (mode === 'sit' && this.seatFor !== this.spot) {
+      this.seatFor = this.spot;
+      this.seatAt = this.#seat(this.spot);
+    }
+    this.seatK = (this.seatK ?? 0) + ((mode === 'sit' ? 1 : 0) - (this.seatK ?? 0)) * (1 - Math.exp(-dt * 8));
+    if (this.seatAt && this.seatK > 1e-3) r.position.lerp(_seat.copy(this.seatAt).add(_lift), this.seatK);
     if (mode === 'sleep') {
       // Lying on the bunk on one side, along it (bunks run across the hut,
       // so a quarter turn from the way the house faces; head on Ned's pillow).
@@ -953,7 +1001,7 @@ class Villager {
       r.position.y += 0.42;
     }
     this.bear.setRod(mode === 'fish');
-    this.bear.update(dt, { mode, speed, t, look, effort: 0 });
+    this.bear.update(dt, { mode, speed, t, look, effort: 0, wave });
   }
 
   get awake() {

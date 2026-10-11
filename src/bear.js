@@ -243,12 +243,18 @@ export class Bear {
 
     switch (s.mode) {
       case 'sit': {
-        // Sat on a log or a bench: legs out in front, paws on knees.
-        target.legX = [-1.45, -1.45];
+        // Sat on a log or a bench: legs out in front (swinging a little),
+        // paws on knees; or one paw up, waving, without getting up.
+        const swing = Math.sin(t * 1.3) * 0.05;
+        target.legX = [-1.47 + swing, -1.47 - swing];
         target.bob = -0.24;
         target.lean = -0.08;
         target.armX = [-0.55, -0.55];
         target.armZ = [-0.15, 0.15];
+        if (s.wave) {
+          target.armX[1] = -2.7;
+          target.armZ[1] = -0.25 + Math.sin(t * 9) * 0.45;
+        }
         target.headX = 0.05 + Math.sin(t * 0.4) * 0.04;
         break;
       }

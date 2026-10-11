@@ -629,13 +629,20 @@ export class Interior {
       box(x + 0.25, (y0 + y1) / 2, -(z0 + 0.615), 0.44, y1 - y0 - 0.06, 0.012, TEAK_LIGHT);
       rod(V(x + 0.42, y0 + 0.05, -(z0 + 0.6)), V(x + 0.42, y0 + 0.09, -(z0 + 0.6)), 0.01, BRASS);
     }
-    for (let i = 0; i < 5; i++) {
-      const plate = new THREE.CylinderGeometry(0.1, 0.1, 0.014, 14);
-      plate.rotateX(Math.PI / 2);
-      plate.translate(-0.95 + i * 0.045, 1.07, -(z0 + 0.58));
-      parts.push(paint(plate, ['#efe9dc', NAVY_LIGHT, '#efe9dc', '#c9b98a', '#efe9dc'][i]));
+    // The plate rack: plates on edge, one to a slot between two rails, with
+    // an end board each side (none of them touching the next).
+    {
+      const zr = -(z0 + 0.58);
+      const yc = 1.085;
+      for (let i = 0; i < 5; i++) {
+        const plate = new THREE.CylinderGeometry(0.095, 0.095, 0.012, 16);
+        plate.rotateZ(Math.PI / 2);
+        plate.translate(-0.95 + i * 0.05, yc, zr);
+        parts.push(paint(plate, ['#efe9dc', NAVY_LIGHT, '#efe9dc', '#c9b98a', '#efe9dc'][i]));
+      }
+      for (const dz of [-0.06, 0.06]) rod(V(-1.02, 1.0, zr + dz), V(-0.71, 1.0, zr + dz), 0.009, TEAK_DARK, parts, 5);
+      for (const x of [-1.03, -0.7]) box(x, 1.045, zr, 0.014, 0.1, 0.15, TEAK_DARK);
     }
-    box(-0.86, 1.0, -(z0 + 0.6), 0.28, 0.02, 0.06, TEAK_DARK);
     rod(V(-0.2, 1.16, -(z0 + 0.6)), V(0.35, 1.16, -(z0 + 0.6)), 0.008, TEAK_DARK);
     for (let i = 0; i < 4; i++) {
       const x = -0.12 + i * 0.13;
