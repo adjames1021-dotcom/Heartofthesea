@@ -147,6 +147,7 @@ export class Seakeeping {
       return this;
     }
     const dw = t - this.t;
+    if (dw < 1e-5) return this; // (no time to step over)
     const n = Math.min(12, Math.max(1, Math.ceil(dw / (1 / 90))));
     const h = dw / n;
     const prev = Float64Array.from(this.h);
@@ -243,6 +244,14 @@ export class Seakeeping {
     this.pitch = Math.max(-0.45, Math.min(0.45, this.pitch));
     this.t = t;
     this.#remember(b);
+    // (Should a bad number ever get in, put her straight back on the water
+    // rather than let it spread to everything she carries.)
+    if (!Number.isFinite(this.y + this.vy + this.pitch + this.vp + this.roll + this.vr)) {
+      this.last = null;
+      this.#settle(b, t, scale);
+      this.#remember(b);
+      this.phase = null;
+    }
     return this;
   }
 

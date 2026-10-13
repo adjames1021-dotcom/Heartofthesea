@@ -578,6 +578,13 @@ function frameTime(dt) {
 
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
+  // A frame with no time in it (some browsers round their timers, and on a
+  // fast screen two frames then share a timestamp): nothing has moved, so
+  // there's nothing to do. (Stepping the sea on no time at all broke it.)
+  if (!(dt > 0)) {
+    requestAnimationFrame(frame);
+    return;
+  }
   last = now;
   let t = frameTime(dt);
   if (dev.simTime) {
@@ -739,6 +746,11 @@ function frame(now) {
   }
   player.sheltered = interior.inside;
   player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis(), dryAt: (p) => boat.holds(p) });
+  // (Should the bear ever end up nowhere at all, a bad number having got in
+  // somewhere, put them back aboard rather than leave a blank screen.)
+  if (!Number.isFinite(player.pos.x + player.pos.y + player.pos.z)) {
+    player.place(boat.toWorld(new THREE.Vector3(-2.7, LAYOUT.cockpit.sole + 0.02, 0.45)), boat.body);
+  }
   fishing.update(dt, { t, waveScale: swell, night: atmosphere.uniforms.uNight.value > 0.5, camYaw: follow.yaw });
   treasure.update(dt, { t, waveScale: swell, boatBody: boat.body, player });
   puzzles.update(player);

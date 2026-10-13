@@ -39,10 +39,12 @@ export class FollowCamera {
     const want = this.zoom[context];
     this.dist += (want - this.dist) * (1 - Math.exp(-dt * 4));
 
-    if (this.first) {
+    if (this.first || !Number.isFinite(this.smoothTarget.x + this.smoothTarget.y + this.smoothTarget.z)) {
       this.smoothTarget.copy(target);
       this.first = false;
     }
+    if (!Number.isFinite(this.dist)) this.dist = want;
+    if (!Number.isFinite(this.blockedDist)) this.blockedDist = undefined;
     // Follow tightly sideways, a little softer vertically (bobbing on deck).
     const k = 1 - Math.exp(-dt * 14);
     const ky = 1 - Math.exp(-dt * 6);
