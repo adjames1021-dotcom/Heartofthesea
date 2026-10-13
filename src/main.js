@@ -646,11 +646,12 @@ function seaEvents(dt) {
 }
 
 // ---------- Overboard ----------
-// Gone over the side while she's not at anchor, or knocked flat into the sea:
-// after a few seconds in the water the screen closes in to black and you're
-// back aboard, in the cockpit. Not if she's at anchor and you went in on
-// purpose (to swim ashore), and not once you've reached land.
-const OVERBOARD = { wait: 6, close: 0.7, hold: 0.45, open: 0.9 };
+// Gone over the side with her sails up (or engine going) and her sailing
+// away: two seconds and the screen closes in to black and you're back
+// aboard, in the cockpit. Drifting off with no anchor down, or knocked flat
+// into the sea: the same after six. Not if she's at anchor and you went in
+// on purpose (to swim ashore), and not once you've reached land.
+const OVERBOARD = { wait: 6, sailing: 2, close: 0.7, hold: 0.45, open: 0.9 };
 const overboard = { t: 0, fromBoat: false, thrown: false, fade: null };
 const vignette = document.createElement('div');
 vignette.className = 'overboard';
@@ -660,11 +661,17 @@ function watchOverboard(dt) {
   const aboard = player.platform === boat.body || player.mode === 'station' || player.mode === 'hold' || interior.inside;
   if (aboard && !overboard.fade) Object.assign(overboard, { t: 0, fromBoat: true, thrown: false });
   else if (player.mode === 'ground' && player.grounded && !overboard.fade) Object.assign(overboard, { t: 0, fromBoat: false, thrown: false });
-  const counts = overboard.fromBoat && player.mode === 'swim' && (overboard.thrown || !boat.state.anchor.set);
+  // Sails up (or the engine going) and her sailing off without you: back
+  // aboard quickly. Otherwise (drifting off at no anchor, or knocked in) after a while.
+  const b = boat.state;
+  const away = Math.hypot(player.pos.x - b.x, player.pos.z - b.z) > 5;
+  const underWay = (b.mainHoist > 0.3 || b.jibOut > 0.3 || (b.engine && Math.abs(b.throttle) > 0.1)) && Math.hypot(b.u, b.v) > 0.5 && away;
+  const counts = overboard.fromBoat && player.mode === 'swim' && (overboard.thrown || underWay || !b.anchor.set);
   overboard.t = counts ? overboard.t + dt : 0;
+  const wait = underWay ? OVERBOARD.sailing : OVERBOARD.wait;
   // (Not while she's still on her side or keel-up: wait for her to come up.)
   const upright = boat.sea.phase !== 'over' && boat.sea.phase !== 'righting';
-  if (overboard.t > OVERBOARD.wait && upright && !overboard.fade) overboard.fade = { t: 0, moved: false };
+  if (overboard.t > wait && upright && !overboard.fade) overboard.fade = { t: 0, moved: false };
   const f = overboard.fade;
   if (!f) return;
   f.t += dt;

@@ -161,9 +161,10 @@ you've caught.
 To go ashore: sail in close, press G at the helm, and swim. The swim
 platform at the stern is where you climb back aboard. In the water you ride
 the sea: up every swell and down every trough, leaning with its slope, and
-carried round with it as the waves pass. Go over the side while she's not
-anchored and she won't wait: after a few seconds the screen closes in to
-black and you're back aboard in the cockpit (unless you've reached land).
+carried round with it as the waves pass. Go over the side while she's
+sailing off with her sails up (or her engine going) and two seconds later
+the screen closes in to black and you're back aboard in the cockpit; while
+she's drifting off with no anchor down, after six (unless you've reached land).
 
 ## People and places
 
