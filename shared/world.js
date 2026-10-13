@@ -7,7 +7,7 @@
 // = 0, negative = seabed); props and puzzle pieces are listed in the same frame.
 
 import { mulberry32, fbm, smoothstep as sstep, lerp, clamp } from './noise.js';
-import { sunDirection } from './environment.js';
+import { sunDirection, tideAt } from './environment.js';
 
 export const WORLD_SEED = 1721;
 export const SEA_FLOOR = -40;
@@ -30,6 +30,24 @@ const beach = (d, top = 2.2, width = 18) => top * sstep(0, width, d);
 
 function saddleIsland() {
   const BAY = { x: 25, z: 238, r: 55 };
+  const ground = (lx, lz) => {
+    const r = Math.hypot(lx, lz);
+    const wob = (fbm(lx * 0.0055 + 3.1, lz * 0.0055 - 1.7, 11, 3) - 0.5) * 80;
+    const sdf = Math.max(r - 232 + wob, BAY.r - Math.hypot(lx - BAY.x, lz - BAY.z));
+    if (sdf > 0) return shelf(sdf, 0.7);
+    const d = -sdf;
+    let h = beach(d, 2.4, 20) + 6 * sstep(16, 75, d);
+    const hill1 = 98 * Math.exp(-(sq(lx + 75) + sq(lz + 40)) / sq(85));
+    const hill2 = 56 * Math.exp(-(sq(lx - 100) + sq(lz - 45)) / sq(65));
+    h += (hill1 + hill2) * sstep(18, 95, d);
+    h += (fbm(lx * 0.035, lz * 0.035, 5, 3) - 0.5) * 7 * sstep(14, 45, d);
+    return h;
+  };
+  // The keepers' temple (shared/temple.js), up in the saddle between the
+  // hills: the ground levelled into a podium for it, banked down to the
+  // hillside round it, and the pit inside it cut down deep.
+  const T = { at: { x: 12, z: -2 }, half: { x: 10, z: 48 }, pit: { z0: -5, z1: 11, half: 5, depth: 8 } };
+  T.floor = Math.round(ground(T.at.x, T.at.z) + 1);
   return {
     name: 'Saddle Island',
     land: 300,
@@ -38,18 +56,18 @@ function saddleIsland() {
     features: {
       bay: BAY,
       buoy: { x: 22, z: 302 },
+      temple: T,
+      clear: [{ x: T.at.x, z: T.at.z, r: 62 }],
     },
     height(lx, lz) {
-      const r = Math.hypot(lx, lz);
-      const wob = (fbm(lx * 0.0055 + 3.1, lz * 0.0055 - 1.7, 11, 3) - 0.5) * 80;
-      const sdf = Math.max(r - 232 + wob, BAY.r - Math.hypot(lx - BAY.x, lz - BAY.z));
-      if (sdf > 0) return shelf(sdf, 0.7);
-      const d = -sdf;
-      let h = beach(d, 2.4, 20) + 6 * sstep(16, 75, d);
-      const hill1 = 98 * Math.exp(-(sq(lx + 75) + sq(lz + 40)) / sq(85));
-      const hill2 = 56 * Math.exp(-(sq(lx - 100) + sq(lz - 45)) / sq(65));
-      h += (hill1 + hill2) * sstep(18, 95, d);
-      h += (fbm(lx * 0.035, lz * 0.035, 5, 3) - 0.5) * 7 * sstep(14, 45, d);
+      let h = ground(lx, lz);
+      const dx = lx - T.at.x;
+      const dz = lz - T.at.z;
+      const box = Math.max(Math.abs(dx) - T.half.x - 2, Math.abs(dz) - T.half.z - 2);
+      if (box < 30) h = lerp(T.floor, h, sstep(0, 30, box));
+      // (The ground's only coarse here, a vertex every 4 m: cut a little wider than the pit, so its
+      // floor's all the way down under the pillars, and the walls round it hide the slope up.)
+      if (Math.abs(dx) < T.pit.half + 0.5 && dz > T.pit.z0 - 1.5 && dz < T.pit.z1 + 1.5) h = T.floor - T.pit.depth;
       return h;
     },
   };
@@ -453,6 +471,197 @@ function greenIsland() {
   };
 }
 
+// --- The far islands ----------------------------------------------------
+
+/** Low black rock in flat ledges stepping down to the sea, a shingle beach in
+ *  the lee, and the Kittiwake lying on her side on the seaward ledge. */
+function ledgesIsland() {
+  // Where she lies (shared/kittiwake.js): on a flat shelf 2.2 m up, across
+  // the head of a gully, her stern hanging out over deep water.
+  const WRECK = { x: 46, z: 18, yaw: 0.35 + Math.PI, y: 2.2 };
+  const BEACH = { x: -62, z: -8 };
+  return {
+    name: 'Black Ledges',
+    land: 95,
+    bound: 260,
+    cell: 2,
+    features: {
+      kittiwake: WRECK, // (not `wreck`: that's the Molly Ann's, src/islands.js)
+      beach: BEACH,
+      clear: [{ x: WRECK.x, z: WRECK.z, r: 16 }],
+      rocks: [{ x: -10, z: 30, s: 2.6 }, { x: 12, z: -34, s: 3.2 }, { x: -36, z: 26, s: 2.2 }, { x: 64, z: -22, s: 2.4 }],
+      deadShrubs: [{ x: -30, z: -20 }, { x: -12, z: 8 }],
+    },
+    // Bare black rock everywhere but the shingle in the lee.
+    ground(lx, lz, h) {
+      if (h < 0.6) return null;
+      return Math.hypot((lx - BEACH.x) / 1.6, lz - BEACH.z) < 20 ? 'shingle' : 'rock';
+    },
+    height(lx, lz) {
+      const wob = (fbm(lx * 0.02 + 31, lz * 0.02, 131, 3) - 0.5) * 34;
+      const sdf = Math.hypot(lx / 1.25, lz) - 66 + wob;
+      if (sdf > 0) return shelf(sdf, 1.5);
+      const d = -sdf;
+      // Ledges: the rock rises in flat steps a metre and a half high.
+      const raw = 1.2 + 8 * sstep(4, 60, d) + (fbm(lx * 0.045, lz * 0.045, 133, 3) - 0.5) * 5 * sstep(4, 30, d);
+      const step = 1.5;
+      const k = raw / step;
+      const f = k - Math.floor(k);
+      let h = (Math.floor(k) + sstep(0.82, 1, f)) * step;
+      // The shingle beach in the lee.
+      const bd = Math.hypot((lx - BEACH.x) / 1.6, lz - BEACH.z);
+      if (bd < 22) h = lerp(beach(d, 1.6, 14), h, sstep(14, 22, bd));
+      h = Math.max(h, beach(d, 1.2, 8));
+      // Her ledge, flat under her forward half, and the gully under her stern.
+      const wx = lx - WRECK.x;
+      const wz = lz - WRECK.z;
+      const along = wx * Math.cos(WRECK.yaw) + wz * Math.sin(WRECK.yaw);
+      const across = -wx * Math.sin(WRECK.yaw) + wz * Math.cos(WRECK.yaw);
+      const shelfW = Math.max(Math.abs(along - 2.5) - 7, Math.abs(across) - 4.5);
+      if (shelfW < 4) h = lerp(WRECK.y, h, sstep(0, 4, shelfW));
+      const gullyW = Math.max(Math.abs(along + 13) - 8, Math.abs(across) - 6);
+      if (gullyW < 3) h = Math.min(h, lerp(-2.6, h, sstep(0, 3, gullyW)));
+      return h;
+    },
+  };
+}
+
+/** A tall green hill with the ruin of a watch tower on top, a beach either
+ *  side, and a hollow on its flank by three standing stones. */
+function beaconIsland() {
+  const TOWER = { x: 0, z: 0 };
+  const STONES = { x: -52, z: 38 };
+  return {
+    name: 'Beacon Island',
+    land: 115,
+    bound: 290,
+    cell: 2.5,
+    features: {
+      tower: TOWER,
+      stones: STONES,
+      clear: [{ x: TOWER.x, z: TOWER.z, r: 9 }, { x: STONES.x, z: STONES.z, r: 6 }],
+      palms: [{ x: 84, z: 20, height: 7.5, lean: 0.5 }, { x: -86, z: -26, height: 7, lean: 0.45 }],
+      shrubs: [{ x: 30, z: -40 }, { x: -24, z: -50 }, { x: 46, z: 36 }, { x: -60, z: 6 }],
+      rocks: [{ x: 20, z: 54, s: 2.4 }, { x: -70, z: -50, s: 2.8 }],
+    },
+    height(lx, lz) {
+      const wob = (fbm(lx * 0.02 + 41, lz * 0.02, 141, 3) - 0.5) * 30;
+      const sdf = Math.hypot(lx, lz / 1.15) - 92 + wob;
+      if (sdf > 0) return shelf(sdf, 1.2);
+      const d = -sdf;
+      const r = Math.hypot(lx - TOWER.x, lz - TOWER.z);
+      // The hill, flat on top where the tower stands.
+      // (Dead flat round the tower: it stands on a levelled platform.)
+      let h = 34 * Math.pow(sstep(92, 9, r), 1.25) + (fbm(lx * 0.05, lz * 0.05, 143, 2) - 0.5) * 3 * sstep(10, 40, d) * sstep(8, 16, r);
+      // The hollow by the stones.
+      const hs = Math.hypot(lx - STONES.x, lz - STONES.z);
+      h -= 1.6 * sstep(9, 0, hs);
+      return Math.max(beach(d, 2.2, 14), h * sstep(2, 22, d));
+    },
+  };
+}
+
+/** Cliffs all along the north side, a beach on the south, and the Zawn: a
+ *  slot in the cliff, under an arch the sea fills at high water, opening into
+ *  a hidden pool in the rock where the smugglers had their landing. */
+function cormorantIsland() {
+  // The slot runs in from the sea (local +z) to the pool; the arch is over its mouth.
+  const ZAWN = { x: 6, z0: 112, z1: 60, w: 3.2 };
+  const POOL = { x: 0, z: 38, rx: 22, rz: 19 };
+  // (Its roof's under water from a little below half tide: the tide's ±1
+  // here. At low water you wade through on the sill.)
+  const ARCH = { x: 6, z: 101, roof: -0.2, sill: -1.5, depth: 8 };
+  // The smugglers' landing, all at the pool's south-west: a quay, a gap of
+  // deep water, the ledge with the cellar door in the rock, too high to
+  // climb onto from the water; the winch on the quay that lowered a gangway.
+  const QUAY = { x0: -12, x1: 12, z0: 20, z1: 27, y: 2.2 };
+  const GAP = { x0: -17, x1: -12.5 };
+  const LEDGE = { x0: -25, x1: -17, z0: 19, z1: 28, y: 3.6 };
+  const CELLAR = { x0: -31, x1: -25, z0: 20.5, z1: 26.5 };
+  // A cleft in the pool's east wall, its mouth roofed low: only open at low
+  // water. At the back, a dry shelf.
+  const CAVE = { x0: 22, x1: 34, z: 38, w: 2.1, lip: 23, mouth: 25.5, back: 27.5, floor: -1.5, shelf: 1.3, roof: -0.2, top: 2.9 };
+  return {
+    name: 'Cormorant Island',
+    land: 125,
+    bound: 300,
+    cell: 1.5,
+    features: {
+      zawn: ZAWN,
+      pool: POOL,
+      arch: ARCH,
+      quay: QUAY,
+      gap: GAP,
+      ledge: LEDGE,
+      cellar: CELLAR,
+      cave: CAVE,
+      beach: { x: -10, z: -96 },
+      clear: [{ x: POOL.x, z: POOL.z, r: 34 }, { x: ZAWN.x, z: (ZAWN.z0 + ZAWN.z1) / 2, r: 30 }],
+      palms: [{ x: -40, z: -84, height: 7, lean: 0.5 }, { x: 30, z: -90, height: 8, lean: 0.4 }],
+      shrubs: [{ x: -50, z: -30 }, { x: 40, z: -40 }, { x: -20, z: -60 }],
+      rocks: [{ x: 60, z: -50, s: 2.6 }, { x: -70, z: 10, s: 3 }],
+    },
+    // Wet rock down in the pool, the landing and the slot (no grass growing on the quay).
+    ground(lx, lz, h) {
+      const pe = Math.hypot((lx - POOL.x) / POOL.rx, (lz - POOL.z) / POOL.rz);
+      if (pe < 1.5 && h < 12) return 'rock';
+      if (Math.abs(lx - ZAWN.x) < ZAWN.w + 6 && lz > ZAWN.z1 - 8 && lz < ZAWN.z0 + 4 && h < 12) return 'rock';
+      return null;
+    },
+    // Calm water in the slot and the pool.
+    shelter(lx, lz) {
+      const inSlot = Math.abs(lx - ZAWN.x) < ZAWN.w + 5 && lz > ZAWN.z1 - 10 && lz < ZAWN.z0 + 4;
+      const inPool = sq((lx - POOL.x) / (POOL.rx + 8)) + sq((lz - POOL.z) / (POOL.rz + 8)) < 1;
+      return inSlot || inPool ? 0.1 : 1;
+    },
+    height(lx, lz) {
+      const wob = (fbm(lx * 0.018 + 51, lz * 0.018, 151, 3) - 0.5) * 26;
+      const sdf = Math.hypot(lx / 1.1, lz) - 104 + wob;
+      // Steep on the north (+z) side.
+      const north = sstep(-20, 60, lz);
+      let h;
+      if (sdf > 0) h = shelf(sdf, lerp(1.2, 4.5, north));
+      else {
+        const d = -sdf;
+        const top = 8 + 16 * north + (fbm(lx * 0.06, lz * 0.06, 153, 2) - 0.5) * 3 * sstep(6, 24, d);
+        h = Math.max(beach(d, 2.0, 14), top * sstep(0, lerp(36, 3, north), d));
+      }
+      // The pool: a bowl of sea in the rock, walled all round.
+      const pe = Math.hypot((lx - POOL.x) / POOL.rx, (lz - POOL.z) / POOL.rz);
+      if (pe < 1.4) {
+        const bowl = -3.5 + 2.2 * sstep(0.5, 1, pe);
+        h = pe < 1 ? Math.min(h, bowl) : Math.min(h, lerp(bowl, h, sstep(1.0, 1.4, pe)));
+      }
+      // The landing.
+      const inX = (a, b, m = 0) => lx > a - m && lx < b + m;
+      const inZ = (a, b, m = 0) => lz > a - m && lz < b + m;
+      if (inX(QUAY.x0, QUAY.x1) && inZ(QUAY.z0, QUAY.z1)) h = QUAY.y;
+      else if (inX(QUAY.x0, QUAY.x1, 1.5) && inZ(QUAY.z0, QUAY.z1, 1.5) && h < QUAY.y) h = lerp(h, QUAY.y, 0.5);
+      if (inX(GAP.x0, GAP.x1) && inZ(QUAY.z0 - 3, QUAY.z1 + 3)) h = Math.min(h, -2.2);
+      if (inX(LEDGE.x0, LEDGE.x1) && inZ(LEDGE.z0, LEDGE.z1)) h = LEDGE.y;
+      if (inX(CELLAR.x0, CELLAR.x1) && inZ(CELLAR.z0, CELLAR.z1)) h = LEDGE.y;
+      // The tide cave: its floor down under the low roof at the mouth, then up onto the shelf.
+      const cw = Math.abs(lz - CAVE.z) - CAVE.w;
+      if (lx > CAVE.x0 - 2 && lx < CAVE.x1 && cw < 1.5) {
+        const floor = lerp(CAVE.floor, CAVE.shelf, sstep(CAVE.mouth, CAVE.back, lx));
+        h = Math.min(h, lerp(floor, h, sstep(0, 1.5, cw)));
+      }
+      // The slot from the sea to the pool, cut down through the cliff: deep
+      // water at the mouth, a sill of rock under the arch (dry at low water
+      // only), shingle behind it, then down into the pool.
+      const sx = Math.abs(lx - ZAWN.x) - ZAWN.w * (0.85 + 0.15 * Math.sin(lz * 0.3));
+      if (lz > ZAWN.z1 - 8 && lz < ZAWN.z0 + 40 && sx < 3) {
+        let bed = -0.55;
+        bed = lerp(bed, ARCH.sill, sstep(7, 3, Math.abs(lz - ARCH.z)));
+        bed = lerp(bed, -2.8, sstep(ARCH.z + 6, ARCH.z + 14, lz));
+        bed = lerp(bed, -2.2, sstep(ZAWN.z1 + 6, ZAWN.z1 - 4, lz));
+        h = Math.min(h, lerp(bed, h, sstep(0, 3, sx)));
+      }
+      return h;
+    },
+  };
+}
+
 const KINDS = {
   saddle: saddleIsland,
   stack: stackIsland,
@@ -465,6 +674,9 @@ const KINDS = {
   kettle: kettleIsland,
   brothers: brothersIsland,
   green: greenIsland,
+  ledges: ledgesIsland,
+  beacon: beaconIsland,
+  cormorant: cormorantIsland,
 };
 
 /** Further out: [kind, bearing from Saddle in degrees (0 = +x), distance, turn]. */
@@ -473,6 +685,13 @@ const OUTER = [
   ['kettle', 152, 880, 0],
   ['brothers', 212, 860, Math.PI / 2],
   ['green', 328, 900, 0.4],
+];
+
+/** And furthest out, a long sail away: the same, added last. */
+const FAR = [
+  ['ledges', 100, 1160, -0.6],
+  ['beacon', 357, 1200, 0],
+  ['cormorant', 270, 1180, Math.PI / 2],
 ];
 
 // ---------------------------------------------------------------------------
@@ -498,7 +717,7 @@ function layout() {
   });
   // The outer ring came later; it's added after the shuffle so the first
   // seven islands stay exactly where they always were.
-  for (const [kind, deg, r, turn] of OUTER) {
+  for (const [kind, deg, r, turn] of [...OUTER, ...FAR]) {
     const ang = (deg * Math.PI) / 180;
     placed.push({ kind, x: Math.cos(ang) * r, z: Math.sin(ang) * r, rot: ang + turn });
   }
@@ -575,8 +794,8 @@ export function islandNear(x, z, margin = 0) {
 // the same numbers as a texture, so CPU and GPU waves agree near the shore.
 // ---------------------------------------------------------------------------
 
-export const BAKE_SIZE = 1300;
-export const BAKE_HALF = 1300;
+export const BAKE_SIZE = 1600; // (2 m texels)
+export const BAKE_HALF = 1600; // (the far islands reach out to about 1450 m)
 
 let bake = null;
 
@@ -636,6 +855,23 @@ function sampleField(field, x, z) {
   const c = field[k + n];
   const d = field[k + n + 1];
   return a + (bb - a) * fu + (c - a) * fv + (a - bb - c + d) * fu * fv;
+}
+
+/**
+ * Where the tide runs (round Cormorant Island): its full height within r0 of
+ * the island, fading to nothing by r1. Everywhere else the sea keeps its level.
+ */
+export const TIDAL = (() => {
+  const c = ISLAND_BY_ID.cormorant;
+  return { x: c.x, z: c.z, r0: 280, r1: 520 };
+})();
+export function tidalReach(x, z) {
+  return 1 - sstep(TIDAL.r0, TIDAL.r1, Math.hypot(x - TIDAL.x, z - TIDAL.z));
+}
+/** The sea's mean level at (x, z) at time t (0 nearly everywhere; the tide round Cormorant). */
+export function seaLevelAt(x, z, t) {
+  const k = tidalReach(x, z);
+  return k > 0 ? k * tideAt(t) : 0;
 }
 
 /** Seabed (or land) height from the baked grid. */
@@ -912,5 +1148,9 @@ export function diggableAt(x, z) {
   if (h < 0.35 || _dn.y < 0.8) return null;
   if ((isl.id === 'stack' || isl.id === 'sow') && h > 2.3) return null;
   if (isl.id === 'reef' && h < 0.9) return null;
+  if (isl.ground) {
+    toLocal(isl, x, z, tmpL);
+    if (isl.ground(tmpL.x, tmpL.z, h) === 'rock') return null;
+  }
   return isl.id;
 }

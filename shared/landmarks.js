@@ -27,6 +27,11 @@ export const LANDMARKS = {
   buoy: { name: 'the lantern buoy', island: 'saddle', at: () => [F('saddle').buoy.x, F('saddle').buoy.z], reach: 25, kind: 'buoy', label: [8, 12, 'left'] },
   wreck: { name: 'the Molly Ann', island: 'reef', at: () => [F('reef').wreck.x, F('reef').wreck.z], reach: 30, kind: 'wreck', label: [-9, 4, 'right'] },
   cottage: { name: 'the burnt cottage', island: 'burnt', at: [-50, 35], reach: 20, kind: 'cottage', label: [9, 10, 'left'] },
+  kittiwake: { name: 'the Kittiwake', island: 'ledges', at: () => [F('ledges').kittiwake.x, F('ledges').kittiwake.z], reach: 30, kind: 'wreck', label: [-9, 4, 'right'] },
+  tower: { name: 'the watch tower', island: 'beacon', at: () => [F('beacon').tower.x, F('beacon').tower.z], reach: 25, kind: 'tower', label: [9, 2, 'left'] },
+  stones: { name: 'the standing stones', island: 'beacon', at: () => [F('beacon').stones.x, F('beacon').stones.z], reach: 15, kind: 'stones', label: [-9, 6, 'right'] },
+  zawn: { name: 'the Zawn', island: 'cormorant', at: () => [F('cormorant').pool.x, F('cormorant').pool.z], reach: 35, kind: 'cave', label: [9, -4, 'left'] },
+  temple: { name: "the keepers' temple", island: 'saddle', at: () => [F('saddle').temple.at.x, F('saddle').temple.at.z], reach: 40, kind: 'temple', label: [10, 3, 'left'] },
 };
 
 /** Where a landmark is in the world: { x, z }. */

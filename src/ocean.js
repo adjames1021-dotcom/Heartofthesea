@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { RIPPLES, SWELLS, DEFAULT_WAVE_SCALE, wavePhases } from '../shared/waves.js';
 import { noiseGLSL, skyGLSL, skyUniformsGLSL } from './glsl.js';
 import { HULL_GLSL } from './boat.js';
+import { TIDAL } from '../shared/world.js';
+import { tideAt } from '../shared/environment.js';
 
 const GRID = 420;          // vertices per side
 const RADIUS = 4500;       // metres from the camera to the mesh edge
@@ -58,6 +60,7 @@ uniform float uSwellPhase[NUM_SWELLS];
 uniform vec4 uRipples[NUM_RIPPLES];
 uniform float uRipplePhase[NUM_RIPPLES];
 uniform float uWaveScale;
+uniform vec4 uTide;         // where the tide runs (x, z), its level now, and r1 (it's full within 0.54 r1)
 uniform sampler2D uWorld;   // r: seabed height (m), g: swell damping 0..1
 uniform vec3 uWorldRect;    // min x, min z, size
 
@@ -93,6 +96,8 @@ void main() {
     disp += vec3(w.x * a * c, a * sin(f), w.y * a * c);
   }
   wp.xyz += disp;
+  // The tide (round Cormorant Island only), as in shared/world.js seaLevelAt.
+  wp.y += uTide.z * (1.0 - smoothstep(uTide.w * 0.5385, uTide.w, length(p - uTide.xy)));
   vGrid = p;
   vWorld = wp.xyz;
   vHeight = disp.y;
@@ -310,6 +315,7 @@ export class Ocean {
       uRipples: { value: packWaves(RIPPLES) },
       uRipplePhase: { value: this.ripplePhases },
       uWaveScale: { value: this.waveScale },
+      uTide: { value: new THREE.Vector4(TIDAL.x, TIDAL.z, 0, TIDAL.r1) },
       uDeep: { value: atmosphere.state.deep },
       uShallow: { value: atmosphere.state.shallow },
       uScatter: { value: atmosphere.state.scatter },
@@ -347,6 +353,7 @@ export class Ocean {
   /** t: shared world clock in seconds (full double precision). */
   update(t, camera) {
     wavePhases(SWELLS, t, this.swellPhases);
+    this.uniforms.uTide.value.z = tideAt(t);
     wavePhases(RIPPLES, t, this.ripplePhases);
     this.uniforms.uFogDensity.value = this.atmosphere.fog.density;
     // Follow the camera horizontally. Snapping keeps vertex jitter down.

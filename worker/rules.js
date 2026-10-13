@@ -18,6 +18,8 @@ import { SHOPS, VALUE, FISH_PRICE, NED_FEE, sellableFish, stockFor, openNow } fr
 import { dayAt, seasonAt } from '../shared/environment.js';
 import { PLACES, onMenu } from '../shared/restaurants.js';
 import { PLACE_IDS, isAt } from '../shared/landmarks.js';
+import { CHAPTERS, TEMPLE, DONE, TEMPLE_CLUE, DONE_NOTE, keyIn } from '../shared/story.js';
+import { templeGate, templeHeart } from '../shared/temple.js';
 
 /** A brand-new player. */
 export function freshState(now) {
@@ -48,6 +50,7 @@ export function freshState(now) {
     shops: {}, // what you've bought today: { [shop]: { day, bought: { [slot]: n } } }
     meals: {}, // how many times you've eaten at each place (shared/restaurants.js)
     visited: [], // islands set foot on and landmarks been to, for the chart (shared/landmarks.js)
+    story: { ch: 0, keys: [] }, // the Heart of the Sea (shared/story.js): which chapter, the keys found
     nextId: 1,
   };
 }
@@ -79,6 +82,32 @@ function hashText(t) {
 }
 
 const finite = (...v) => v.every((x) => typeof x === 'number' && Number.isFinite(x));
+
+/** The story so far (saves from before it began have none). */
+const storyOf = (s) => (s.story ??= { ch: 0, keys: [] });
+
+/** A chapter's started: the clue goes in the journal. */
+function chapterNote(s, now) {
+  const st = storyOf(s);
+  const text = st.ch === TEMPLE ? TEMPLE_CLUE : st.ch === DONE ? DONE_NOTE : CHAPTERS[st.ch].clue;
+  s.journal.push({ t: now, quest: 'heart', text });
+  s.quests.heart = { stage: st.ch, started: s.quests.heart?.started ?? now, done: st.ch === DONE };
+}
+
+/**
+ * A chest from `from` (a puzzle's or a climb's) has been had: if it's the one
+ * this chapter's key is in, the key's yours and the next chapter begins.
+ * Returns { n, name } of the key, or null.
+ */
+function turnKey(s, from, now) {
+  const st = storyOf(s);
+  if (!keyIn(st, from)) return null;
+  const n = st.ch;
+  st.keys.push(n);
+  st.ch = n === 8 ? TEMPLE : n + 1;
+  chapterNote(s, now);
+  return { n, name: CHAPTERS[n].key };
+}
 
 const ACTIONS = {
   /** Just load. */
@@ -113,31 +142,38 @@ const ACTIONS = {
       from = s.maps.find((m) => m.id === res.map)?.island ?? null;
       s.maps = s.maps.filter((m) => m.id !== res.map);
     } else if (res.puzzle) {
-      if (s.solved.includes(res.puzzle)) return { ok: true, result: 'nothing' };
-      s.solved.push(res.puzzle);
+      // (Had already? Only again if the story's key is in it now.)
+      const again = s.solved.includes(res.puzzle);
+      if (again && !keyIn(s.story, res.puzzle)) return { ok: true, result: 'nothing' };
+      if (!again) s.solved.push(res.puzzle);
       from = res.puzzle;
     }
     const id = chestId(s);
     s.chests[id] = { from, found: now, delivered: false };
-    return { ok: true, result: 'chest', chest: id, from };
+    const key = res.puzzle ? turnKey(s, res.puzzle, now) : null;
+    return { ok: true, result: 'chest', chest: id, from, ...(key ? { key } : {}) };
   },
 
   /** Is the ground turned over near here? */
   async near(s, a, { secret }) {
     if (!finite(a.x, a.z)) return fail('where');
     const res = await near(secret, { x: a.x, z: a.z, maps: s.maps.map((m) => m.id) });
-    return { ok: true, spots: res.spots.filter((p) => !p.puzzle || !s.solved.includes(p.puzzle)).map(({ x, z }) => ({ x, z })) };
+    const open = (p) => !p.puzzle || !s.solved.includes(p.puzzle) || keyIn(s.story, p.puzzle);
+    return { ok: true, spots: res.spots.filter(open).map(({ x, z }) => ({ x, z })) };
   },
 
   /** Got the chest down off a climb. */
   async claim(s, a, { now }) {
     if (!finite(a.x, a.y, a.z) || typeof a.course !== 'string') return fail('where');
     const res = claim({ course: a.course, x: a.x, y: a.y, z: a.z });
-    if (res.result !== 'chest' || s.solved.includes(a.course)) return { ok: true, result: 'nothing' };
-    s.solved.push(a.course);
+    if (res.result !== 'chest') return { ok: true, result: 'nothing' };
+    const again = s.solved.includes(a.course);
+    if (again && !keyIn(s.story, a.course)) return { ok: true, result: 'nothing' };
+    if (!again) s.solved.push(a.course);
     const id = chestId(s);
     s.chests[id] = { from: a.course, found: now, delivered: false };
-    return { ok: true, result: 'chest', chest: id };
+    const key = turnKey(s, a.course, now);
+    return { ok: true, result: 'chest', chest: id, ...(key ? { key } : {}) };
   },
 
   /** A chest set down on your boat: it opens, and there's usually a map in it. */
@@ -402,7 +438,39 @@ ACTIONS.buy = async (s, a, { now }) => {
   return { ok: true, total, got };
 };
 
-/** Something out in the world for a quest (shared/quests.js): only counts at the right stage. */
+/** Read Elowen's letter on the chart table: the story begins. */
+ACTIONS.storyBegin = async (s, a, { now }) => {
+  const st = storyOf(s);
+  if (st.ch !== 0) return fail('already');
+  st.ch = 1;
+  chapterNote(s, now);
+  return { ok: true };
+};
+
+/** All eight keys in the temple gate (you have to be at it). */
+ACTIONS.templeOpen = async (s, a) => {
+  const st = storyOf(s);
+  if (st.ch !== TEMPLE || st.keys.length < 8) return fail('not yet');
+  if (!finite(a.x, a.z)) return fail('where');
+  const g = templeGate();
+  if (Math.hypot(a.x - g.x, a.z - g.z) > 9) return fail('where');
+  st.open = true;
+  return { ok: true };
+};
+
+/** The Heart of the Sea, lifted off its stone (you have to be by it). The end of the story. */
+ACTIONS.heart = async (s, a, { now }) => {
+  const st = storyOf(s);
+  if (st.ch !== TEMPLE || !st.open) return fail('not yet');
+  if (!finite(a.x, a.y, a.z)) return fail('where');
+  const h = templeHeart();
+  if (Math.hypot(a.x - h.x, a.y - h.y, a.z - h.z) > 3.5) return fail('where');
+  st.ch = DONE;
+  st.done = now;
+  chapterNote(s, now);
+  return { ok: true };
+};
+
 /** Been somewhere new: an island (ashore) or a landmark (close by). Only from there, and only once. */
 ACTIONS.visit = async (s, a) => {
   if (typeof a.id !== 'string' || !PLACE_IDS.includes(a.id) || !finite(a.x, a.z)) return fail('what');

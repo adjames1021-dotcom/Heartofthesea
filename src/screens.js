@@ -124,6 +124,60 @@ function glyph(ctx, kind, x, y) {
       ctx.arc(0, -8, 1.6, 0, Math.PI * 2);
       ctx.fill();
       break;
+    case 'tower':
+      // A round tower, its top broken.
+      ctx.beginPath();
+      ctx.moveTo(-3, 4);
+      ctx.lineTo(-3, -6);
+      ctx.lineTo(-1, -5);
+      ctx.lineTo(0, -7);
+      ctx.lineTo(1.5, -5.5);
+      ctx.lineTo(3, -6);
+      ctx.lineTo(3, 4);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    case 'stones':
+      // Three standing stones.
+      for (const [dx, h] of [[-4, 6], [0, 8], [4, 5]]) {
+        ctx.beginPath();
+        ctx.moveTo(dx, 3);
+        ctx.lineTo(dx, 3 - h);
+        ctx.stroke();
+      }
+      break;
+    case 'cave':
+      // A cave mouth in a cliff.
+      ctx.beginPath();
+      ctx.moveTo(-7, 4);
+      ctx.lineTo(-5, -5);
+      ctx.lineTo(5, -5);
+      ctx.lineTo(7, 4);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-3, 4);
+      ctx.quadraticCurveTo(0, -4, 3, 4);
+      ctx.fill();
+      break;
+    case 'temple':
+      // A pediment on four columns, on a step.
+      ctx.beginPath();
+      ctx.moveTo(-7, -3);
+      ctx.lineTo(0, -8);
+      ctx.lineTo(7, -3);
+      ctx.closePath();
+      ctx.stroke();
+      for (const dx of [-5, -1.7, 1.7, 5]) {
+        ctx.beginPath();
+        ctx.moveTo(dx, -3);
+        ctx.lineTo(dx, 3);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(-8, 4);
+      ctx.lineTo(8, 4);
+      ctx.stroke();
+      break;
     case 'wreck':
       // A hull on its side, the mast broken off.
       ctx.beginPath();
@@ -246,7 +300,7 @@ export class Screens {
     this.chart.appendChild(this.canvas);
     document.body.appendChild(this.chart);
     this.base = null;
-    this.R = 1150; // metres from the centre to the chart edge
+    this.R = 1480; // metres from the centre to the chart edge (the far islands are out to ~1320)
   }
 
   get open() {
@@ -363,12 +417,29 @@ export class Screens {
   }
 
   /** Redraw the chart with the boat, the bear, the wind, and where you've been. */
-  update({ boat, player, wind, aboard = false, catchLog = [], finds = null, visited = new Set() }) {
+  update({ boat, player, wind, aboard = false, catchLog = [], finds = null, visited = new Set(), story = null }) {
     if (!this.chart.classList.contains('open')) return;
     if (!this.base) this.#drawBase();
     const ctx = this.canvas.getContext('2d');
     ctx.drawImage(this.base, 0, 0);
     this.#places(ctx, visited);
+    // Where the story's sending you: a red ring round the island, and the key's name.
+    if (story) {
+      const [sx, sy] = this.#toPx(story.x, story.z);
+      const r = Math.max(16, (story.r * this.canvas.width) / (2 * this.R) + 10);
+      ctx.save();
+      ctx.strokeStyle = RED;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([7, 5]);
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = RED;
+      ctx.font = `18px ${HAND}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(story.label, sx, sy - r - 8);
+    }
     // The boat: an arrow along her heading.
     const b = boat.state;
     const [bx, by] = this.#toPx(b.x, b.z);

@@ -8,6 +8,9 @@
 import { ISLAND_BY_ID, toWorld, dirToWorld, pellsBar, horseshoeCove, gannetNest } from '../shared/world.js';
 import { sunDirection } from '../shared/environment.js';
 import { foreTopChest, hatchChest } from '../shared/wreck.js';
+import { kittiwakeChest } from '../shared/kittiwake.js';
+import { beaconSpot } from '../shared/beacon.js';
+import { zawnChest } from '../shared/zawn.js';
 
 const DIG_RADIUS = 2.2; // metres from the true spot that still finds the chest
 const PACE = 0.75;
@@ -198,6 +201,7 @@ export function spotWorld(spot) {
 export const PUZZLES = {
   'pells-bar': () => pellsBar().spot,
   horseshoe: () => horseshoeCove().spot,
+  beacon: () => beaconSpot(),
 };
 
 // ---------------------------------------------------------------------------
@@ -309,6 +313,8 @@ export const COURSES = {
   wreck: () => foreTopChest(),
   'molly-ann': () => hatchChest(),
   gannet: () => gannetNest(),
+  kittiwake: () => kittiwakeChest(),
+  zawn: () => zawnChest(),
 };
 
 /** Is the player really up there with the chest? */

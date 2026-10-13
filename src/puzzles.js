@@ -451,6 +451,17 @@ export class Puzzles {
     return plank;
   }
 
+  /** Set up a stone with words cut in it somewhere (a world matrix), readable with E. */
+  addSlab(lines, seed, matrix, wid = 1.1, hgt = 0.8) {
+    const slab = slabModel(slabCanvas(lines, { seed }), wid, hgt);
+    slab.matrixAutoUpdate = false;
+    slab.matrix.copy(matrix);
+    this.group.add(slab);
+    const pos = new THREE.Vector3().setFromMatrixPosition(matrix);
+    this.readables.push({ pos, lines, seed, kind: 'slab' });
+    return slab;
+  }
+
   /** Something to read within reach? */
   nearest(p, r = 1.7) {
     let best = null;

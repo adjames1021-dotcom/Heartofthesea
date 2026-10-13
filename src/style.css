@@ -442,3 +442,69 @@ html, body {
 
 /* Frame-rate readout (Settings → Frame rate). */
 .fps { position: fixed; top: 10px; right: 12px; z-index: 30; display: none; font-size: 0.8rem; padding: 2px 7px; color: var(--paper-ink); background: var(--paper); border-radius: 3px; pointer-events: none; }
+
+/* A trap in the temple: a quick dip to black and back. */
+.temple-fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 15; transition: opacity 0.5s ease; }
+.temple-fade.on { opacity: 1; transition: opacity 0.12s ease; }
+
+/* Elowen's letter, and the card when you find a key. */
+.letter-screen { pointer-events: auto; z-index: 22; }
+.letter {
+  max-width: 560px;
+  width: calc(100vw - 32px);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 34px 40px 22px;
+  background: #f3ead2;
+  color: #2f2416;
+  border-radius: 2px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45), inset 0 0 60px rgba(150, 110, 60, 0.18);
+  font-family: 'Reenie Beanie', 'Comic Sans MS', cursive;
+  font-size: 1.45rem;
+  line-height: 1.25;
+  transform: rotate(-0.6deg);
+}
+.letter p { margin: 0 0 10px; }
+.letter p.gap { height: 4px; }
+.letter .close { font-family: inherit; font-size: 0.85rem; opacity: 0.6; text-align: right; margin-top: 14px; }
+.key-card {
+  position: fixed;
+  left: 50%;
+  bottom: 13vh;
+  transform: translate(-50%, 16px);
+  width: min(460px, calc(100vw - 32px));
+  padding: 16px 22px 12px;
+  background: #ece3cc;
+  color: #2b241d;
+  border-radius: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  z-index: 21;
+  text-align: center;
+}
+.key-card.open { opacity: 1; transform: translate(-50%, 0); }
+.key-card h3 { margin: 4px 0 6px; font-weight: 600; }
+.key-card p { margin: 6px 0; font-size: 0.92rem; text-align: left; }
+.key-card .close { text-align: right; opacity: 0.6; font-size: 0.8rem; }
+.key-row { display: flex; flex-wrap: wrap; gap: 2px 6px; justify-content: center; margin: 4px 0 8px; }
+.journal .key-row { justify-content: flex-start; flex-wrap: nowrap; gap: 3px; margin: 6px 0 10px; }
+
+/* Cinematics: bars top and bottom, a line of words, nothing else on screen. */
+.cine { position: fixed; inset: 0; pointer-events: none; z-index: 25; opacity: 0; transition: opacity 0.8s ease; }
+.cine.on { opacity: 1; }
+.cine .bar { position: absolute; left: 0; right: 0; height: 11vh; background: #000; }
+.cine .bar.top { top: 0; }
+.cine .bar.bottom { bottom: 0; }
+.cine .caption {
+  position: absolute; left: 50%; bottom: 13.5vh; transform: translateX(-50%);
+  width: min(760px, calc(100vw - 48px)); margin: 0; text-align: center;
+  color: #f4ecd8; font-size: clamp(1rem, 2.2vw, 1.35rem); line-height: 1.45;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+  opacity: 0; transition: opacity 0.9s ease;
+}
+.cine .caption.on { opacity: 1; }
+.cine .caption.big { font-size: clamp(1.6rem, 4vw, 2.6rem); letter-spacing: 0.08em; }
+.cine .skip { position: absolute; right: 18px; bottom: 3.5vh; margin: 0; color: rgba(244, 236, 216, 0.55); font-size: 0.8rem; }
+.in-cine .hud, .in-cine .panel, .in-cine .toggle, .in-cine .fps, .in-cine .title, .in-cine .start, .in-cine .version { visibility: hidden; }

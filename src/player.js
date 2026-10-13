@@ -194,6 +194,9 @@ export class Player {
   /** Is the sea where we are? (Not inside a boat's hull, below her waterline: that's dry.) */
   #seaAt(ctx) {
     if (ctx.dryAt?.(this.pos)) return -1e4;
+    // (Water standing somewhere of its own, like a wreck's flooded hold.)
+    const pool = ctx.poolAt?.(this.pos);
+    if (pool != null) return pool;
     return heightAt(this.pos.x, this.pos.z, ctx.t, ctx.waveScale);
   }
 
@@ -393,6 +396,8 @@ export class Player {
 
   /** Water level here, averaged over a bear-sized patch so small ripples don't jolt you. */
   #waterAt(ctx) {
+    const pool = ctx.poolAt?.(this.pos);
+    if (pool != null) return pool;
     const { x, z } = this.pos;
     let h = 0;
     for (const [dx, dz] of [[0, 0], [0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6]]) h += heightAt(x + dx, z + dz, ctx.t, ctx.waveScale);

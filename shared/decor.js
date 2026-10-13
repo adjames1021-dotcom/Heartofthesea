@@ -28,6 +28,9 @@ export const DEFAULT_SPOTS = {
   // On the chart table.
   log: { at: [-0.85, 0.79, 1.12], yaw: 0.2 },
   spyglass: { at: [0.02, 0.79, 1.3], yaw: -0.3 },
+  whistle: { at: [0.2, 0.79, 1.44], yaw: 0.6 },
+  lens: { at: [-0.55, 0.79, 1.45], yaw: 0 },
+  tally: { at: [-0.4, 0.79, 1.05], yaw: 0.15 },
   // On the walls: the bell by the companionway, the nameboard on the bulkhead.
   bell: { at: [-1.13, 1.42, 0.7], yaw: Math.PI / 2, wall: true },
   nameboard: { at: [2.08, 1.0, -0.62], yaw: -Math.PI / 2, wall: true },

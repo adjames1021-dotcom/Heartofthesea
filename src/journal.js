@@ -9,6 +9,7 @@ import { RECIPES, describe, sameKey } from '../shared/food.js';
 import { UPGRADES } from '../shared/upgrades.js';
 import { aboutCabin } from '../shared/decor.js';
 import { words } from '../shared/trade.js';
+import { keySvg } from './story.js';
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -53,7 +54,9 @@ export class Journal {
       g.last = Math.max(g.last, n.t ?? 0);
     }
     const done = (g) => !!s.quests?.[g.id]?.done;
-    return [...groups.values()].sort((a, b) => done(a) - done(b) || b.last - a.last);
+    // (The main story at the top while it's going on.)
+    const story = (g) => (g.id === 'heart' && !done(g) ? 0 : 1);
+    return [...groups.values()].sort((a, b) => done(a) - done(b) || story(a) - story(b) || b.last - a.last);
   }
 
   /** Once something's sorted, just how it started and how it ended. */
@@ -85,6 +88,7 @@ export class Journal {
           .map(
             (g) => `<div class="entry${s.quests?.[g.id]?.done ? ' done' : ''}">
               ${QUESTS[g.id]?.title ? `<h3>${esc(QUESTS[g.id].title)}</h3>` : ''}
+              ${g.id === 'heart' ? `<div class="key-row">${Array.from({ length: 8 }, (_, i) => keySvg(i + 1, (s.story?.keys ?? []).includes(i + 1), 14)).join('')}</div>` : ''}
               ${this.#shown(g, s).map((t) => `<p>${esc(t)}</p>`).join('')}
             </div>`,
           )

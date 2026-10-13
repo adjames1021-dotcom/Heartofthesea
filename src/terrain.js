@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ISLANDS, islandGrid, worldBake, groundAt, islandNear, surfAt } from '../shared/world.js';
+import { ISLANDS, islandGrid, worldBake, groundAt, islandNear, surfAt, toLocal } from '../shared/world.js';
 import { hash2, fbm } from '../shared/noise.js';
 import { deepenShadows } from './atmosphere.js';
 
@@ -42,6 +42,15 @@ const PALETTES = {
     sand: C('#e2d2a6'), wet: C('#c4ad80'), grass: C('#7aa653'), grass2: C('#5d8c44'),
     dirt: C('#9a8566'), rock: C('#97928a'), rock2: C('#7f7b74'), seabed: C('#c8b78e'),
   },
+  // Black slate in flat ledges, grey shingle in the lee, a little lichen.
+  ledges: {
+    sand: C('#6f6b64'), wet: C('#4e4b46'), grass: C('#7a7f5e'), grass2: C('#646a4e'),
+    dirt: C('#55514b'), rock: C('#45433f'), rock2: C('#333230'), seabed: C('#6d6559'),
+  },
+  cormorant: {
+    sand: C('#e6d6aa'), wet: C('#c8b083'), grass: C('#79a752'), grass2: C('#5c8b43'),
+    dirt: C('#958063'), rock: C('#8f8a82'), rock2: C('#77736c'), seabed: C('#c4b28a'),
+  },
   green: {
     sand: C('#f1e4bb'), wet: C('#d6c393'), grass: C('#6fae47'), grass2: C('#4f8f3a'), grassLight: C('#8cc357'),
     dirt: C('#9c8257'), rock: C('#a19b90'), rock2: C('#8a847b'), seabed: C('#d8c99f'),
@@ -52,7 +61,8 @@ for (const p of Object.values(PALETTES)) {
   p.dry = p.grass.clone().lerp(p.sand, 0.5);
 }
 
-const SAND_TOP = { saddle: 2.7, horseshoe: 2.3, bar: 3, reef: 3, stack: 2.0, sow: 1.7, burnt: 2.3, head: 2.0, kettle: 2.0, brothers: 1.6, green: 2.4 };
+const SAND_TOP = { saddle: 2.7, horseshoe: 2.3, bar: 3, reef: 3, stack: 2.0, sow: 1.7, burnt: 2.3, head: 2.0, kettle: 2.0, brothers: 1.6, green: 2.4, ledges: 1.8, beacon: 2.4, cormorant: 2.2 };
+const _local = {};
 
 const SURF_ROCK = [C('#5f5c55'), C('#6b675f'), C('#545a4c')];
 const smooth = (a, b, x) => {
@@ -65,6 +75,13 @@ export function surfaceKind(isl, h, ny, x, z) {
   const sandTop = SAND_TOP[isl.id] ?? 2.4;
   if (isl.id === 'horseshoe' && h > 0.3 && h < 2 && surfAt(x, z)) return 'surf';
   if (h < -0.4) return 'seabed';
+  // Islands that say what their own ground is (shared/world.js `ground`).
+  if (isl.ground) {
+    toLocal(isl, x, z, _local);
+    const g = isl.ground(_local.x, _local.z, h);
+    if (g === 'rock') return 'rock';
+    if (g === 'shingle') return h < 0.6 ? 'wet' : 'sand';
+  }
   // Reef flats are rough coral rock; only the cay is sand.
   if (isl.id === 'reef' && h < 0.9) return 'coral';
   if (h < 0.6) return ny > 0.75 ? 'wet' : 'rock';
@@ -95,7 +112,7 @@ function classify(isl, pal, h, ny, x, z, out) {
     case 'rock': {
       out.copy(pal.rock).lerp(pal.rock2, fbm(x * 0.08, z * 0.08, 7, 2));
       // A little moss where it isn't too steep (not on the bare islands).
-      if (ny > 0.5 && isl.id !== 'burnt' && isl.id !== 'stack' && isl.id !== 'sow') out.lerp(pal.grass2, 0.3 * smooth(0.5, 0.64, ny) * n);
+      if (ny > 0.5 && isl.id !== 'burnt' && isl.id !== 'stack' && isl.id !== 'sow') out.lerp(pal.grass2, (isl.id === 'ledges' ? 0.12 : 0.3) * smooth(0.5, 0.64, ny) * n);
       return out;
     }
     case 'sand':

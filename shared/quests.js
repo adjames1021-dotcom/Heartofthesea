@@ -69,6 +69,8 @@ export const QUESTS = {
   },
   // Ben Clemo's lamp has run out of oil; Silas might spare some.
   lamp: { title: "Ben's lamp", steps: {} },
+  // The main story (shared/story.js): its notes go under this.
+  heart: { title: 'The Heart of the Sea', steps: {} },
 };
 
 // Steps given on an island (`island`, `local`) get their world position here.

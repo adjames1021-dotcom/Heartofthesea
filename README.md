@@ -15,7 +15,7 @@ shared clock (`GET /api/time`, 24-minute days).
 
 | Island | What it is |
 | --- | --- |
-| Saddle Island | The big two-hilled island in the middle, wooded on its lower slopes. You start at anchor in its bay. |
+| Saddle Island | The big two-hilled island in the middle, wooded on its lower slopes. You start at anchor in its bay. Up in the saddle between the hills, the keepers' temple. |
 | Gannet Stack | A tall rock spire on a pebble island, white with seabirds. |
 | The Horseshoe | A crescent with a lagoon and a sheer outer cliff. |
 | Pell's Bar | A long sandbar with one standing rock at its west end. |
@@ -26,6 +26,9 @@ shared clock (`GET /api/time`, 24-minute days).
 | Kettle Island | An old volcano: black sand, steep green flanks and a lake in the crater. |
 | The Brothers | Two towers of rock with a deep channel between them you can sail through. |
 | Green Island | Low and wooded to the water, a white beach all round, one big old tree in the middle. |
+| Black Ledges | Furthest out, east. Low black rock in flat steps, a shingle beach in the lee, and the Kittiwake on her side on the seaward ledge. |
+| Beacon Island | Furthest out, north. A tall green hill with a ruined watch tower on top, and three standing stones in a hollow by the shore. |
+| Cormorant Island | Furthest out, west. Cliffs all along the north, a beach on the south, and the Zawn: a slot in the cliff, under an arch, into a hidden pool. It has a tide (the only place that does): a metre either way of half tide, twice a day. |
 
 ## Weather
 
@@ -297,6 +300,23 @@ that can only look at your cabin.
     fore top.
   - **Gannet Stack.** Up the footholds on the beach side of the spire, along
     the top of the first drum, up the old rope, and round to the nest.
+  - **The Kittiwake, on Black Ledges.** Up the boarding net down her deck
+    and in through her stove-in planking. Her hold's half full of water and
+    the door aft won't give against it: work the bilge pump on the crates
+    till she sucks dry, then pull the door. The chest's in the captain's
+    cabin; out through her broken stern.
+  - **The watch tower, Beacon Island.** Up the stair round the newel (two
+    places where steps have dropped out: jump them), and where it stops,
+    jump for the rope off the old joist. On the lamp floor, light the lamp
+    and turn it till its light falls in the hollow among the standing
+    stones. Dig there.
+  - **The Zawn, Cormorant Island.** In under the arch at low water (it's under
+    the sea from a little below half tide; the game says how long till it
+    clears). The smugglers' winch on the quay has no handle: a note says it's
+    kept dry in the cleft across the pool, whose mouth is only open at low
+    water too. Wind the gangway down over the deep water, cross, climb the
+    rock at the end of the ledge and pull the lever, and the cellar door
+    lifts. The chest's inside.
 
 The server decides all of this. `worker/treasure.js` issues each map signed
 with HMAC (the client only gets the drawing, never the spot), decides every
@@ -307,6 +327,36 @@ pocket watch, a string of pearls, a brass sextant.
 
 Maps are signed with a random key the Worker makes for itself the first time
 it runs and keeps in a Durable Object (`Keeper`), so there's nothing to set up.
+## The Heart of the Sea
+
+The main story (`shared/story.js`). Before there were villages on these
+islands there was a temple on Saddle, and in it a stone as green as deep
+water. When raiders came, its eight keepers locked it and hid the keys
+where the sea would keep them.
+
+- The first time in after it arrived, a short film tells you that much and
+  comes down to your boat. Elowen Tresize, who had her before you, has left
+  a letter on the chart table below decks. Reading it begins the story.
+- Eight chapters, one at a time, in order. Each key is in the chest at one
+  of the eight big places above (Pell's Bar, the Molly Ann's hatch, the
+  Horseshoe, Gannet Stack, the Molly Ann's fore top, the Kittiwake, the
+  watch tower, the Zawn), but only when it's that chapter's turn. Each has a
+  tag on it saying where the next one is. The journal (J) keeps the clue and
+  the keys you have; the chart (Tab) rings where to go. A chest you already
+  had out before the story got there is back for you to fetch again.
+- With all eight, the temple gate opens. Inside are the keepers' traps:
+  blades swinging across a hall, a pit crossed on pillars (two of them
+  sink if you stand about), a corridor that puts up spikes in a wave, and a
+  ramp a boulder comes down (get in an alcove). Each has a brazier before it
+  that lights as you reach it; a trap sends you back to the last one lit.
+- At the top, the Heart on its stone. Lift it and the ending film plays; its
+  light stays up over Saddle afterwards.
+
+The server keeps your place in it and hands out the keys (`worker/rules.js`):
+a key only comes with the right chest at the right time, the gate only
+opens with all eight and only from in front of it, and the Heart only from
+beside it.
+
 ## Versions
 
 The start screen, Settings and the controls screen (H) show the version and
@@ -372,6 +422,9 @@ shared/environment.js  clock → sun, swell, clouds, wind
 shared/world.js        island shapes and layout, ground and seabed, shallows,
                        digging rules, puzzle geometry (shadow spot, shelf, nest)
 shared/wreck.js        the Molly Ann's layout (renderer, course and server share it)
+shared/kittiwake.js    the Kittiwake's frame and numbers; shared/beacon.js the watch tower's;
+                       shared/zawn.js the Zawn's (with the tide there); shared/temple.js the temple's plan
+shared/story.js        the Heart of the Sea: the chapters, the keys and their clues, Elowen's letter
 shared/boat.js         sailing physics: sails, keel, rudder, heel, engine, anchor
 shared/items.js        everything you can own, and how it's written
 shared/villages.js     villages, people and their days; shared/talk.js what they say
@@ -411,6 +464,11 @@ src/interior.js        the cabin below, inside the hull; src/screens.js the cont
 src/treasure.js        maps, digging, chests, crabs, casks; src/mapview.js draws maps
 src/puzzles.js         notes and set pieces (Pell's Bar, the Horseshoe)
 src/hatch.js           the Molly Ann's hatch, yard, net and casks
+src/kittiwake.js       the Kittiwake: hull, hold, pump, door; src/beacon.js the watch tower, its lamp and the stones
+src/zawn.js            the arch, the tide cave, the quay, winch, gangway, lever and cellar
+src/temple.js          the keepers' temple: gate and keyholes, the traps, braziers, the Heart
+src/story.js           Elowen's letter, the key card, chests put back for the story
+src/cinematic.js       the opening and ending films (the shots are in src/main.js)
 src/course.js          the wreck climb; src/stack.js the Gannet Stack climb
 src/ocean.js           ocean mesh and water shader; src/atmosphere.js sky and light
 worker/index.js        Worker routes: /api/time, /api/player, /api/player/new, /api/cabin/<id>

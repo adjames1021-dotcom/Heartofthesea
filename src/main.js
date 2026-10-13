@@ -6,8 +6,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
-import { heightAt, setWaveDamping } from '../shared/waves.js';
-import { dampingAt, groundAt, ISLAND_BY_ID, toWorld, gannetNest } from '../shared/world.js';
+import { heightAt, setWaveDamping, setSeaLevel } from '../shared/waves.js';
+import { dampingAt, seaLevelAt, groundAt, ISLAND_BY_ID, toWorld, gannetNest } from '../shared/world.js';
 import { hoursAt, swellScaleAt, cloudCoverAt, windAt, stormAt, nextStormIn, forceStorm } from '../shared/environment.js';
 import { Storm } from './storm.js';
 import { ChartMarks } from './chartmarks.js';
@@ -47,6 +47,14 @@ import { Restaurants } from './restaurants.js';
 import { WreckCourse } from './course.js';
 import { HatchPuzzle } from './hatch.js';
 import { StackClimb } from './stack.js';
+import { Kittiwake } from './kittiwake.js';
+import { Beacon } from './beacon.js';
+import { Zawn } from './zawn.js';
+import { Temple } from './temple.js';
+import { Story } from './story.js';
+import { Cinematic } from './cinematic.js';
+import { templePoint, templeHeart } from '../shared/temple.js';
+import { towerFrame } from '../shared/beacon.js';
 import { foreTopChest } from '../shared/wreck.js';
 import { OceanAudio } from './audio.js';
 import { syncClock, worldTime } from './clock.js';
@@ -76,6 +84,7 @@ const dev = {
 // ---------- World data ----------
 const worldTex = buildWorldTexture(); // bakes the seabed/damping grid
 setWaveDamping(dampingAt);
+setSeaLevel(seaLevelAt);
 
 // ---------- Renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -202,11 +211,21 @@ try {
 setSailing(savedSailing);
 sailingBtn?.addEventListener('click', () => setSailing(BOAT.arcade ? 'realistic' : 'arcade'));
 const puzzles = new Puzzles({ scene, world });
+const story = new Story({ progress, hud, interior, treasure });
+const cinematic = new Cinematic();
 const course = new WreckCourse({ scene, world, wreck: islands.wreck });
 treasure.placeCourseChest('wreck', foreTopChest());
 const hatch = new HatchPuzzle({ scene, world, wreck: islands.wreck, treasure, puzzles });
 const stack = new StackClimb({ scene, world });
 treasure.placeCourseChest('gannet', gannetNest());
+// The set pieces on the far islands: each builds itself, updates itself when
+// you're near, and offers whatever you can do with it (E).
+const kittiwake = new Kittiwake({ scene, world, treasure, puzzles, progress });
+const beacon = new Beacon({ scene, world, puzzles, progress });
+const zawn = new Zawn({ scene, world, treasure, puzzles, progress });
+const temple = new Temple({ scene, world, progress });
+const setPieces = [kittiwake, beacon, zawn, temple];
+for (const sp of setPieces) sp.say = (text, s) => hud.say(text, s);
 
 // ---------- Dev camera (screenshots) ----------
 let controls = null;
@@ -328,7 +347,66 @@ ui.toggle.addEventListener('click', () => {
 renderer.domElement.addEventListener('mousedown', () => {
   ui.start.classList.add('gone');
   ui.version.classList.add('gone');
+  // The first time in since the story came: how it all began, then down to your boat.
+  if (!visit && story.letterWaiting && !seen('intro')) {
+    cinematic.play(openingFilm(), () => {
+      remember('intro');
+      hud.say("Elowen's letter is on the chart table, below decks.", 6);
+    });
+  }
 }, { once: true });
+
+/** Seen it before (in this browser)? (Storage may be missing: then it's always the first time.) */
+function seen(what) {
+  try {
+    return localStorage.getItem(`hots-seen-${what}`) === '1';
+  } catch {
+    return false;
+  }
+}
+function remember(what) {
+  try {
+    localStorage.setItem(`hots-seen-${what}`, '1');
+  } catch {
+    // (Not kept; no matter.)
+  }
+}
+
+// ---------- The films ----------
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const tp = (x, z, y) => {
+  const p = templePoint(x, z, y);
+  return V3(p.x, p.y, p.z);
+};
+const saddleAt = (dx, y, dz) => V3(ISLAND_BY_ID.saddle.x + dx, y, ISLAND_BY_ID.saddle.z + dz);
+const boatAt = (dx, dy, dz) => () => boat.root.position.clone().add(V3(dx, dy, dz));
+
+function openingFilm() {
+  const tw = towerFrame();
+  return [
+    { from: saddleAt(-520, 240, 560), to: saddleAt(-200, 190, 640), look: saddleAt(0, 25, 0), dur: 7, say: 'Before there were villages on these islands, there was a temple on Saddle.' },
+    { from: tp(70, 150, 70), to: tp(18, 62, 14), look: tp(0, -10, 2), lookTo: tp(0, -30, 3), dur: 7, say: 'In it the keepers kept the Heart of the Sea, and while it was kept, the sea was kind to the islands.' },
+    { from: V3(tw.x + 70, tw.y + 55, tw.z + 50), to: V3(tw.x + 35, tw.y + 20, tw.z - 45), look: V3(tw.x, tw.y + 10, tw.z), dur: 7, say: 'When raiders came, the eight keepers locked it and hid its keys where the sea would keep them. None of them came back.' },
+    { from: boatAt(55, 26, 40), to: boatAt(-7, 3.5, 6), look: boatAt(0, 1.2, 0), dur: 7.5, say: "Your boat was Elowen Tresize's. She spent thirty years looking for those keys, and she's left you a letter." },
+  ];
+}
+
+function endingFilm() {
+  const h = templeHeart();
+  const H = V3(h.x, h.y, h.z);
+  const off = (x, y, z) => H.clone().add(V3(x, y, z));
+  return [
+    { from: off(2.6, 0.9, 2.2), to: off(1.3, 0.4, -1.8), look: H, dur: 5, say: 'The Heart of the Sea wakes in your paws, and the old stones light up green.' },
+    { from: off(6, 4, 8), to: off(30, 70, 60), look: H, lookTo: off(0, 40, 0), dur: 6.5, say: 'Its light goes up over Saddle and out across the water, the way it used to.' },
+    { from: saddleAt(300, 260, 400), to: saddleAt(-300, 220, 420), look: saddleAt(0, 45, 0), dur: 8, say: "Out on the islands, people stop what they're doing and look up." },
+    { from: saddleAt(520, 6, 380), to: saddleAt(420, 10, 300), look: saddleAt(0, 70, 0), dur: 7, say: "The keepers' work is done at last. Elowen would have liked to see it." },
+    { from: saddleAt(-700, 420, -300), to: saddleAt(-500, 380, 200), look: saddleAt(0, 30, 0), dur: 8, say: 'The Heart of the Sea', big: true },
+    { from: saddleAt(-500, 380, 200), to: saddleAt(-420, 360, 320), look: saddleAt(0, 30, 0), dur: 6, say: "Thank you for playing. The sea's still yours: sail on." },
+  ];
+}
+temple.onHeart = () => {
+  cinematic.play(endingFilm(), () => hud.say('The Heart of the Sea is home.', 5));
+};
 // Which version this is, on the start screen (and in Settings and on the H screen).
 ui.version.textContent = `Version ${VERSION} · build ${BUILD.hash}${BUILD.date ? ` · ${BUILD.date}` : ''}`;
 console.info(`Heart of the Sea ${VERSION} (${BUILD.hash} ${BUILD.date})`);
@@ -387,6 +465,9 @@ function onBoat(p) {
 }
 
 function findInteraction() {
+  // Reading Elowen's letter, or looking at a key you've just found: E puts it away.
+  if (story.open) return { key: 'E', label: 'Fold up the letter', act: () => story.closeLetter() };
+  if (story.cardOpen) return { key: 'E', label: 'Put the key away', act: () => story.closeCard() };
   if (player.mode === 'station' || player.mode === 'dig' || player.mode === 'hold' || player.flopT > 0 || player.clinging) return null;
   if (interior.inside) {
     // Something you're carrying about the cabin to put somewhere.
@@ -402,6 +483,8 @@ function findInteraction() {
     const chartD = interior.dist(player.pos, interior.chartTable);
     if (thing && (!interior.nearChartTable(player.pos) || thing.d < chartD)) return { key: 'E', label: thing.label, act: () => decorating.pickUp(thing.id) };
     if (interior.nearChartTable(player.pos)) {
+      // Elowen's letter, waiting for you.
+      if (story.letterWaiting) return { key: 'E', label: 'Read the letter', act: () => story.readLetter() };
       // A spare treasure map is always here if you've run out.
       if (!treasure.state.maps.length) {
         return {
@@ -481,6 +564,10 @@ function findInteraction() {
       label: find.place.label,
       act: () => finds.take(find),
     };
+  }
+  for (const sp of setPieces) {
+    const it = sp.interaction?.(player);
+    if (it) return it;
   }
   const note = player.mode === 'swim' ? null : puzzles.nearest(player.pos);
   if (note) return { key: 'E', label: puzzles.reading === note ? 'Look away' : 'Read', act: () => puzzles.read(note) };
@@ -620,6 +707,13 @@ function frame(now) {
     return;
   }
   last = now;
+  // In a film, the keys only skip it; nothing else hears them.
+  if (cinematic.active) {
+    if (input.pressed('Space', 'Escape')) cinematic.stop();
+    input.down.clear();
+    input.hits.clear();
+    input.mouse.dx = input.mouse.dy = input.mouse.wheel = 0;
+  }
   let t = frameTime(dt);
   if (dev.simTime) {
     simT = (simT ?? t) + dt;
@@ -721,6 +815,7 @@ function frame(now) {
   course.update(t, dt, swell);
   hatch.update(dt);
   stack.update(t);
+  for (const sp of setPieces) if (sp.center.distanceTo(player.pos) < 160 || sp.center.distanceTo(camera.position) < 160) sp.update(dt, { t, player, night: atmosphere.uniforms.uNight.value });
 
   // Player.
   const interaction = findInteraction();
@@ -752,6 +847,8 @@ function frame(now) {
     journal.toggle();
   }
   if (journal.open && input.pressed('Escape')) journal.toggle(false);
+  if (story.open && input.pressed('Escape')) story.closeLetter();
+  story.update(dt);
   journal.update(input, dt);
   // Lights: L anywhere aboard. They come on by themselves at dusk and go off at dawn.
   const nightNow = atmosphere.uniforms.uNight.value > 0.5;
@@ -773,13 +870,13 @@ function frame(now) {
     screens.toggleChart();
   }
   chartMarks.update(dt, { player, boatBody: boat.body });
-  screens.update({ boat, player, wind: env.wind, aboard: interior.inside, catchLog: fishing.summary(), finds: finds.summary(), visited: screens.open ? chartMarks.visited : undefined });
+  screens.update({ boat, player, wind: env.wind, aboard: interior.inside, catchLog: fishing.summary(), finds: finds.summary(), visited: screens.open ? chartMarks.visited : undefined, story: screens.open ? story.chartMark() : null });
   if (player.station !== 'helm') {
     if (input.pressed('ArrowRight')) treasure.flip(1);
     if (input.pressed('ArrowLeft')) treasure.flip(-1);
   }
   player.sheltered = interior.inside;
-  player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis(), dryAt: (p) => boat.holds(p) });
+  player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis(), dryAt: (p) => boat.holds(p), poolAt: (p) => kittiwake.poolAt(p) });
   // (Should the bear ever end up nowhere at all, a bad number having got in
   // somewhere, put them back aboard rather than leave a blank screen.)
   if (!Number.isFinite(player.pos.x + player.pos.y + player.pos.z)) {
@@ -803,7 +900,9 @@ function frame(now) {
   hud.update(dt);
 
   // Camera.
-  if (controls) {
+  if (cinematic.active) {
+    cinematic.update(dt, camera, null);
+  } else if (controls) {
     controls.update();
   } else if (cooking.open) {
     // Cooking: look down into the pan from beside the stove.
@@ -843,7 +942,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { composer, renderer, heightAt, waveNow, shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { cinematic, openingFilm, endingFilm, story, ISLAND_BY_ID, composer, renderer, kittiwake, beacon, zawn, temple, setPieces, heightAt, waveNow, shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {

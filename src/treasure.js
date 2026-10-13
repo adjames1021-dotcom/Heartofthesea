@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { keyIn } from '../shared/story.js';
 import { heightAt } from '../shared/waves.js';
 import { diggableAt, groundAt, islandNear } from '../shared/world.js';
 import { mulberry32 } from '../shared/noise.js';
@@ -432,9 +433,12 @@ export class Treasure {
     return c;
   }
 
-  /** A chest left somewhere hard to get to (top of a climb). Once per player. */
-  placeCourseChest(id, at) {
-    if (this.state.puzzles.includes(id)) return null;
+  /**
+   * A chest left somewhere hard to get to (top of a climb). Once per player;
+   * `again`, when the story's put one back there (src/story.js).
+   */
+  placeCourseChest(id, at, { again = false } = {}) {
+    if (this.state.puzzles.includes(id) && !again) return null;
     const c = this.spawnChest(at.x, at.y, at.z, { from: id, rise: false });
     c.course = id;
     c.yaw = 0.35;
@@ -503,8 +507,9 @@ export class Treasure {
     if (this.nearAt && Math.hypot(p.x - this.nearAt.x, p.z - this.nearAt.z) < 4) return;
     const isl = islandNear(p.x, p.z, 15);
     if (!isl || groundAt(p.x, p.z) < -1.2) return;
-    const puzzle = { bar: 'pells-bar', horseshoe: 'horseshoe' }[isl.id];
-    const wanted = this.state.maps.some((m) => m.island === isl.id) || (puzzle && !this.state.puzzles.includes(puzzle));
+    const puzzle = { bar: 'pells-bar', horseshoe: 'horseshoe', beacon: 'beacon' }[isl.id];
+    // (A puzzle's spot is wanted until it's dug, or again while the story's key is in it.)
+    const wanted = this.state.maps.some((m) => m.island === isl.id) || (puzzle && (!this.state.puzzles.includes(puzzle) || keyIn(this.progress.state?.story, puzzle)));
     if (!wanted) return;
     this.nearT = 1.5;
     this.nearAt = { x: p.x, z: p.z };

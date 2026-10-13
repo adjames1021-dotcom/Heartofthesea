@@ -261,6 +261,41 @@ function floatGeo() {
   return mergeParts(parts);
 }
 
+function whistleGeo() {
+  const tube = new THREE.CylinderGeometry(0.014, 0.016, 0.11, 8);
+  tube.rotateZ(Math.PI / 2);
+  tube.translate(0, 0.02, 0);
+  const bell = new THREE.SphereGeometry(0.026, 8, 6);
+  bell.translate(0.055, 0.024, 0);
+  const ring = new THREE.TorusGeometry(0.014, 0.004, 3, 8);
+  ring.translate(-0.065, 0.02, 0);
+  const cord = new THREE.TorusGeometry(0.07, 0.004, 3, 14);
+  cord.rotateX(Math.PI / 2);
+  cord.translate(-0.13, 0.005, 0);
+  return mergeParts([paint(tube, '#c4a24c'), paint(bell, '#c4a24c'), paint(ring, '#c4a24c'), paint(cord, '#7a2e24')]);
+}
+
+function lensGeo() {
+  const g = new THREE.CylinderGeometry(0.11, 0.11, 0.035, 14);
+  g.translate(0, 0.018, 0);
+  const crack = new THREE.BoxGeometry(0.2, 0.004, 0.006);
+  crack.rotateY(0.5);
+  crack.translate(0, 0.037, 0);
+  return mergeParts([paint(g, '#b9d8d4'), paint(crack, '#5d6f6c')]);
+}
+
+function tallyGeo() {
+  const stick = new THREE.BoxGeometry(0.34, 0.03, 0.035);
+  stick.translate(0, 0.015, 0);
+  const parts = [paint(stick, '#9a7a52')];
+  for (let i = 0; i < 9; i++) {
+    const n = new THREE.BoxGeometry(0.008, 0.012, 0.037);
+    n.translate(-0.14 + i * 0.03 + (i > 4 ? 0.02 : 0), 0.026, 0);
+    parts.push(paint(n, '#4e3a26'));
+  }
+  return mergeParts(parts);
+}
+
 function shellGeo(kind) {
   if (kind === 'scallop') {
     const g = new THREE.CircleGeometry(0.09, 9, 0, Math.PI);
@@ -298,6 +333,12 @@ export function keepsake(id) {
     case 'seaglass':
     case 'scallop':
       return m(shellGeo(id));
+    case 'whistle':
+      return m(whistleGeo());
+    case 'lens':
+      return m(lensGeo());
+    case 'tally':
+      return m(tallyGeo());
     case 'bell': {
       const g = bellGeo('#4a4036');
       g.translate(0, -0.2, 0);
@@ -377,6 +418,10 @@ export const PLACES = [
   { id: 'cowrie', island: 'saddle', at: [12, 172], small: () => shellGeo('cowrie'), name: 'A cowrie shell', label: 'Pick up the shell', text: 'A cowrie shell.' },
   { id: 'seaglass', island: 'burnt', at: [-52, 80], small: () => shellGeo('seaglass'), name: 'A piece of sea glass', label: 'Pick up the sea glass', text: 'A piece of blue sea glass, worn smooth.' },
   { id: 'scallop', island: 'horseshoe', at: [-76, -31], small: () => shellGeo('scallop'), name: 'A scallop shell', label: 'Pick up the shell', text: 'A scallop shell.' },
+  // The far islands.
+  { id: 'whistle', island: 'ledges', at: [-60, -12], small: whistleGeo, name: "A pilot's whistle", label: 'Pick up the whistle', text: "A brass pilot's whistle on a red lanyard. KITTIWAKE is stamped on it." },
+  { id: 'lens', island: 'beacon', at: [9, 7], small: lensGeo, name: "The signal lamp's lens", label: 'Pick up the glass', text: 'A thick glass lens out of the old signal lamp, cracked right across.' },
+  { id: 'tally', island: 'cormorant', at: [5, 22.5], small: tallyGeo, name: "A smugglers' tally stick", label: 'Pick up the stick', text: "A tally stick, a notch cut for every cask landed. Nine, and then it stops." },
 ];
 
 /** Where a place is in the world, nudged inland until it's on dry ground. */

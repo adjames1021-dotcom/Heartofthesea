@@ -57,6 +57,14 @@ export function setWaveDamping(fn) {
   dampingFn = fn;
 }
 
+// Optional mean sea level: (x, z, t) → metres added to the water height. shared/
+// world.js provides the tide round Cormorant Island; elsewhere it's 0.
+let levelFn = null;
+
+export function setSeaLevel(fn) {
+  levelFn = fn;
+}
+
 /** Phase of each wave at time t (seconds), wrapped to [0, 2π) in double precision. */
 export function wavePhases(waves, t, out = new Float32Array(waves.length)) {
   for (let i = 0; i < waves.length; i++) {
@@ -117,5 +125,5 @@ export function heightAt(x, z, t, scale = DEFAULT_WAVE_SCALE) {
     ux -= scratch.x - x;
     uz -= scratch.z - z;
   }
-  return sampleSurface(ux, uz, t, scale, scratch).y;
+  return sampleSurface(ux, uz, t, scale, scratch).y + (levelFn ? levelFn(x, z, t) : 0);
 }

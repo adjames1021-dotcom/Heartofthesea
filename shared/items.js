@@ -95,13 +95,16 @@ export const ITEMS = {
   cowrie: { kind: 'find', name: 'cowrie shell' },
   seaglass: { kind: 'find', name: 'piece of sea glass', plural: 'pieces of sea glass' },
   scallop: { kind: 'find', name: 'scallop shell' },
+  whistle: { kind: 'find', name: "pilot's whistle" },
+  lens: { kind: 'find', name: "the signal lamp's lens" },
+  tally: { kind: 'find', name: "smugglers' tally stick" },
 };
 
 /** What can be in a chest besides the next map. */
 export const VALUABLE_IDS = Object.keys(ITEMS).filter((k) => ITEMS[k].kind === 'valuable');
 
 /** Things found on the islands, in the order they're listed. */
-export const FIND_IDS = ['log', 'spyglass', 'bell', 'pipe', 'nameboard', 'bottle', 'lead', 'float', 'cowrie', 'seaglass', 'scallop'];
+export const FIND_IDS = ['log', 'spyglass', 'bell', 'pipe', 'nameboard', 'bottle', 'lead', 'float', 'cowrie', 'seaglass', 'scallop', 'whistle', 'lens', 'tally'];
 
 const NUMBERS = ['no', 'a', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 

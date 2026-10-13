@@ -7,8 +7,8 @@ import { SPOTS, spotWorld, PUZZLES, COURSES, issueMap, verifyMap, dig, near, cla
 
 const SECRET = 'test-secret';
 
-test('eleven islands, the big one in the middle, the first seven where they always were', () => {
-  assert.equal(ISLANDS.length, 11);
+test('fourteen islands, the big one in the middle, the first seven where they always were', () => {
+  assert.equal(ISLANDS.length, 14);
   const saddle = ISLANDS.find((i) => i.id === 'saddle');
   assert.deepEqual([saddle.x, saddle.z], [0, 0]);
   // Moving these would move every chest, note and puzzle on them.

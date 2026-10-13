@@ -20,6 +20,24 @@ export function hoursAt(t) {
   return h < 0 ? h + 24 : h;
 }
 
+/**
+ * The tide: up and down twice an in-game day, about a metre either side of
+ * mean level. Only round Cormorant Island does it rise and fall enough to
+ * matter (see shared/world.js seaLevelAt): it fills the arch into the Zawn at
+ * high water and leaves it dry at low. In metres, −1 (low) to +1 (high).
+ */
+export const TIDE_PERIOD = DAY_LENGTH / 2;
+export function tideAt(t) {
+  return Math.cos((t / TIDE_PERIOD) * TAU + 1.1);
+}
+
+/** Seconds from t until the tide next falls to `level` (on its way down). */
+export function tideFallsTo(t, level) {
+  const want = Math.acos(clamp(level, -1, 1)); // the phase where it reaches it falling
+  const now = (((t / TIDE_PERIOD) * TAU + 1.1) % TAU + TAU) % TAU;
+  return (((want - now) % TAU + TAU) % TAU / TAU) * TIDE_PERIOD;
+}
+
 /** Which in-game day it is (it turns over at midnight, with the hours). */
 export function dayAt(t) {
   return Math.floor(((t / DAY_LENGTH) * 24 + EPOCH_HOURS) / 24);

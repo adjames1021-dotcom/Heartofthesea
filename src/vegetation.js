@@ -108,6 +108,7 @@ export function buildVegetation({ colliders }) {
     if (f.light) clear.push({ ...toWorld(isl, f.light.x, f.light.z), r: 6 });
     if (f.bigTree) clear.push({ ...toWorld(isl, f.bigTree.x, f.bigTree.z), r: 13 });
     if (f.lake) clear.push({ ...toWorld(isl, 0, 0), r: f.lake.r + 2.5 });
+    for (const c of f.clear ?? []) clear.push({ ...toWorld(isl, c.x, c.z), r: c.r });
   }
   const cleared = (x, z) => clear.some((c) => (x - c.x) ** 2 + (z - c.z) ** 2 < c.r * c.r);
   const trunkGeo = paint(segment(V(0, 0, 0), V(0, 3.4, 0), 0.26, 0.17, 6), '#ffffff');

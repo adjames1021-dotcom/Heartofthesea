@@ -12,8 +12,8 @@ import { PLACES as EATING } from '../shared/restaurants.js';
 export const placeName = (id) => LANDMARKS[id]?.name ?? ISLAND_BY_ID[id]?.name ?? id;
 
 // Where the finds are, the climbs and puzzles end, and the quests send you.
-const FIND_AT = { log: ['saddle', 'hut'], spyglass: ['saddle', 'cairn'], cowrie: ['saddle'], bell: ['burnt', 'cottage'], seaglass: ['burnt'], pipe: ['horseshoe'], scallop: ['horseshoe'], nameboard: ['reef'], bottle: ['bar'], lead: ['stack'], float: ['sow'] };
-const SOLVED_AT = { 'pells-bar': ['bar'], horseshoe: ['horseshoe'], wreck: ['reef', 'wreck'], 'molly-ann': ['reef', 'wreck'], gannet: ['stack'] };
+const FIND_AT = { log: ['saddle', 'hut'], spyglass: ['saddle', 'cairn'], cowrie: ['saddle'], bell: ['burnt', 'cottage'], seaglass: ['burnt'], pipe: ['horseshoe'], scallop: ['horseshoe'], nameboard: ['reef'], bottle: ['bar'], lead: ['stack'], float: ['sow'], whistle: ['ledges'], lens: ['beacon', 'tower'], tally: ['cormorant', 'zawn'] };
+const SOLVED_AT = { 'pells-bar': ['bar'], horseshoe: ['horseshoe'], wreck: ['reef', 'wreck'], 'molly-ann': ['reef', 'wreck'], gannet: ['stack'], kittiwake: ['ledges', 'kittiwake'], beacon: ['beacon', 'tower', 'stones'], zawn: ['cormorant', 'zawn'] };
 const QUEST_AT = { nets: ['reef'], cairn: ['saddle', 'cairn'], canvas: ['brothers'] };
 
 /**
