@@ -569,8 +569,9 @@ function cormorantIsland() {
   const ZAWN = { x: 6, z0: 112, z1: 60, w: 3.2 };
   const POOL = { x: 0, z: 38, rx: 22, rz: 19 };
   // (Its roof's under water from a little below half tide: the tide's ±1
-  // here. At low water you wade through on the sill.)
-  const ARCH = { x: 6, z: 101, roof: -0.2, sill: -1.5, depth: 8 };
+  // here. Below that you swim through, and at low water you wade through on
+  // the sill, with room over your head.)
+  const ARCH = { x: 6, z: 101, roof: 0.2, sill: -1.5, depth: 8 };
   // The smugglers' landing, all at the pool's south-west: a quay, a gap of
   // deep water, the ledge with the cellar door in the rock, too high to
   // climb onto from the water; the winch on the quay that lowered a gangway.
@@ -580,7 +581,8 @@ function cormorantIsland() {
   const CELLAR = { x0: -31, x1: -25, z0: 20.5, z1: 26.5 };
   // A cleft in the pool's east wall, its mouth roofed low: only open at low
   // water. At the back, a dry shelf.
-  const CAVE = { x0: 22, x1: 34, z: 38, w: 2.1, lip: 23, mouth: 25.5, back: 27.5, floor: -1.5, shelf: 1.3, roof: -0.2, top: 2.9 };
+  // (The floor rises from the mouth to the shelf gently enough to walk up out of the water.)
+  const CAVE = { x0: 22, x1: 34, z: 38, w: 2.1, lip: 23, mouth: 25.5, back: 30.5, floor: -1.5, shelf: 1.3, roof: 0.2, top: 2.9 };
   return {
     name: 'Cormorant Island',
     land: 125,
@@ -652,7 +654,8 @@ function cormorantIsland() {
       const sx = Math.abs(lx - ZAWN.x) - ZAWN.w * (0.85 + 0.15 * Math.sin(lz * 0.3));
       if (lz > ZAWN.z1 - 8 && lz < ZAWN.z0 + 40 && sx < 3) {
         let bed = -0.55;
-        bed = lerp(bed, ARCH.sill, sstep(7, 3, Math.abs(lz - ARCH.z)));
+        // (Flat the whole way under it, so there's the same room over you all through.)
+        bed = lerp(bed, ARCH.sill, sstep(ARCH.depth / 2 + 3, ARCH.depth / 2 + 1, Math.abs(lz - ARCH.z)));
         bed = lerp(bed, -2.8, sstep(ARCH.z + 6, ARCH.z + 14, lz));
         bed = lerp(bed, -2.2, sstep(ZAWN.z1 + 6, ZAWN.z1 - 4, lz));
         h = Math.min(h, lerp(bed, h, sstep(0, 3, sx)));

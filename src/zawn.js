@@ -5,7 +5,7 @@ import { deepenShadows } from './atmosphere.js';
 import { ISLAND_BY_ID } from '../shared/world.js';
 import { tideFallsTo } from '../shared/environment.js';
 import { hash2 } from '../shared/noise.js';
-import { ZAWN, zawnChest, roomUnder } from '../shared/zawn.js';
+import { ZAWN, zawnChest, roomUnder, HEADROOM } from '../shared/zawn.js';
 
 // The Zawn on Cormorant Island, and the smugglers' landing in the pool it
 // leads to (the terrain's shaped in shared/world.js; the numbers are in
@@ -562,7 +562,7 @@ export class Zawn {
       this.told[k] = true;
       const roof = k === 'arch' ? A.roof : C.roof;
       if (roomUnder(roof, t)) return;
-      const mins = Math.max(1, Math.round(tideFallsTo(t, roof - 0.35) / 60));
+      const mins = Math.max(1, Math.round(tideFallsTo(t, roof - HEADROOM - 0.02) / 60));
       const where = k === 'arch' ? "The arch is under water: the tide's too high to get through." : k === 'cave' ? "The cleft's mouth is under water." : "The tide's over the cleft's mouth: you're shut in.";
       this.say?.(`${where} Low enough in about ${mins} minute${mins === 1 ? '' : 's'}.`, 4.5);
     };

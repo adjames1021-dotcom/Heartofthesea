@@ -2,7 +2,7 @@ import { ISLAND_BY_ID, toWorld, tidalReach } from './world.js';
 import { tideAt } from './environment.js';
 
 // The Zawn on Cormorant Island: a slot in the north cliff, under an arch the
-// sea fills from a little above half tide, into a pool hidden in the rock.
+// sea fills from a little below half tide, into a pool hidden in the rock.
 // The smugglers' landing is there: a quay, a winch that lowered a gangway
 // over deep water to a ledge, and a cellar door in the rock behind it. The
 // winch's handle they kept dry in a cleft in the pool wall, whose mouth is
@@ -35,5 +35,8 @@ export function zawnWater(t) {
   return tidalReach(i.x, i.z) * tideAt(t);
 }
 
-/** Is there room to get under a roof at `roof` at time t? (Swimming, your head's about 0.3 above the water.) */
-export const roomUnder = (roof, t) => zawnWater(t) + 0.3 < roof;
+/** How far over the water the top of you is, swimming (your head and a little to spare). */
+export const HEADROOM = 0.45;
+
+/** Is there room to get under a roof at `roof` at time t? */
+export const roomUnder = (roof, t) => zawnWater(t) + HEADROOM < roof;

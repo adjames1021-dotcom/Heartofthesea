@@ -8,7 +8,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 import { heightAt, setWaveDamping, setSeaLevel } from '../shared/waves.js';
 import { dampingAt, seaLevelAt, groundAt, ISLAND_BY_ID, toWorld, gannetNest } from '../shared/world.js';
-import { hoursAt, swellScaleAt, cloudCoverAt, windAt, stormAt, nextStormIn, forceStorm } from '../shared/environment.js';
+import { hoursAt, swellScaleAt, cloudCoverAt, windAt, stormAt, nextStormIn, forceStorm, forceTide } from '../shared/environment.js';
 import { Storm } from './storm.js';
 import { ChartMarks } from './chartmarks.js';
 import { VERSION, BUILD } from './version.js';
@@ -312,8 +312,8 @@ const ui = {
   start: document.getElementById('start'),
   version: document.getElementById('version'),
 };
-// Admin settings for testing (the key's "sea"): time, weather, boat speed. See src/admin.js.
-const admin = new Admin({ rows: ui.panel.querySelector('.rows'), dev, env, forceStorm });
+// Admin settings for testing (the key's "sea"): time, tide, weather, boat speed. See src/admin.js.
+const admin = new Admin({ rows: ui.panel.querySelector('.rows'), dev, env, forceStorm, forceTide });
 // A frame-rate readout, for measuring (Settings, or ?fps). Off unless asked for.
 const fpsEl = document.createElement('div');
 fpsEl.className = 'fps';

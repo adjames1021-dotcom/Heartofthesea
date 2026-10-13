@@ -2,6 +2,7 @@
 // "version" in package.json) with every update, newest first.
 
 export const CHANGES = [
+  ['0.15.9', "The Zawn: room for you under the arch once the tide's down (wading at low water, swimming as it falls), and under the cleft's mouth; the cleft's floor a ramp you can walk up to the shelf; the tide in the admin settings"],
   ['0.15.8', "The Kittiwake: up her net you come over the top onto her planking (it used to leave you stuck at the top), and you can drop into her hold to the pump; her mast stump and keel are solid, and her top edge can be caught; her bow closed to a point, bulwarks along her sides instead of rails in the air, and planking with an inside to it"],
   ['0.15.7', 'Admin settings for testing: type the key "sea" in Settings to set the time, the weather and how fast the boat goes'],
   ['0.15.6', 'The journal is a book: fixed pages, two at a time, turned with the arrow keys or the corners'],

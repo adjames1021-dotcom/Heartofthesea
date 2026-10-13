@@ -321,7 +321,7 @@ that can only look at your cabin.
     stones. Dig there.
   - **The Zawn, Cormorant Island.** In under the arch at low water (it's under
     the sea from a little below half tide; the game says how long till it
-    clears). The smugglers' winch on the quay has no handle: a note says it's
+    clears). As the tide falls you can swim under it; at low water, wade. The smugglers' winch on the quay has no handle: a note says it's
     kept dry in the cleft across the pool, whose mouth is only open at low
     water too. Wind the gangway down over the deep water, cross, climb the
     rock at the end of the ledge and pull the lever, and the cellar door
@@ -400,8 +400,9 @@ Developer URL parameters (append to the game URL):
 
 Admin settings, for testing without changing the URL: open Settings and type
 `sea` into the Admin key box. That opens a time-of-day slider (with Dawn,
-Noon, Dusk and Night, and back to the world clock), the weather (the world's,
-or Calm, Fair, Grey or a Storm) and a boat speed of up to six times her own.
+Noon, Dusk and Night, and back to the world clock), the tide (the world's, or
+held at low, half or high water), the weather (the world's, or Calm, Fair,
+Grey or a Storm) and a boat speed of up to six times her own.
 They only change your screen; the server keeps the world's time, so the shops
 still open and shut by it. The key isn't a secret: it only keeps the controls
 out of the way. Lock puts them away again.

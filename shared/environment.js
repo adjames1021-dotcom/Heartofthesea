@@ -27,7 +27,13 @@ export function hoursAt(t) {
  * high water and leaves it dry at low. In metres, −1 (low) to +1 (high).
  */
 export const TIDE_PERIOD = DAY_LENGTH / 2;
+let tideHeld = null;
+/** Hold the tide at a level (−1 low … 1 high) on this screen, for testing; null lets it run. */
+export function forceTide(v) {
+  tideHeld = v;
+}
 export function tideAt(t) {
+  if (tideHeld !== null) return tideHeld;
   return Math.cos((t / TIDE_PERIOD) * TAU + 1.1);
 }
 

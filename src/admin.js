@@ -1,6 +1,6 @@
 // Admin settings, for testing. In Settings, type the key ("sea") into the
-// admin box and three more controls open: the time of day, the weather and
-// how fast the boat goes. They change this screen only; nothing goes to the
+// admin box and more controls open: the time of day, the tide, the weather
+// and how fast the boat goes. They change this screen only; nothing goes to the
 // server, and anyone else still has the shared sky. (The key is here in
 // plain sight on purpose: it keeps the controls out of the way, that's all.)
 
@@ -14,6 +14,8 @@ const WEATHER = {
   grey: { label: 'Grey', storm: 0, clouds: 0.9, swell: 0.85, wind: 11 },
   storm: { label: 'Storm', storm: 1, clouds: null, swell: null, wind: null },
 };
+// The tide held at low water, half tide or high water (null: it runs).
+const TIDES = { world: null, low: -1, half: 0, high: 1 };
 const STORE = 'hots.admin';
 
 const clock = (h) => {
@@ -25,12 +27,14 @@ export class Admin {
   /**
    * dev: main.js's overrides (hours, storm, clouds, swell, wind), changed in place.
    * env: the boat's surroundings (env.fast scales her speed).
-   * forceStorm: shared/environment.js's, so the storm itself follows.
+   * forceStorm, forceTide: shared/environment.js's, so the storm and the tide follow.
    */
-  constructor({ rows, dev, env, forceStorm }) {
+  constructor({ rows, dev, env, forceStorm, forceTide }) {
     this.dev = dev;
     this.env = env;
     this.forceStorm = forceStorm;
+    this.forceTide = forceTide;
+    this.tide = 'world';
     this.weather = dev.storm === null && dev.clouds === null && dev.swell === null && dev.wind === null ? 'world' : null;
 
     const before = rows.querySelector('.ver');
@@ -49,6 +53,8 @@ export class Admin {
         <input type="range" class="admin-time" min="0" max="24" step="0.25" />
       </label>
       <div class="admin-pick admin-clock"><button type="button" data-clock="world">World clock</button><button type="button" data-clock="6.25">Dawn</button><button type="button" data-clock="12">Noon</button><button type="button" data-clock="17.75">Dusk</button><button type="button" data-clock="0">Night</button></div>
+      <div class="admin-row"><span>Tide</span></div>
+      <div class="admin-pick admin-tide">${Object.keys(TIDES).map((k) => `<button type="button" data-tide="${k}" aria-pressed="${k === 'world'}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
       <div class="admin-row"><span>Weather</span></div>
       <div class="admin-pick admin-weather">${Object.entries(WEATHER).map(([k, w]) => `<button type="button" data-weather="${k}" aria-pressed="false">${w.label}</button>`).join('')}</div>
       <label class="admin-row">
@@ -80,6 +86,10 @@ export class Admin {
     this.el.querySelector('.admin-weather').addEventListener('click', (e) => {
       const b = e.target.closest('[data-weather]');
       if (b) this.setWeather(b.dataset.weather);
+    });
+    this.el.querySelector('.admin-tide').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tide]');
+      if (b) this.setTide(b.dataset.tide);
     });
     this.fastIn.addEventListener('input', () => this.setSpeed(Number(this.fastIn.value)));
 
@@ -125,6 +135,14 @@ export class Admin {
     this.dev.wind = w.wind;
     this.forceStorm(w.storm);
     this.#showWeather();
+  }
+
+  /** 'world' (it runs), or held at 'low', 'half' or 'high'. */
+  setTide(kind) {
+    if (!(kind in TIDES)) return;
+    this.tide = kind;
+    this.forceTide?.(TIDES[kind]);
+    for (const b of this.el.querySelectorAll('[data-tide]')) b.setAttribute('aria-pressed', String(b.dataset.tide === kind));
   }
 
   /** 1 is her own speed; up to 6 times it. */
