@@ -633,6 +633,7 @@ function seaEvents(dt) {
         // Into the sea on the low side.
         const low = Math.sign(sea.total(b)) || 1; // + : starboard down
         player.throwOff(-Math.sin(b.heading) * low * 4, Math.cos(b.heading) * low * 4, 2.5);
+        overboard.thrown = true;
         hud.say("Knocked flat. You're in the sea.", 4);
       }
     } else if (e === 'up') {
@@ -642,6 +643,52 @@ function seaEvents(dt) {
   }
   sea.wasOver = sea.phase === 'over' || sea.phase === 'righting' || (sea.wasOver && sea.phase);
   // (While she's knocked down or keel-up she stops: see Boat.step.)
+}
+
+// ---------- Overboard ----------
+// Gone over the side while she's not at anchor, or knocked flat into the sea:
+// after a few seconds in the water the screen closes in to black and you're
+// back aboard, in the cockpit. Not if she's at anchor and you went in on
+// purpose (to swim ashore), and not once you've reached land.
+const OVERBOARD = { wait: 6, close: 0.7, hold: 0.45, open: 0.9 };
+const overboard = { t: 0, fromBoat: false, thrown: false, fade: null };
+const vignette = document.createElement('div');
+vignette.className = 'overboard';
+document.body.appendChild(vignette);
+
+function watchOverboard(dt) {
+  const aboard = player.platform === boat.body || player.mode === 'station' || player.mode === 'hold' || interior.inside;
+  if (aboard && !overboard.fade) Object.assign(overboard, { t: 0, fromBoat: true, thrown: false });
+  else if (player.mode === 'ground' && player.grounded && !overboard.fade) Object.assign(overboard, { t: 0, fromBoat: false, thrown: false });
+  const counts = overboard.fromBoat && player.mode === 'swim' && (overboard.thrown || !boat.state.anchor.set);
+  overboard.t = counts ? overboard.t + dt : 0;
+  // (Not while she's still on her side or keel-up: wait for her to come up.)
+  const upright = boat.sea.phase !== 'over' && boat.sea.phase !== 'righting';
+  if (overboard.t > OVERBOARD.wait && upright && !overboard.fade) overboard.fade = { t: 0, moved: false };
+  const f = overboard.fade;
+  if (!f) return;
+  f.t += dt;
+  const { close, hold, open } = OVERBOARD;
+  let k; // 0 clear … 1 black
+  if (f.t < close) k = f.t / close;
+  else if (f.t < close + hold) k = 1;
+  else k = Math.max(0, 1 - (f.t - close - hold) / open);
+  if (f.t >= close && !f.moved) {
+    f.moved = true;
+    player.place(boat.toWorld(new THREE.Vector3(-2.7, LAYOUT.cockpit.sole + 0.02, 0.45)), boat.body);
+    player.heading = Math.PI / 2 - boat.state.heading;
+    follow.first = true;
+    Object.assign(overboard, { t: 0, fromBoat: true, thrown: false });
+    hud.say('Back aboard.', 2.5);
+  }
+  // Black closing in from the edges to the middle, and opening out again.
+  const e = k * k * (3 - 2 * k);
+  const r = 80 * (1 - e);
+  vignette.style.background = e > 0.001 ? `radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) ${(r * 0.45).toFixed(1)}%, rgba(0, 0, 0, ${(0.55 + 0.45 * e).toFixed(2)}) ${(r * 0.8).toFixed(1)}%, #000 ${r.toFixed(1)}%)` : 'none';
+  if (f.t > close + hold + open) {
+    overboard.fade = null;
+    vignette.style.background = 'none';
+  }
 }
 
 // A word before a storm, and when it's over.
@@ -882,6 +929,7 @@ function frame(now) {
   if (!Number.isFinite(player.pos.x + player.pos.y + player.pos.z)) {
     player.place(boat.toWorld(new THREE.Vector3(-2.7, LAYOUT.cockpit.sole + 0.02, 0.45)), boat.body);
   }
+  watchOverboard(dt);
   fishing.update(dt, { t, waveScale: swell, night: atmosphere.uniforms.uNight.value > 0.5, camYaw: follow.yaw });
   treasure.update(dt, { t, waveScale: swell, boatBody: boat.body, player });
   puzzles.update(player);
@@ -942,7 +990,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { cinematic, openingFilm, endingFilm, story, ISLAND_BY_ID, composer, renderer, kittiwake, beacon, zawn, temple, setPieces, heightAt, waveNow, shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { groundAt, overboard, cinematic, openingFilm, endingFilm, story, ISLAND_BY_ID, composer, renderer, kittiwake, beacon, zawn, temple, setPieces, heightAt, waveNow, shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {

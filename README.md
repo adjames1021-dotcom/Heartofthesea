@@ -55,9 +55,10 @@ the water and lands with a crash and a burst of spray. Lie beam-on to the
 breaking seas (worse with too much sail up) and one can knock her flat, and
 now and then a bad one rolls her right over. She lies keel-up a few seconds,
 then her keel brings her round and up again; she always comes up. On deck
-when she goes flat, you're thrown into the sea and have to swim back to the
-swim platform; below, you hang on and go round with her. Nothing aboard is
-ever lost. Calm days stay calm.
+when she goes flat, you're thrown into the sea (after a few seconds the
+screen closes in to black and you're back aboard, once she's upright);
+below, you hang on and go round with her. Nothing aboard is ever lost. Calm
+days stay calm.
 
 Ashore there are crabs that scuttle off sideways and burrow, sandpipers
 running at the water's edge, butterflies over the grass, goats on the hills
@@ -158,7 +159,11 @@ sand, mackerel and pollock in open water, squid at night). Tab shows what
 you've caught.
 
 To go ashore: sail in close, press G at the helm, and swim. The swim
-platform at the stern is where you climb back aboard.
+platform at the stern is where you climb back aboard. In the water you ride
+the sea: up every swell and down every trough, leaning with its slope, and
+carried round with it as the waves pass. Go over the side while she's not
+anchored and she won't wait: after a few seconds the screen closes in to
+black and you're back aboard in the cockpit (unless you've reached land).
 
 ## People and places
 

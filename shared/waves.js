@@ -127,3 +127,27 @@ export function heightAt(x, z, t, scale = DEFAULT_WAVE_SCALE) {
   }
   return sampleSurface(ux, uz, t, scale, scratch).y + (levelFn ? levelFn(x, z, t) : 0);
 }
+
+const scratch2 = {};
+
+/**
+ * The surface at a *world* (x, z): its height, its normal, and where the bit
+ * of water there came from (the undisplaced point, ux/uz), so something
+ * floating can be carried round with it as the waves pass.
+ */
+export function surfaceAt(x, z, t, scale = DEFAULT_WAVE_SCALE, out = {}) {
+  let ux = x, uz = z;
+  for (let i = 0; i < 4; i++) {
+    sampleSurface(ux, uz, t, scale, scratch2);
+    ux -= scratch2.x - x;
+    uz -= scratch2.z - z;
+  }
+  sampleSurface(ux, uz, t, scale, scratch2);
+  out.y = scratch2.y + (levelFn ? levelFn(x, z, t) : 0);
+  out.nx = scratch2.nx;
+  out.ny = scratch2.ny;
+  out.nz = scratch2.nz;
+  out.ux = ux;
+  out.uz = uz;
+  return out;
+}

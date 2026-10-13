@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { heightAt } from '../shared/waves.js';
+import { heightAt, surfaceAt, sampleSurface } from '../shared/waves.js';
 import { surfAt } from '../shared/world.js';
 import { Bear } from './bear.js';
 import { STATIONS } from './boat.js';
@@ -34,6 +34,8 @@ const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
 const _m = new THREE.Matrix4();
 const UP = new THREE.Vector3(0, 1, 0);
+const _s = {};
+const _s2 = {};
 
 const smooth = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -61,6 +63,8 @@ export class Player {
     this.flopT = 0;
     this.animMode = 'idle';
     this.stepOff = 0; // visual-only height offset that eases out after a step
+    this.waterUp = new THREE.Vector3(0, 1, 0); // which way the sea's surface faces, under you
+    this.floatOff = null; // swimming: how far off riding the surface you still are, coming in
     this.effort = 0;
     this.turning = 0;
     this.speed = 0;
@@ -121,6 +125,7 @@ export class Player {
     else if (this.mode === 'swim') this.#swim(dt, input, ctx);
     else this.#walk(dt, input, ctx);
 
+    if (this.mode !== 'swim') this.floatOff = null;
     this.bear.root.position.copy(this.pos);
     // Steps and snaps move the body at once but the model eases after it.
     this.stepOff = (this.stepOff ?? 0) * Math.exp(-dt * 14);
@@ -150,10 +155,12 @@ export class Player {
       // On a deck that heels and pitches, lean with it: most of the way, as
       // a bear standing braced would.
       const onDeck = this.platform?.matrix && this.mode !== 'swim';
-      const deck = onDeck ? _a.setFromMatrixColumn(this.platform.matrix, 1).normalize() : _a.copy(UP);
+      const swimming = this.mode === 'swim';
+      // (Swimming, lie on the water as it heaves: with the slope of the swell under you.)
+      const deck = onDeck ? _a.setFromMatrixColumn(this.platform.matrix, 1).normalize() : swimming ? _a.copy(this.waterUp) : _a.copy(UP);
       this.deckUp ??= UP.clone();
       this.deckUp.lerp(deck, 1 - Math.exp(-dt * 10)).normalize();
-      _b.copy(UP).lerp(this.deckUp, 0.75).normalize();
+      _b.copy(UP).lerp(this.deckUp, swimming ? 0.9 : 0.75).normalize();
       _q.setFromUnitVectors(UP, _b);
       this.bear.root.quaternion.premultiply(_q);
       this.tilt = Math.acos(Math.min(1, this.deckUp.y));
@@ -394,14 +401,44 @@ export class Player {
     if (this.mode !== 'swim') this.mode = this.grounded ? 'ground' : 'air';
   }
 
-  /** Water level here, averaged over a bear-sized patch so small ripples don't jolt you. */
+  /**
+   * The water here: its level (over a bear-sized patch, so the very shortest
+   * waves don't jolt you) and which way its surface faces (this.waterUp).
+   */
   #waterAt(ctx) {
     const pool = ctx.poolAt?.(this.pos);
-    if (pool != null) return pool;
+    if (pool != null) {
+      this.waterUp.set(0, 1, 0);
+      return pool;
+    }
     const { x, z } = this.pos;
-    let h = 0;
-    for (const [dx, dz] of [[0, 0], [0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6]]) h += heightAt(x + dx, z + dz, ctx.t, ctx.waveScale);
-    return h / 5;
+    const s = surfaceAt(x, z, ctx.t, ctx.waveScale, _s);
+    this.waterUp.set(s.nx, s.ny, s.nz);
+    let h = s.y * 2;
+    for (const [dx, dz] of [[0.35, 0], [-0.35, 0], [0, 0.35], [0, -0.35]]) h += heightAt(x + dx, z + dz, ctx.t, ctx.waveScale);
+    return h / 6;
+  }
+
+  /**
+   * Carried round with the water as the waves go by (it goes round in a
+   * circle under each one, so you go up the face, along the crest and back
+   * down, and end up where you were). Since the last frame, where has the
+   * water we're floating in moved to?
+   */
+  #rideWaves(ctx) {
+    const last = this.seaT;
+    this.seaT = ctx.t;
+    if (last === undefined || !(ctx.t > last) || ctx.t - last > 0.5 || ctx.poolAt?.(this.pos) != null) return;
+    // Where that water was (undisplaced, at the last frame's time), and where it is now.
+    const was = surfaceAt(this.pos.x, this.pos.z, last, ctx.waveScale, _s);
+    const now = sampleSurface(was.ux, was.uz, ctx.t, ctx.waveScale, _s2);
+    const dx = now.x - this.pos.x;
+    const dz = now.z - this.pos.z;
+    // (A sanity limit: a slow frame shouldn't throw you about.)
+    const d = Math.hypot(dx, dz);
+    const k = d > 0.5 ? 0.5 / d : 1;
+    this.pos.x += dx * k;
+    this.pos.z += dz * k;
   }
 
   #swim(dt, input, ctx) {
@@ -412,6 +449,7 @@ export class Player {
       this.vel.y = 0;
       return;
     }
+    this.#rideWaves(ctx);
     const water = this.#waterAt(ctx);
     const wish = this.#wish(input, ctx);
     const fast = input.held('ShiftLeft', 'ShiftRight');
@@ -427,8 +465,13 @@ export class Player {
     // In the surf off the shelf there's no climbing out: swim round.
     const surf = surfAt(this.pos.x, this.pos.z);
     this.#face(wish.x, wish.z, dt, 8);
+    // Ride the surface exactly, up every swell and down every trough. (Where
+    // you came in, above or below it, eases out over a moment, so falling
+    // in still bobs you down and back up.)
     const targetY = water - FLOAT_DEPTH;
-    this.pos.y += (targetY - this.pos.y) * (1 - Math.exp(-dt * 5));
+    if (this.floatOff === null) this.floatOff = Math.max(-1.6, Math.min(0.6, this.pos.y - targetY));
+    this.floatOff *= Math.exp(-dt * 3.5);
+    this.pos.y = targetY + this.floatOff;
     this.vel.y = 0;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
