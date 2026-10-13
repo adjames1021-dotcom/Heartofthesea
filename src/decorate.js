@@ -190,8 +190,12 @@ export class Decorating {
         continue;
       }
       let o = this.objects.get(e.item);
-      if (!o || o.entry.kind !== e.kind) {
-        if (o) this.interior.group.remove(o.obj);
+      // (Something just out of the locker has no place yet, so no entry: keep its model.)
+      if (o && o.entry && o.entry.kind !== e.kind) {
+        this.interior.group.remove(o.obj);
+        o = null;
+      }
+      if (!o) {
         const obj = decorModel(e.kind);
         if (!obj) continue;
         this.interior.group.add(obj);
@@ -217,6 +221,7 @@ export class Decorating {
     let best = null;
     let bd = 1.45;
     for (const [id, o] of this.objects) {
+      if (!o.entry) continue; // (out of the locker and not put anywhere yet)
       const a = o.entry.at;
       const d = Math.hypot(a[0] - p.x, a[2] - p.z);
       if (d < bd && a[1] - p.y < 1.9) {

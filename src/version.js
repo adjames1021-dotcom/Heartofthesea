@@ -2,6 +2,7 @@
 // "version" in package.json) with every update, newest first.
 
 export const CHANGES = [
+  ['0.15.5', 'Fixed: the game stopping when you put down something taken out of the locker'],
   ['0.15.4', 'The sea a little see-through (most in the shallows, looking down); the opening film waits for your save if you click in early, and Settings has a button to watch it again'],
   ['0.15.3', 'A blue comforter on the bed, quilted in squares and turned down at the head'],
   ['0.15.2', 'Over the side while she sails off with her sails up (or the engine going): back aboard in two seconds'],
