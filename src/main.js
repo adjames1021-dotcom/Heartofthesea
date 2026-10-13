@@ -919,7 +919,7 @@ function frame(now) {
   if (journal.open && input.pressed('Escape')) journal.toggle(false);
   if (story.open && input.pressed('Escape')) story.closeLetter();
   story.update(dt);
-  journal.update(input, dt);
+  journal.update(input);
   // Lights: L anywhere aboard. They come on by themselves at dusk and go off at dawn.
   const nightNow = atmosphere.uniforms.uNight.value > 0.5;
   if (nightNow !== wasNight) {
@@ -942,8 +942,8 @@ function frame(now) {
   chartMarks.update(dt, { player, boatBody: boat.body });
   screens.update({ boat, player, wind: env.wind, aboard: interior.inside, catchLog: fishing.summary(), finds: finds.summary(), visited: screens.open ? chartMarks.visited : undefined, story: screens.open ? story.chartMark() : null });
   if (player.station !== 'helm') {
-    if (input.pressed('ArrowRight')) treasure.flip(1);
-    if (input.pressed('ArrowLeft')) treasure.flip(-1);
+    if (input.pressed('ArrowRight') && !journal.open) treasure.flip(1);
+    if (input.pressed('ArrowLeft') && !journal.open) treasure.flip(-1);
   }
   player.sheltered = interior.inside;
   player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis(), dryAt: (p) => boat.holds(p), poolAt: (p) => kittiwake.poolAt(p) });

@@ -397,13 +397,14 @@ html, body {
 }
 .night .talk { filter: brightness(0.8); }
 
-/* The journal (J): a notebook open at two pages, written by hand. */
+/* The journal (J): a notebook open at two pages, written by hand. The pages
+   are a fixed size; what doesn't fit goes over onto the next. */
 .journal-screen { pointer-events: auto; }
 .journal {
   display: grid;
   grid-template-columns: 1fr 1fr;
   width: min(940px, calc(100vw - 32px));
-  max-height: calc(100vh - 48px);
+  height: min(560px, calc(100vh - 48px));
   color: #2f281f;
   background: #efe6cf;
   border-radius: 3px;
@@ -411,29 +412,45 @@ html, body {
   font-family: 'Reenie Beanie', 'Comic Sans MS', cursive;
   font-size: 1.45rem;
   line-height: 30px;
-  min-height: min(470px, calc(100vh - 48px));
 }
+.journal.single { grid-template-columns: 1fr; }
 .journal .page {
-  overflow: auto;
-  padding: 26px 30px 18px 34px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  padding: 26px 30px 8px 34px;
   /* Faint ruled lines, one per line of writing. */
   background: repeating-linear-gradient(to bottom, transparent 0 29px, rgba(70, 58, 42, 0.13) 29px 30px);
   background-position: 0 25px;
 }
 .journal .page + .page { border-left: 1px solid rgba(70, 58, 42, 0.28); box-shadow: inset 10px 0 14px -10px rgba(70, 58, 42, 0.35); }
+.journal .text { flex: 1; min-height: 0; overflow: hidden; }
+.journal .foot { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 34px; flex: none; }
+.journal .foot > :last-child { text-align: right; }
+.journal .num { opacity: 0.6; }
+.journal .hint { opacity: 0.55; white-space: nowrap; }
+.journal .turn {
+  font: inherit;
+  font-size: 2.3rem;
+  line-height: 1;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0 8px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.journal .turn:hover { opacity: 1; }
+.journal .turn.gone { visibility: hidden; }
 .journal h3 { margin: 0; font-size: 1.7rem; font-weight: 400; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.journal h3 .cont { display: inline-block; font-size: 1.2rem; opacity: 0.6; } /* (inline-block: not underlined) */
 .journal p { margin: 0 0 0 0; }
 .journal ul { margin: 0; padding: 0 0 0 1em; list-style: '– '; }
-.journal .entry { margin-bottom: 30px; }
+.journal .entry + .entry { margin-top: 30px; }
 .journal .entry.done { opacity: 0.5; }
 .journal .empty { opacity: 0.6; }
 .journal b { font-weight: 400; text-decoration: underline; text-decoration-thickness: 1px; }
-.journal .close { margin-top: 30px; text-align: right; opacity: 0.55; }
-@media (max-width: 640px) {
-  .journal { grid-template-columns: 1fr; overflow: auto; }
-  .journal .page { overflow: visible; }
-  .journal .page + .page { border-left: 0; box-shadow: none; border-top: 1px solid rgba(70, 58, 42, 0.28); }
-}
 
 /* The cooking card sits to one side so you can watch the pan. */
 .talk.cook { left: 24px; transform: none; bottom: 16%; width: min(380px, calc(100vw - 48px)); }

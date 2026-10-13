@@ -192,7 +192,9 @@ waves. There are no markers over anyone.
 
 Things people ask of you come out of talking to them, and go in your
 journal (J) in your own words, with what's in the hold, the dishes you know
-and what's been done to the boat. Some lead on to each other: Oda's nets
+and what's been done to the boat. It's a book of fixed pages, two open at
+a time: when it runs on, turn over with the arrow keys or the page corners.
+Some lead on to each other: Oda's nets
 take you to the Molly Ann, and her copper is what Ned wants; once that's done
 Tam sends you up the wreck's foremast; Gwen's knife has Silas mention a sail
 with no lights, which takes you to Kettle and the Landing and ends in a
