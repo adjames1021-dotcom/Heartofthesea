@@ -2,6 +2,7 @@
 // "version" in package.json) with every update, newest first.
 
 export const CHANGES = [
+  ['0.15.4', 'The sea a little see-through (most in the shallows, looking down); the opening film waits for your save if you click in early, and Settings has a button to watch it again'],
   ['0.15.3', 'A blue comforter on the bed, quilted in squares and turned down at the head'],
   ['0.15.2', 'Over the side while she sails off with her sails up (or the engine going): back aboard in two seconds'],
   ['0.15.1', "Swimming rides the sea properly: up every swell and down every trough with no lag, leaning with the slope, carried round as the waves pass; over the side while she isn't anchored (or knocked flat into the sea), you're back aboard after a few seconds, the screen closing to black and opening again"],

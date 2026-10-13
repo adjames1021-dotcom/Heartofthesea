@@ -4,6 +4,7 @@ import { noiseGLSL, skyGLSL, skyUniformsGLSL } from './glsl.js';
 import { HULL_GLSL } from './boat.js';
 import { TIDAL } from '../shared/world.js';
 import { tideAt } from '../shared/environment.js';
+import { DEEP_WATER } from './terrain.js';
 
 const GRID = 420;          // vertices per side
 const RADIUS = 4500;       // metres from the camera to the mesh edge
@@ -295,7 +296,12 @@ void main() {
   float fogF = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);
   col = mix(col, fogCol, fogF);
 
-  gl_FragColor = vec4(col, 1.0);
+  // --- Slightly see-through: what's under the surface shows a little (the
+  // sand in the shallows, her keel, a swimmer's legs), most looking straight
+  // down, none through foam, at a glancing angle or far off.
+  float clear = (1.0 - fresnel) * (0.07 + 0.25 * shallow) * (1.0 - foam);
+  clear *= (1.0 - smoothstep(40.0, 180.0, dist)) * (1.0 - fogF);
+  gl_FragColor = vec4(col, 1.0 - clear);
 }
 `;
 
@@ -339,9 +345,19 @@ export class Ocean {
         uniforms: this.uniforms,
         vertexShader,
         fragmentShader,
+        transparent: true,
       }),
     );
     this.mesh.frustumCulled = false;
+    // (First of the see-through things, so rain and spray still draw over it.)
+    this.mesh.renderOrder = -1;
+    // Under the open sea, a floor of deep dark water to see down into
+    // (otherwise there'd be nothing under it but sky). Islands' own seabeds
+    // come up through it in the shallows.
+    this.deep = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshBasicMaterial({ color: DEEP_WATER }));
+    this.deep.rotation.x = -Math.PI / 2;
+    this.deep.position.y = -40;
+    this.deep.frustumCulled = false;
   }
 
   setWaveScale(s) {
@@ -363,5 +379,7 @@ export class Ocean {
       0,
       Math.round(camera.position.z / snap) * snap,
     );
+    this.deep.position.x = this.mesh.position.x;
+    this.deep.position.z = this.mesh.position.z;
   }
 }

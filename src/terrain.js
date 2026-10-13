@@ -70,6 +70,9 @@ const smooth = (a, b, x) => {
   return t * t * (3 - 2 * t);
 };
 
+/** The colour of deep water, looked down into (src/ocean.js puts a floor of it under the open sea). */
+export const DEEP_WATER = new THREE.Color('#0b2c3c');
+
 /** What the ground is at a spot: grass, dune, scrub, sand, wet, dirt, rock, coral, surf or seabed. */
 export function surfaceKind(isl, h, ny, x, z) {
   const sandTop = SAND_TOP[isl.id] ?? 2.4;
@@ -104,7 +107,9 @@ function classify(isl, pal, h, ny, x, z, out) {
     case 'surf':
       return out.copy(SURF_ROCK[Math.floor(fbm(x * 0.3, z * 0.3, 37, 2) * 3) % 3]);
     case 'seabed':
-      return out.copy(pal.seabed);
+      // Darkening as it goes down, into the deep water's colour by where the
+      // seabed mesh stops (5 m), so seen through the water there's no edge.
+      return out.copy(pal.seabed).lerp(DEEP_WATER, smooth(-0.8, -4.8, h));
     case 'coral':
       return out.copy(fbm(x * 0.15, z * 0.15, 3, 2) > 0.5 ? pal.rock : pal.rock2);
     case 'wet':

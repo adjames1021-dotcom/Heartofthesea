@@ -102,7 +102,7 @@ const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.3, 90
 const atmosphere = new Atmosphere();
 atmosphere.addTo(scene);
 const ocean = new Ocean(atmosphere, worldTex);
-scene.add(ocean.mesh);
+scene.add(ocean.mesh, ocean.deep);
 const islands = new Islands();
 scene.add(islands.group);
 
@@ -344,17 +344,33 @@ ui.toggle.addEventListener('click', () => {
   const open = ui.panel.classList.toggle('open');
   ui.toggle.setAttribute('aria-expanded', String(open));
 });
-renderer.domElement.addEventListener('mousedown', () => {
+// (pointerdown: a mouse click or a tap.)
+renderer.domElement.addEventListener('pointerdown', () => {
   ui.start.classList.add('gone');
   ui.version.classList.add('gone');
-  // The first time in since the story came: how it all began, then down to your boat.
-  if (!visit && story.letterWaiting && !seen('intro')) {
-    cinematic.play(openingFilm(), () => {
-      remember('intro');
-      hud.say("Elowen's letter is on the chart table, below decks.", 6);
-    });
-  }
+  clickedIn = true;
+  maybeOpening();
 }, { once: true });
+
+// The opening film: the first time in since the story came, how it all
+// began, then down to your boat. (If you clicked in before your save had
+// loaded, it waits for it.) And any time from Settings.
+let clickedIn = false;
+function maybeOpening() {
+  if (clickedIn && !visit && !cinematic.active && story.letterWaiting && !seen('intro')) playOpening();
+}
+function playOpening() {
+  cinematic.play(openingFilm(), () => {
+    remember('intro');
+    if (story.letterWaiting) hud.say("Elowen's letter is on the chart table, below decks.", 6);
+  });
+}
+progress.onChange(() => maybeOpening());
+document.getElementById('watch-opening')?.addEventListener('click', () => {
+  ui.panel.classList.remove('open');
+  ui.toggle.setAttribute('aria-expanded', 'false');
+  playOpening();
+});
 
 /** Seen it before (in this browser)? (Storage may be missing: then it's always the first time.) */
 function seen(what) {
