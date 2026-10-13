@@ -217,13 +217,19 @@ export function stepBoat(b, dt, env) {
   // --- Engine ---
   if (b.engine) Ff += b.throttle * (b.throttle >= 0 ? 2300 : 1400);
 
+  // Quicker for testing (Settings, admin: env.fast, 1 as she is). The drive
+  // goes up with its square and the hull drag is stretched to match, so her
+  // top speed goes up by env.fast and she handles the same.
+  const fast = env.fast ?? 1;
+  Ff *= fast * fast;
+
   // --- Hull ---
   // Past hull speed the bow wave holds her back, hard. Arcade lets her go a
   // bit quicker, and in a gale she gets up and planes.
   const storm = env.storm ?? 0;
-  const hullSpeed = BOAT.arcade ? lerp(4.8, 9, storm) : 4.1;
+  const hullSpeed = (BOAT.arcade ? lerp(4.8, 9, storm) : 4.1) * fast;
   const au = Math.abs(b.u);
-  Ff -= Math.sign(b.u) * (60 * au + 78 * b.u * b.u * (1 + 2 * (au / hullSpeed) ** 4));
+  Ff -= Math.sign(b.u) * (60 * au * fast + 78 * b.u * b.u * (1 + 2 * (au / hullSpeed) ** 4));
   Fs -= 4800 * b.v * (au + 0.2) + 4000 * b.v * Math.abs(b.v);
 
   // --- Yaw ---

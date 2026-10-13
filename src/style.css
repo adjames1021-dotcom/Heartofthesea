@@ -75,6 +75,8 @@ html, body {
 .panel .rows {
   display: none;
   min-width: 160px;
+  max-height: calc(100vh - 76px);
+  overflow-y: auto;
   padding: 8px;
   background: var(--paper);
   border-radius: 3px;
@@ -528,3 +530,15 @@ html, body {
 
 /* Back aboard after going over the side: black closing in from the edges (src/main.js draws it). */
 .overboard { position: fixed; inset: 0; pointer-events: none; z-index: 16; }
+
+/* Admin settings (Settings, the key "sea"): for testing. */
+.panel .rows .admin { display: grid; gap: 5px; width: 15.5em; padding: 6px 2px 2px; border-top: 1px solid var(--paper-rule); color: var(--paper-ink); }
+.panel .rows .admin[hidden], .panel .rows .admin-key[hidden] { display: none; }
+.panel .rows .admin-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+.panel .rows .admin-head button { padding: 2px 8px; font-size: 0.8rem; }
+.panel .rows .admin-row { display: grid; gap: 2px; font-size: 0.85rem; }
+.panel .rows .admin-row b { font-weight: 400; font-variant-numeric: tabular-nums; opacity: 0.75; }
+.panel .rows .admin-row input[type='range'] { width: 100%; accent-color: var(--paper-ink); }
+.panel .rows .admin-pick { display: flex; flex-wrap: wrap; gap: 4px; }
+.panel .rows .admin-pick button { padding: 2px 7px; font-size: 0.8rem; }
+.panel .rows .admin-note { margin: 0; font-size: 0.72rem; opacity: 0.65; }

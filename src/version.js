@@ -2,6 +2,7 @@
 // "version" in package.json) with every update, newest first.
 
 export const CHANGES = [
+  ['0.15.7', 'Admin settings for testing: type the key "sea" in Settings to set the time, the weather and how fast the boat goes'],
   ['0.15.6', 'The journal is a book: fixed pages, two at a time, turned with the arrow keys or the corners'],
   ['0.15.5', 'Fixed: the game stopping when you put down something taken out of the locker'],
   ['0.15.4', 'The sea a little see-through (most in the shallows, looking down); the opening film waits for your save if you click in early, and Settings has a button to watch it again'],

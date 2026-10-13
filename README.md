@@ -397,6 +397,14 @@ Developer URL parameters (append to the game URL):
 | `?cam=island&id=reef&az=0.6&el=0.25&dist=320` | orbit an island |
 | `?look=white` | the white bear |
 
+Admin settings, for testing without changing the URL: open Settings and type
+`sea` into the Admin key box. That opens a time-of-day slider (with Dawn,
+Noon, Dusk and Night, and back to the world clock), the weather (the world's,
+or Calm, Fair, Grey or a Storm) and a boat speed of up to six times her own.
+They only change your screen; the server keeps the world's time, so the shops
+still open and shut by it. The key isn't a secret: it only keeps the controls
+out of the way. Lock puts them away again.
+
 Debug pages: `dev/bear.html` (the character), `dev/maps.html` (every island's
 map sheet), `dev/props.html` and `dev/island-props.html` (props).
 
@@ -448,6 +456,7 @@ src/village.js         villages and the yard, and the people walking their day
 src/handvillage.js     the villages built by hand; src/handpieces.js the stalls, kitchens, shed, garden and the rest; src/kit.js boards, walls, roofs, weathering
 src/talk.js            the talk card; shared/talk.js has everything people say
 src/journal.js         the journal (J)
+src/admin.js           admin settings for testing (the key's "sea"): time, weather, boat speed
 src/shops.js           shops you walk round; src/goods3d.js the goods and price tags
 src/restaurants.js     the cook's board, their calls, the fire, bowls on the tables
 src/questworld.js      things out in the world for quests (the copper, the bales)

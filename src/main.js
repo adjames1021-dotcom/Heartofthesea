@@ -57,6 +57,7 @@ import { templePoint, templeHeart } from '../shared/temple.js';
 import { towerFrame } from '../shared/beacon.js';
 import { foreTopChest } from '../shared/wreck.js';
 import { OceanAudio } from './audio.js';
+import { Admin } from './admin.js';
 import { syncClock, worldTime } from './clock.js';
 import './style.css';
 
@@ -311,6 +312,8 @@ const ui = {
   start: document.getElementById('start'),
   version: document.getElementById('version'),
 };
+// Admin settings for testing (the key's "sea"): time, weather, boat speed. See src/admin.js.
+const admin = new Admin({ rows: ui.panel.querySelector('.rows'), dev, env, forceStorm });
 // A frame-rate readout, for measuring (Settings, or ?fps). Off unless asked for.
 const fpsEl = document.createElement('div');
 fpsEl.className = 'fps';
@@ -808,6 +811,7 @@ function frame(now) {
     villagesPlaced = true;
   }
   hoursNow = dev.hours ?? hoursAt(t);
+  if (ui.panel.classList.contains('open')) admin.update(hoursAt(t));
   // Anyone with something to say to you turns and waves.
   for (const p of villages.people) p.wantsToTalk = !!WANTS[p.id]?.(progress.state);
   villages.update(dt, { t, hours: hoursNow, player, night: atmosphere.uniforms.uNight.value, camera, wind: env.wind });
@@ -1013,7 +1017,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { groundAt, overboard, cinematic, openingFilm, endingFilm, story, ISLAND_BY_ID, composer, renderer, kittiwake, beacon, zawn, temple, setPieces, heightAt, waveNow, shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { admin, groundAt, overboard, cinematic, openingFilm, endingFilm, story, ISLAND_BY_ID, composer, renderer, kittiwake, beacon, zawn, temple, setPieces, heightAt, waveNow, shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {
