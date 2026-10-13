@@ -309,7 +309,8 @@ that can only look at your cabin.
   - **Gannet Stack.** Up the footholds on the beach side of the spire, along
     the top of the first drum, up the old rope, and round to the nest.
   - **The Kittiwake, on Black Ledges.** Up the boarding net down her deck
-    and in through her stove-in planking. Her hold's half full of water and
+    (or jump for the stump of her mast, then for her top edge) and drop in
+    through her stove-in planking. Her hold's half full of water and
     the door aft won't give against it: work the bilge pump on the crates
     till she sucks dry, then pull the door. The chest's in the captain's
     cabin; out through her broken stern.

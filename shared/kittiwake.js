@@ -23,7 +23,7 @@ export const KW = {
   foreBulkhead: 4.0,
   water: { full: 2.6, empty: 0.55, perStroke: 0.17 },
   // Where she's stove in, on her uppermost side, over the hold.
-  hole: { x0: -0.7, x1: 0.9, z0: 0.05, z1: 1.12 },
+  hole: { x0: -0.7, x1: 0.9, z0: -0.4, z1: 1.12 },
   // The cabin door in the after bulkhead (an opening, in her lying frame).
   door: { y0: 1.0, y1: 2.4, z0: -0.7, z1: 0.9 },
   // Crates lashed in the forward end of the hold, with the pump beside them.
@@ -36,7 +36,7 @@ export const KW = {
 /** Her half-breadth (upright) at x, at the deck. */
 export function kwBreadth(x) {
   const fwd = x > 0.8;
-  const t = (x - 0.8) / (fwd ? 6.9 : 9.6);
+  const t = (x - 0.8) / (fwd ? 6.8 : 9.6); // (to a point at her stem)
   return KW.half * Math.sqrt(Math.max(0, 1 - t * t));
 }
 

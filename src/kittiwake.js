@@ -8,8 +8,9 @@ import { KW, kwBreadth, kittiwakeFrame, kittiwakeChest } from '../shared/kittiwa
 // on the ledge in a blow and stayed there.
 //
 // A boarding net still hangs down her deck (a wall now, facing inshore) from
-// her uppermost rail. Up there, amidships, her planking's stove in: drop
-// through into the hold. It's half full of water, and the door aft into the
+// her uppermost rail; or jump for the stump of her mast and from there for
+// her top edge. Up there, amidships, her planking's stove in: drop through
+// into the hold. It's half full of water, and the door aft into the
 // captain's cabin won't give against it. On the crates lashed in the forward
 // end there's her bilge pump: work it and the water goes down, until the
 // door's clear and you can pull it open. Her stern's stove in too, out over
@@ -43,6 +44,54 @@ function sectionPoint(x, phi, out = new THREE.Vector3()) {
 }
 
 const inHole = (x, z, phi) => phi > 0 && x > KW.hole.x0 && x < KW.hole.x1 && z > KW.hole.z0 && z < KW.hole.z1;
+
+// Stations along her and round her section, shared by her planking, her deck
+// and her bulwarks so their edges meet exactly. (The hole's ends are among
+// the stations, so it's cut square, where the colliders cut it.)
+const NP = 24;
+const XS = (() => {
+  const n = 34;
+  const xs = Array.from({ length: n + 1 }, (_, i) => KW.stern + ((KW.stem - KW.stern) * i) / n);
+  for (const x of [KW.hole.x0, KW.hole.x1]) if (!xs.some((v) => Math.abs(v - x) < 0.12)) xs.push(x);
+  return xs.sort((a, b) => a - b);
+})();
+const PH = Array.from({ length: NP + 1 }, (_, j) => -Math.PI / 2 + (Math.PI * j) / NP);
+
+// The boarding net down her deck (aft of the hole, so you come over the top
+// onto planking, a step from it), and how far her bulwarks stand off her deck.
+const NET = { x0: -2.5, w: 1.6 };
+const BULWARK = 0.32;
+
+/** How high her uppermost side is at x, z (her frame): where you walk, on top of her. */
+function topAt(x, z) {
+  const up = Math.min(D, Math.max(0, z + D / 2));
+  const phi = Math.acos(Math.min(1, Math.max(0, 1 - up / D) ** (1 / 1.6)));
+  return sectionPoint(x, phi, new THREE.Vector3()).y;
+}
+
+// Her planking has a thickness: the inside face is this far in from the outside.
+const SKIN = 0.07;
+const _p1 = new THREE.Vector3();
+const _p2 = new THREE.Vector3();
+/** sectionPoint, moved in (toward her middle) by `inset`, off the outside of her planking. */
+function insidePoint(x, phi, inset = SKIN, out = new THREE.Vector3()) {
+  const e = 0.01;
+  sectionPoint(x, Math.min(phi + e, Math.PI / 2), _p1);
+  sectionPoint(x, Math.max(phi - e, -Math.PI / 2), _p2);
+  let ny = _p1.z - _p2.z;
+  let nz = -(_p1.y - _p2.y);
+  const len = Math.hypot(ny, nz) || 1;
+  ny /= len;
+  nz /= len;
+  sectionPoint(x, phi, out);
+  if (ny * (out.y - H) + nz * out.z < 0) {
+    ny = -ny;
+    nz = -nz;
+  }
+  // (Never more than a little of her breadth: right forward she's thin.)
+  const k = Math.min(inset, 0.4 * Math.max(kwBreadth(x), 0.04));
+  return out.set(out.x, out.y - ny * k, out.z - nz * k);
+}
 
 export class Kittiwake {
   constructor({ scene, world, treasure, puzzles, progress }) {
@@ -124,15 +173,16 @@ export class Kittiwake {
 
     // The boarding net down her deck, and a rope down into the hold from the hole.
     world.climbables ??= [];
-    const netTop = H + kwBreadth(-0.4) - 0.1;
+    const netTop = H + kwBreadth(NET.x0 + NET.w / 2) - 0.1;
     world.climbables.push({
-      o: this.#w(V(-1.4, 0.05, D / 2 + 0.35)),
+      o: this.#w(V(NET.x0, 0.05, D / 2 + 0.35)),
       r: this.#d(V(1, 0, 0)),
       u: this.#d(V(0, 1, 0)),
       n: this.#d(V(0, 0, 1)),
-      w: 1.6,
+      w: NET.w,
       h: netTop,
-      exit: this.#w(V(-0.6, netTop + 0.15, D / 2 - 0.5)),
+      // Over the top onto her planking (not into the hole: there's nothing to stand on there).
+      exit: this.#w(V(NET.x0 + NET.w / 2, netTop + 0.15, D / 2 - 0.5)),
     });
     const ropeTop = H + kwBreadth(0.1) - 0.05;
     world.climbables.push({
@@ -143,7 +193,7 @@ export class Kittiwake {
       w: 0.5,
       h: ropeTop - KW.crates.top,
       rope: true,
-      exit: this.#w(V(0.3, ropeTop + 0.1, 0.2)),
+      exit: this.#w(V(0.3, ropeTop + 0.1, D / 2)), // (out onto her planking beside the hole)
     });
     const rope = new THREE.Mesh(paint(segment(V(0.3, KW.crates.top - 0.6, 0.7), V(0.3, ropeTop + 0.05, 0.7), 0.03, 0.03, 5), ROPE), new THREE.MeshLambertMaterial({ vertexColors: true }));
     this.group.add(rope);
@@ -168,10 +218,12 @@ export class Kittiwake {
 
   /** The boarding net's look: ropes in a grid down the deck. */
   netGeo(add) {
-    const z = D / 2 + 0.06;
-    const top = H + kwBreadth(-0.4) - 0.1;
-    for (let i = 0; i <= 5; i++) add(segment(V(-1.4 + i * 0.32, 0.05, z), V(-1.4 + i * 0.32, top, z), 0.018, 0.018, 4), ROPE);
-    for (let y = 0.3; y < top; y += 0.35) add(segment(V(-1.4, y, z), V(0.2, y, z), 0.016, 0.016, 4), ROPE);
+    // Hung from the rail on her bulwark, down to the rock.
+    const z = D / 2 + BULWARK + 0.06;
+    const top = H + kwBreadth(NET.x0 + NET.w / 2);
+    const n = Math.round(NET.w / 0.32);
+    for (let i = 0; i <= n; i++) add(segment(V(NET.x0 + i * 0.32, 0.05, z), V(NET.x0 + i * 0.32, top, z), 0.018, 0.018, 4), ROPE);
+    for (let y = 0.3; y < top; y += 0.35) add(segment(V(NET.x0, y, z), V(NET.x0 + NET.w, y, z), 0.016, 0.016, 4), ROPE);
   }
 
   // -------------------------------------------------------------------------
@@ -179,10 +231,7 @@ export class Kittiwake {
   // -------------------------------------------------------------------------
 
   #hull(add) {
-    const NX = 34;
-    const NP = 24;
-    const xs = Array.from({ length: NX + 1 }, (_, i) => KW.stern + ((KW.stem - KW.stern) * i) / NX);
-    const ph = Array.from({ length: NP + 1 }, (_, j) => -Math.PI / 2 + (Math.PI * j) / NP);
+    const NX = XS.length - 1;
     const pos = [];
     const col = [];
     const c = new THREE.Color();
@@ -190,24 +239,53 @@ export class Kittiwake {
     const b = new THREE.Vector3();
     const e = new THREE.Vector3();
     const g = new THREE.Vector3();
+    const quad = (p, q, r, t, color) => {
+      for (const v of [p, q, r, p, r, t]) {
+        pos.push(v.x, v.y, v.z);
+        col.push(color.r, color.g, color.b);
+      }
+    };
+    // Which quads are the hole.
+    const hole = [];
+    for (let i = 0; i < NX; i++) {
+      hole.push([]);
+      for (let j = 0; j < NP; j++) {
+        sectionPoint(XS[i], PH[j], a);
+        sectionPoint(XS[i + 1], PH[j + 1], e);
+        hole[i].push(inHole((XS[i] + XS[i + 1]) / 2, (a.z + e.z) / 2, (PH[j] + PH[j + 1]) / 2));
+      }
+    }
+    const isHole = (i, j) => i >= 0 && i < NX && j >= 0 && j < NP && hole[i][j];
+    const inside = new THREE.Color();
+    const raw = new THREE.Color('#8a7558');
     for (let i = 0; i < NX; i++) {
       for (let j = 0; j < NP; j++) {
-        sectionPoint(xs[i], ph[j], a);
-        sectionPoint(xs[i + 1], ph[j], b);
-        sectionPoint(xs[i + 1], ph[j + 1], e);
-        sectionPoint(xs[i], ph[j + 1], g);
-        const xm = (xs[i] + xs[i + 1]) / 2;
-        const pm = (ph[j] + ph[j + 1]) / 2;
-        if (inHole(xm, (a.z + e.z) / 2, pm)) continue;
-        // Below her old waterline: copper paint and weed; above it black, with a white strake at the sheer.
+        const pm = (PH[j] + PH[j + 1]) / 2;
+        if (hole[i][j]) {
+          // The broken edges of her planking round the hole: raw wood, as thick as she is.
+          const P = (ii, jj, out) => sectionPoint(XS[ii], PH[jj], out);
+          const I = (ii, jj, out) => insidePoint(XS[ii], PH[jj], SKIN, out);
+          const edges = [
+            [i - 1, j, [i, j], [i, j + 1]],
+            [i + 1, j, [i + 1, j], [i + 1, j + 1]],
+            [i, j - 1, [i, j], [i + 1, j]],
+            [i, j + 1, [i, j + 1], [i + 1, j + 1]],
+          ];
+          for (const [ni, nj, [i0, j0], [i1, j1]] of edges) {
+            if (isHole(ni, nj) || ni < 0 || ni >= NX || nj < 0 || nj >= NP) continue;
+            quad(P(i0, j0, a), P(i1, j1, b), I(i1, j1, e), I(i0, j0, g), raw);
+          }
+          continue;
+        }
+        // Outside: below her old waterline copper paint and weed; above it black, with a white strake at the sheer.
         const up = D * (1 - Math.abs(Math.cos(pm)) ** 1.6);
         if (up < 1.25) c.set(j % 2 ? COPPER : WEED).lerp(new THREE.Color(WEED), Math.max(0, 0.6 - up / 2));
         else if (Math.abs(pm) > Math.PI / 2 - 0.12) c.set(WHITE);
         else c.set(j % 2 ? BLACK : BLACK2);
-        for (const q of [a, b, e, a, e, g]) {
-          pos.push(q.x, q.y, q.z);
-          col.push(c.r, c.g, c.b);
-        }
+        quad(sectionPoint(XS[i], PH[j], a), sectionPoint(XS[i + 1], PH[j], b), sectionPoint(XS[i + 1], PH[j + 1], e), sectionPoint(XS[i], PH[j + 1], g), c);
+        // Inside: her bare planking.
+        inside.set(j % 2 ? WOOD : WOOD_DARK);
+        quad(insidePoint(XS[i], PH[j], SKIN, a), insidePoint(XS[i + 1], PH[j], SKIN, b), insidePoint(XS[i + 1], PH[j + 1], SKIN, e), insidePoint(XS[i], PH[j + 1], SKIN, g), inside);
       }
     }
     const geo = new THREE.BufferGeometry();
@@ -221,53 +299,83 @@ export class Kittiwake {
     const rudder = new THREE.BoxGeometry(1.0, 0.12, 1.6);
     rudder.translate(KW.stern + 0.2, H, -D / 2 - 0.2);
     add(rudder, WOOD_DARK);
-    // Her transom, stove in.
-    const t = KW.stern;
-    const outline = [];
-    for (let j = 0; j <= 16; j++) {
-      const p = sectionPoint(t, -Math.PI / 2 + (Math.PI * j) / 16);
-      outline.push(new THREE.Vector2(p.z, p.y));
-    }
-    const shape = new THREE.Shape(outline);
-    const hole = new THREE.Path([V(-0.75, 0.42), V(0.85, 0.42), V(0.95, 1.55), V(0.2, 1.85), V(-0.8, 1.6)].map((p) => new THREE.Vector2(p.x, p.y)));
-    shape.holes.push(hole);
+    // Her transom, stove in (its outline her own last section, so it meets her planking).
+    const outline = (x) => PH.map((phi) => {
+      const p = sectionPoint(x, phi);
+      return new THREE.Vector2(p.z, p.y);
+    });
+    const shape = new THREE.Shape(outline(KW.stern));
+    const hole2 = new THREE.Path([V(-0.75, 0.42), V(0.85, 0.42), V(0.95, 1.55), V(0.2, 1.85), V(-0.8, 1.6)].map((p) => new THREE.Vector2(p.x, p.y)));
+    shape.holes.push(hole2);
     const tg = new THREE.ShapeGeometry(shape);
     tg.rotateY(-Math.PI / 2);
-    tg.translate(t, 0, 0);
+    tg.translate(KW.stern, 0, 0);
     add(tg, BLACK2);
-    // Sprung planks round the hole up top and the stern, splintered ends.
+    // Her bow, closed, with the stem timber down it.
+    const bg = new THREE.ShapeGeometry(new THREE.Shape(outline(KW.stem)));
+    bg.rotateY(-Math.PI / 2);
+    bg.translate(KW.stem, 0, 0);
+    add(bg, BLACK);
+    const stem = new THREE.BoxGeometry(0.18, 0.2, D + BULWARK + 0.1);
+    stem.translate(KW.stem + 0.04, H, (BULWARK - 0.1) / 2);
+    add(stem, WOOD_DARK);
+    // Sprung planks round the hole up top, splintered ends.
     for (const [x0, x1, z] of [[KW.hole.x0 - 0.1, KW.hole.x0 + 0.5, KW.hole.z0], [KW.hole.x1 - 0.6, KW.hole.x1 + 0.1, KW.hole.z1]]) {
-      const y = H + kwBreadth(0) + 0.02;
+      const y = topAt((x0 + x1) / 2, z) + 0.03;
       add(segment(V(x0, y, z), V(x1, y + 0.18, z + 0.05), 0.05, 0.03, 4), WOOD);
     }
   }
 
   #deck(add) {
-    // Her deck: a wall now, planked, with the main hatch boarded over.
+    // Her deck: a wall now, planked, with the main hatch boarded over. Its
+    // edges are her sheer, station for station, so it meets her planking.
     const z = D / 2;
-    const NX = 30;
     const NY = 10;
     const pos = [];
     const col = [];
     const c = new THREE.Color();
-    for (let i = 0; i < NX; i++) {
-      const xa = KW.stern + ((KW.stem - KW.stern) * i) / NX;
-      const xb = KW.stern + ((KW.stem - KW.stern) * (i + 1)) / NX;
+    const half = (x) => Math.max(kwBreadth(x), 0.04);
+    const push = (pts, color) => {
+      for (const [x, y, zz] of pts) {
+        pos.push(x, y, zz);
+        col.push(color.r, color.g, color.b);
+      }
+    };
+    for (let i = 0; i + 1 < XS.length; i++) {
+      const xa = XS[i];
+      const xb = XS[i + 1];
       for (let j = 0; j < NY; j++) {
-        const ya = (k) => H + kwBreadth(k) * (-1 + (2 * j) / NY);
-        const yb = (k) => H + kwBreadth(k) * (-1 + (2 * (j + 1)) / NY);
+        const ya = (k) => H + half(k) * (-1 + (2 * j) / NY);
+        const yb = (k) => H + half(k) * (-1 + (2 * (j + 1)) / NY);
         c.set(j % 2 ? DECK : DECK2);
-        const q = [[xa, ya(xa)], [xb, ya(xb)], [xb, yb(xb)], [xa, ya(xa)], [xb, yb(xb)], [xa, yb(xa)]];
-        for (const [x, y] of q) {
-          pos.push(x, y, z);
-          col.push(c.r, c.g, c.b);
-        }
+        push([[xa, ya(xa), z], [xb, ya(xb), z], [xb, yb(xb), z], [xa, ya(xa), z], [xb, yb(xb), z], [xa, yb(xa), z]], c);
+      }
+      // Her bulwarks, standing up off the deck along both sheers (carrying her
+      // topsides on, black outside and bare wood in).
+      for (const sd of [-1, 1]) {
+        const ya = H + sd * half(xa);
+        const yb = H + sd * half(xb);
+        const t = BULWARK;
+        c.set(BLACK2);
+        push([[xa, ya, z], [xb, yb, z], [xb, yb, z + t], [xa, ya, z], [xb, yb, z + t], [xa, ya, z + t]], c);
+        // (Its inside face, a little in, so it has a thickness.)
+        const ins = 0.06 * sd;
+        c.set(WOOD);
+        push([[xa, ya - ins, z], [xb, yb - ins, z], [xb, yb - ins, z + t], [xa, ya - ins, z], [xb, yb - ins, z + t], [xa, ya - ins, z + t]], c);
       }
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     add(geo, null);
+    // The rail capping each bulwark.
+    for (const sd of [-1, 1]) {
+      for (let i = 0; i + 1 < XS.length; i++) {
+        const xa = XS[i];
+        const xb = XS[i + 1];
+        add(segment(V(xa, H + sd * (half(xa) - 0.03), z + BULWARK), V(xb, H + sd * (half(xb) - 0.03), z + BULWARK), 0.06, 0.06, 5), WOOD_DARK);
+      }
+    }
     // The hatch, boarded, and its coaming; the stump of her mast.
     const hatch = new THREE.BoxGeometry(1.6, 1.3, 0.2);
     hatch.translate(1.8, H - 0.2, z + 0.1);
@@ -279,23 +387,14 @@ export class Kittiwake {
     }
     add(segment(V(1.0, H, z), V(1.0, H, z + 1.6), 0.2, 0.17, 8), WOOD);
     add(segment(V(1.0, H, z + 1.6), V(1.05, H + 0.12, z + 1.75), 0.17, 0.12, 6), '#a08c70');
-    // Her rails, the top one (starboard) and the one on the rock (port).
-    for (const s of [-1, 1]) {
-      const pts = [];
-      for (let x = KW.stern + 0.2; x < KW.stem - 0.3; x += 0.9) pts.push(V(x, H + s * (kwBreadth(x) - 0.06), z + 0.25));
-      for (let k = 0; k + 1 < pts.length; k++) add(segment(pts[k], pts[k + 1], 0.06, 0.06, 4), WOOD_DARK);
-    }
   }
 
   #bulkheads(add) {
-    const section = (x) => {
-      const pts = [];
-      for (let j = 0; j <= 16; j++) {
-        const p = sectionPoint(x, -Math.PI / 2 + (Math.PI * j) / 16);
-        pts.push(new THREE.Vector2(p.z, p.y));
-      }
-      return pts;
-    };
+    // (Their edges sit in the thickness of her planking, so there's no chink round them.)
+    const section = (x) => PH.map((phi) => {
+      const p = insidePoint(x, phi, SKIN / 2);
+      return new THREE.Vector2(p.z, p.y);
+    });
     // Aft, with the door opening.
     const aft = new THREE.Shape(section(KW.aftBulkhead));
     const d = KW.door;
@@ -390,16 +489,27 @@ export class Kittiwake {
           ny = -ny;
           nz = -nz;
         }
-        // (No hanging off her planking: the net's the way up.)
-        this.#box(xm, my + ny * 0.1, mz + nz * 0.1, (x1 - x0) / 2 + 0.02, 0.1, len / 2 + 0.03, Math.atan2(-dy, dz), { noClimb: true, noGrab: true });
+        // Her sides are too steep to hang off; the top of her (where it's near
+        // flat) you can catch hold of and pull yourself up onto.
+        // (Not round the hole, though: dropping in, you'd only catch the far side and climb out again.)
+        const byHole = xm > KW.hole.x0 - 0.7 && xm < KW.hole.x1 + 0.7;
+        const flags = ny > 0.7 && !byHole ? {} : { noClimb: true, noGrab: true };
+        this.#box(xm, my + ny * 0.1, mz + nz * 0.1, (x1 - x0) / 2 + 0.02, 0.1, len / 2 + 0.03, Math.atan2(-dy, dz), flags);
       }
     }
-    // Her deck (a wall).
+    // Her deck (a wall), and her bulwarks along its top and bottom edges.
+    // (The top edge can be caught, from the mast stump.)
     for (let i = 0; i + 1 < stations.length; i++) {
       const xm = (stations[i] + stations[i + 1]) / 2;
+      const hx = (stations[i + 1] - stations[i]) / 2 + 0.02;
       const b2 = kwBreadth(xm);
-      this.#box(xm, H, D / 2 + 0.1, (stations[i + 1] - stations[i]) / 2 + 0.02, b2, 0.1, 0, { noClimb: true, noGrab: true });
+      this.#box(xm, H, D / 2 + 0.1, hx, b2, 0.1, 0, { noClimb: true });
+      for (const sd of [-1, 1]) this.#box(xm, H + sd * (b2 - 0.04), D / 2 + BULWARK / 2, hx, 0.04, BULWARK / 2, 0);
     }
+    // The stump of her mast, sticking out of her deck, and her keel along her
+    // seaward side: both solid, and both in reach from the rock.
+    this.#box(1.0, H, D / 2 + 0.8, 0.19, 0.19, 0.8, 0);
+    this.#box(-0.4, H, -D / 2 - 0.35, (KW.length - 2.4) / 2, 0.11, 0.35, 0);
     // The bulkheads: forward solid; aft round the door opening.
     const d = KW.door;
     const top = H + kwBreadth(KW.aftBulkhead);
