@@ -698,7 +698,7 @@ export class Smoke {
       uniforms: { uMap: { value: puffTexture() }, uColor: { value: new THREE.Color('#a9a49b') }, uPx: { value: 300 } },
       // Sized in metres (projection-aware), so a far chimney is a haze, not a dot.
       vertexShader: `attribute float size; attribute float alpha; varying float vA; uniform float uPx;
-        void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); float px = size * uPx * projectionMatrix[1][1] / -mv.z;
+        void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); float px = size * uPx * projectionMatrix[1][1] / max(-mv.z, 0.05);
           vA = alpha * clamp(px / 6.0, 0.0, 1.0); gl_PointSize = max(px, 1.0); gl_Position = projectionMatrix * mv; }`,
       fragmentShader: `uniform sampler2D uMap; uniform vec3 uColor; varying float vA;
         void main() { vec4 t = texture2D(uMap, gl_PointCoord); gl_FragColor = vec4(uColor, t.a * vA); }`,

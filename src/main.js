@@ -4,6 +4,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 import { heightAt, setWaveDamping } from '../shared/waves.js';
 import { dampingAt, groundAt, ISLAND_BY_ID, toWorld, gannetNest } from '../shared/world.js';
@@ -238,16 +239,49 @@ const composer = new EffectComposer(
   new THREE.WebGLRenderTarget(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio(), { type: THREE.HalfFloatType, samples: 4 }),
 );
 composer.addPass(new RenderPass(scene, camera));
+// Any pixel that came out as no number at all (or too bright to hold) goes
+// black before the glow: the glow blurs it down a chain of ever smaller
+// images, and one bad pixel there comes back as squares across the screen.
+// (Checked by its bits, since some GPUs compile isnan() away.)
+composer.addPass(
+  new ShaderPass({
+    uniforms: { tDiffuse: { value: null } },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D tDiffuse;
+      varying vec2 vUv;
+      bool bad(float x) { return (floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u; }
+      void main() {
+        vec4 c = texture2D(tDiffuse, vUv);
+        gl_FragColor = bad(c.r) || bad(c.g) || bad(c.b) || bad(c.a) ? vec4(0.0, 0.0, 0.0, 1.0) : min(c, vec4(4096.0));
+      }
+    `,
+  }),
+);
 // Only the sun, its glints and lamps should bloom; white paint in daylight shouldn't.
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.28, 0.55, 1.4);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
-addEventListener('resize', () => {
+// (A minimised window can say it's no size at all: keep the last real size
+// rather than make a camera of no shape and a glow of infinitely small steps,
+// and check again when the tab comes back, in case a resize went by unseen.)
+function fitWindow() {
+  if (!(innerWidth > 0 && innerHeight > 0)) return;
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', fitWindow);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) fitWindow();
 });
 
 // ---------- Settings ----------
@@ -809,7 +843,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { heightAt, waveNow, shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { composer, renderer, heightAt, waveNow, shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {

@@ -232,9 +232,7 @@ export class Screens {
         <p class="sub">Treasure: you start with a map (<kbd>M</kbd>). Dig with <kbd>F</kbd> near the X, carry the chest back and put it down on the boat; there's usually another map inside. Out of maps? There's one on the chart table below decks.</p>
         <section class="news">
           <h3>Version ${VERSION} <span class="build">build ${BUILD.hash}${BUILD.date ? `, ${BUILD.date}` : ''}</span></h3>
-          ${CHANGES.slice(0, 3)
-            .map(([v, what]) => `<div class="row"><span>${v}</span>${what}</div>`)
-            .join('')}
+          <div class="log">${CHANGES.map(([v, what]) => `<div class="row"><span>${v}</span>${what}</div>`).join('')}</div>
         </section>
         <p class="close">Press <kbd>H</kbd> to close</p>
       </div>`;
@@ -257,7 +255,9 @@ export class Screens {
 
   toggleControls(force) {
     this.chart.classList.remove('open');
-    this.controls.classList.toggle('open', force);
+    const on = this.controls.classList.toggle('open', force);
+    // (Let go of the mouse, so the changelog can be scrolled.)
+    if (on && document.pointerLockElement) document.exitPointerLock();
   }
 
   toggleChart() {

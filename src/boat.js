@@ -55,7 +55,7 @@ export const LAYOUT = {
   cockpit: { x0: -5.7, x1: -1.2, sole: 0.65, half: 1.4, benchX0: -3.2, benchIn: 0.9, benchTop: 1.0 },
   mast: { x: 1.4, top: 16.5, r: 0.11 },
   boom: { x: 1.27, y: 2.95, len: 4.6 },
-  wheel: { x: -4.0, y: 1.5, r: 0.46 },
+  wheel: { x: -4.02, y: 1.42, r: 0.46, column: -3.8 }, // the wheel on a shaft out of the back of its pedestal
   platform: { x0: -6.35, x1: -5.7, half: 0.8, y: 0.3 },
   forestay: { tack: new THREE.Vector3(5.62, 1.35, 0), head: new THREE.Vector3(1.45, 16.35, 0) },
 };
@@ -197,6 +197,8 @@ function textures() {
 const WHITE = '#f2f1ec';
 const METAL = '#b9bec3';
 const DARK = '#2b3034';
+const BRASS = '#c49a42';
+const BRASS_DARK = '#a07a30';
 const NAVY = '#1f3157';
 
 function sideStrip(x0, x1, inner, outer, height, n = 10) {
@@ -446,9 +448,15 @@ function buildStatic() {
     parts.push(paint(segment(V(-5.55, pushY, side * (halfAt(-5.55) - 0.06)), V(-5.6, pushY, side * 0.62), 0.022, 0.022, 4), METAL));
     parts.push(paint(segment(V(-5.6, deckAt(-5.6), side * 0.62), V(-5.6, pushY, side * 0.62), 0.022, 0.022, 4), METAL));
   }
-  // Wheel pedestal.
+  // Wheel pedestal: a column up from the cockpit sole with the compass in its
+  // binnacle on top, and the wheel's shaft out of its after side.
   const w = LAYOUT.wheel;
-  parts.push(paint(segment(V(w.x - 0.08, k.sole, 0), V(w.x - 0.08, w.y - 0.05, 0), 0.07, 0.06, 8), DARK));
+  parts.push(paint(segment(V(w.column, k.sole, 0), V(w.column, w.y + 0.1, 0), 0.085, 0.07, 10), DARK));
+  parts.push(paint(segment(V(w.column, k.sole, 0), V(w.column, k.sole + 0.05, 0), 0.16, 0.16, 12), DARK));
+  parts.push(paint(segment(V(w.column, w.y + 0.1, 0), V(w.column, w.y + 0.2, 0), 0.11, 0.12, 12), '#9a7a36'));
+  const dome = new THREE.SphereGeometry(0.1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  dome.translate(w.column, w.y + 0.2, 0);
+  parts.push(paint(dome, '#3b4650'));
   // Winches: primaries on the coamings, halyard winches on the coachroof.
   const roofParts = [];
   for (const side of [-1, 1]) {
@@ -972,21 +980,30 @@ export class Boat {
     this.ropes = new Ropes(this.root, 120);
     this.fadeMats = [this.main.mesh.material, this.jib.mesh.material, boomMesh.material, this.stowed.material, this.furl.material, this.ropes.mesh.material];
 
-    // Wheel.
+    // The wheel: brass, eight spokes with turned handles past the rim, on a
+    // shaft from the pedestal (so it turns about the shaft's line).
+    const W = LAYOUT.wheel;
+    const shaft = new THREE.Mesh(
+      paint(segment(new THREE.Vector3(W.column - 0.06, W.y, 0), new THREE.Vector3(W.x + 0.02, W.y, 0), 0.028, 0.028, 8), BRASS),
+      new THREE.MeshPhongMaterial({ vertexColors: true, specular: '#5a4a2a', shininess: 50 }),
+    );
+    this.root.add(shaft);
     this.wheel = new THREE.Group();
-    this.wheel.position.set(LAYOUT.wheel.x, LAYOUT.wheel.y, 0);
+    this.wheel.position.set(W.x, W.y, 0);
     const wparts = [];
-    const rim = new THREE.TorusGeometry(LAYOUT.wheel.r, 0.025, 6, 28);
+    const rim = new THREE.TorusGeometry(W.r, 0.028, 8, 36);
     rim.rotateY(Math.PI / 2);
-    wparts.push(paint(rim, METAL));
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      wparts.push(paint(segment(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, Math.cos(a) * LAYOUT.wheel.r, Math.sin(a) * LAYOUT.wheel.r), 0.012, 0.012, 4), METAL));
+    wparts.push(paint(rim, BRASS));
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const dir = new THREE.Vector3(0, Math.cos(a), Math.sin(a));
+      wparts.push(paint(segment(new THREE.Vector3(0, 0, 0), dir.clone().multiplyScalar(W.r + 0.05), 0.014, 0.014, 6), BRASS));
+      wparts.push(paint(segment(dir.clone().multiplyScalar(W.r + 0.05), dir.clone().multiplyScalar(W.r + 0.15), 0.022, 0.016, 6), BRASS_DARK));
     }
-    const hub = new THREE.CylinderGeometry(0.06, 0.06, 0.1, 10);
+    const hub = new THREE.CylinderGeometry(0.07, 0.07, 0.09, 12);
     hub.rotateZ(Math.PI / 2);
-    wparts.push(paint(hub, DARK));
-    this.wheel.add(new THREE.Mesh(mergeParts(wparts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
+    wparts.push(paint(hub, BRASS_DARK));
+    this.wheel.add(new THREE.Mesh(mergeParts(wparts), new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, specular: '#6a5630', shininess: 45 })));
     this.root.add(this.wheel);
 
     // The black anchor ball: hoisted on the forestay while she's at anchor,
@@ -1694,7 +1711,7 @@ function buildColliders() {
   // Mast (down through the cabin to the keel: set corner-on, so you slide
   // round it in the saloon rather than stop dead), wheel and pedestal.
   out.push({ center: new THREE.Vector3(LAYOUT.mast.x, (b.floor + 14) / 2, 0), half: new THREE.Vector3(0.06, (14 - b.floor) / 2, 0.06), yaw: Math.PI / 4 });
-  box(LAYOUT.wheel.x - 0.08, LAYOUT.wheel.x + 0.04, k.sole, LAYOUT.wheel.y + LAYOUT.wheel.r, -LAYOUT.wheel.r, LAYOUT.wheel.r);
+  box(LAYOUT.wheel.x - 0.06, LAYOUT.wheel.column + 0.1, k.sole, LAYOUT.wheel.y + LAYOUT.wheel.r, -LAYOUT.wheel.r, LAYOUT.wheel.r);
   return out;
 }
 
