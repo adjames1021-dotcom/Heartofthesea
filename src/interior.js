@@ -817,18 +817,29 @@ export class Interior {
     };
     slab(0, yb, TEAK);
     slab(yb, 0.12, '#efeadf', 0.03);
-    // A quilt over the after half, in squares of old shirts.
-    const qs = [[3.0, -0.45], [3.0, 0.0], [3.0, 0.45], [3.32, -0.38], [3.32, 0.05], [3.32, 0.48]];
-    const qc = ['#7c8a7a', '#a88a5a', '#6b7a8c', '#9c6a58', '#c2b48c', '#5f6b5a'];
-    qs.forEach(([x, z], i) => box(x, yb + 0.13, z, 0.32, 0.03, 0.44, qc[i]));
+    // A blue comforter, plump and quilted in squares, over all but the head
+    // of the berth (narrowing with it), its top turned down over the sheet.
+    const top = yb + 0.12;
+    const BLUES = ['#2f5f9e', '#3768a8'];
+    for (let x = BERTH + 0.04, i = 0; x < 3.78; x += 0.2, i++) {
+      const half = side(x + 0.1, top) - 0.07;
+      const n = Math.max(2, Math.round((half * 2) / 0.3));
+      for (let j = 0; j < n; j++) {
+        const w = (half * 2) / n;
+        const zc = -half + (j + 0.5) * w;
+        box(x + 0.1, top + 0.045, zc, 0.19, 0.09, w - 0.012, BLUES[(i + j) % 2]);
+      }
+    }
+    box(3.84, top + 0.06, 0, 0.12, 0.1, (side(3.84, top) - 0.07) * 2, '#4c7fbe'); // the fold
+    box(3.93, top + 0.015, 0, 0.08, 0.03, (side(3.93, top) - 0.07) * 2, '#f2efe6'); // the sheet under it
     for (const z of [-0.28, 0.28]) {
       const pillow = new THREE.SphereGeometry(1, 12, 6);
       pillow.scale(0.17, 0.07, 0.25);
       pillow.translate(4.05, yb + 0.18, z * 0.7);
       parts.push(paint(pillow, '#f6f2e8'));
     }
-    box(BERTH + 0.22, yb + 0.16, -0.1, 0.3, 0.07, 0.7, '#8e4a3c'); // a folded blanket
-    box(3.6, yb + 0.15, 0.38, 0.16, 0.035, 0.12, '#3f5446'); // a book left open
+    box(BERTH + 0.22, yb + 0.245, -0.1, 0.3, 0.07, 0.7, '#8e4a3c'); // a folded blanket
+    box(3.6, yb + 0.23, 0.38, 0.16, 0.035, 0.12, '#3f5446'); // a book left open
     solid(BERTH, FWD, 0, 0.62, -1.98, 1.98);
     // The locker under the berth: two drawers with brass pulls.
     for (const z of [0.05, 0.62]) {
