@@ -42,7 +42,12 @@ const STREAK_VERT = /* glsl */ `
     float len = length(vel) * uLen * (0.7 + 0.6 * fract(aSeed.w * 7.31));
     vec3 pos = p - dir * len * aCorner.y;
     vec3 toCam = normalize(uCam - pos);
-    vec3 side = normalize(cross(dir, toCam));
+    // Sideways across the streak as you see it. (Looking straight along a drop's
+    // fall that's no direction at all, so fall back on any sideways one rather
+    // than make a NaN: a NaN corner can smear a triangle right across the screen.)
+    vec3 side = cross(dir, toCam);
+    float sl = length(side);
+    side = sl > 1e-3 ? side / sl : normalize(cross(dir, vec3(1.0, 0.0, 0.0)));
     float dist = distance(uCam, p);
     // (Never thinner than about a pixel, however far.)
     pos += side * aCorner.x * uWidth * max(1.0, dist / 12.0);
@@ -59,7 +64,7 @@ const STREAK_FRAG = /* glsl */ `
   varying float vAlong, vAcross, vFade;
   void main() {
     // Bright at the drop, tailing off behind it; soft at the sides.
-    float a = pow(1.0 - vAlong, 0.8) * (1.0 - vAcross * vAcross) * vFade * uOpacity;
+    float a = clamp(pow(clamp(1.0 - vAlong, 0.0, 1.0), 0.8) * (1.0 - vAcross * vAcross) * vFade * uOpacity, 0.0, 1.0);
     if (a < 0.003) discard;
     gl_FragColor = vec4(uColor, a);
   }
@@ -94,7 +99,8 @@ const RING_FRAG = /* glsl */ `
     float ring = smoothstep(0.5, 0.82, d) * (1.0 - smoothstep(0.82, 1.0, d));
     // A little splash in the middle at first.
     float splash = (1.0 - smoothstep(0.0, 0.4, d)) * (1.0 - smoothstep(0.0, 0.3, vAge));
-    float a = (uRing * ring * pow(1.0 - vAge, 2.0) + uSplash * splash) * uOpacity;
+    float fade = clamp(1.0 - vAge, 0.0, 1.0);
+    float a = clamp((uRing * ring * fade * fade + uSplash * splash) * uOpacity, 0.0, 1.0);
     if (a < 0.003) discard;
     gl_FragColor = vec4(uColor, a);
   }
@@ -111,7 +117,13 @@ const SHEET_FRAG = /* glsl */ `
   uniform float uTime, uOpacity, uSlant;
   uniform vec3 uColor;
   varying vec2 vUv;
-  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  // (A hash without sin(): sin of a big number turns to blocks of noise on
+  // GPUs that work in lower precision.)
+  float hash(vec2 p) {
+    vec3 q = fract(vec3(p.xyx) * 0.1031);
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+  }
   // Value noise that wraps every 'per' across (the cylinder's seam).
   float noise(vec2 p, float per) {
     vec2 i = floor(p);
@@ -124,11 +136,12 @@ const SHEET_FRAG = /* glsl */ `
   void main() {
     // Fine streaks, falling and slanted with the wind...
     float sx = vUv.x * 700.0 + vUv.y * uSlant * 60.0;
-    float streak = smoothstep(0.5, 0.95, noise(vec2(sx, vUv.y * 7.0 + uTime * 2.2), 700.0));
+    float tt = mod(uTime, 100.0);
+    float streak = smoothstep(0.5, 0.95, noise(vec2(sx, vUv.y * 7.0 + mod(tt * 2.2, 64.0)), 700.0));
     // ...in broad sheets of heavier rain that drift round with it.
-    float sheet = smoothstep(0.3, 0.85, noise(vec2(vUv.x * 9.0 + uTime * 0.03, uTime * 0.06), 9.0));
+    float sheet = smoothstep(0.3, 0.85, noise(vec2(vUv.x * 9.0 + tt * 0.03, tt * 0.06), 9.0));
     float fade = smoothstep(0.02, 0.12, vUv.y) * (1.0 - smoothstep(0.45, 1.0, vUv.y));
-    float a = uOpacity * fade * (0.2 + 0.8 * sheet) * (0.55 + 0.45 * streak);
+    float a = clamp(uOpacity * fade * (0.2 + 0.8 * sheet) * (0.55 + 0.45 * streak), 0.0, 1.0);
     gl_FragColor = vec4(uColor, a);
   }
 `;
