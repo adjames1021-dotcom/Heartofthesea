@@ -64,7 +64,9 @@ export class FollowCamera {
     let d = this.dist;
     for (let s = 0.6; !cabin && s <= this.dist; s += 0.4) {
       const p = this.smoothTarget.clone().addScaledVector(dir, s);
-      if (groundAt(p.x, p.z) > p.y - 0.4 || (world && world.blocked(p, 0.25, true))) {
+      // (Under a hill, in the temple: the walls are what's in the way, not the hill.)
+      const under = world?.inCavity?.(p.x, p.y, p.z);
+      if ((!under && groundAt(p.x, p.z) > p.y - 0.4) || (world && world.blocked(p, 0.25, true))) {
         d = Math.max(1.0, s - 0.5);
         break;
       }
@@ -73,7 +75,7 @@ export class FollowCamera {
     if (this.blockedDist !== undefined && d > this.blockedDist) d = this.blockedDist + (d - this.blockedDist) * (1 - Math.exp(-dt * 3));
     this.blockedDist = d;
     const pos = this.smoothTarget.clone().addScaledVector(dir, d);
-    const floor = Math.max(groundAt(pos.x, pos.z) + 0.4, heightAt(pos.x, pos.z, t, waveScale) + 0.35);
+    const floor = world?.inCavity?.(pos.x, pos.y, pos.z) ? -Infinity : Math.max(groundAt(pos.x, pos.z) + 0.4, heightAt(pos.x, pos.z, t, waveScale) + 0.35);
     if (pos.y < floor && !cabin) pos.y = floor;
     this.camera.position.copy(pos);
     this.camera.lookAt(this.smoothTarget);

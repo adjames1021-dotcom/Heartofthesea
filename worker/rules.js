@@ -18,7 +18,7 @@ import { SHOPS, VALUE, FISH_PRICE, NED_FEE, sellableFish, stockFor, openNow } fr
 import { dayAt, seasonAt } from '../shared/environment.js';
 import { PLACES, onMenu } from '../shared/restaurants.js';
 import { PLACE_IDS, isAt } from '../shared/landmarks.js';
-import { CHAPTERS, TEMPLE, DONE, TEMPLE_CLUE, DONE_NOTE, keyIn } from '../shared/story.js';
+import { CHAPTERS, TEMPLE, DONE, TEMPLE_CLUE, DONE_NOTE, LETTER2_NOTE, KEEPERS, keyIn, stoneNote, stonePoint } from '../shared/story.js';
 import { templeGate, templeHeart } from '../shared/temple.js';
 
 /** A brand-new player. */
@@ -104,6 +104,12 @@ function turnKey(s, from, now) {
   if (!keyIn(st, from)) return null;
   const n = st.ch;
   st.keys.push(n);
+  // What was with it, in its family's words (and with the fourth, Elowen's second letter).
+  s.journal.push({ t: now, quest: 'heart', text: CHAPTERS[n].found });
+  if (n === 4) {
+    st.letter2 = true;
+    s.journal.push({ t: now, quest: 'heart', text: LETTER2_NOTE });
+  }
   st.ch = n === 8 ? TEMPLE : n + 1;
   chapterNote(s, now);
   return { n, name: CHAPTERS[n].key };
@@ -445,6 +451,20 @@ ACTIONS.storyBegin = async (s, a, { now }) => {
   st.ch = 1;
   chapterNote(s, now);
   return { ok: true };
+};
+
+/** Read a keeper's family's stone (you have to be by it): its sign and count go in the journal. */
+ACTIONS.stone = async (s, a, { now }) => {
+  const n = a.n;
+  if (!Number.isInteger(n) || n < 1 || n > 8 || !finite(a.x, a.z)) return fail('what');
+  const p = stonePoint(n);
+  if (Math.hypot(a.x - p.x, a.z - p.z) > 6) return fail('where');
+  const st = storyOf(s);
+  st.stones ??= [];
+  if (st.stones.includes(n)) return { ok: true, already: true, notches: KEEPERS[n].notches };
+  st.stones.push(n);
+  s.journal.push({ t: now, quest: 'stones', text: stoneNote(n) });
+  return { ok: true, notches: KEEPERS[n].notches };
 };
 
 /** All eight keys in the temple gate (you have to be at it). */

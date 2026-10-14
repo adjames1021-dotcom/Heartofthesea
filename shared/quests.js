@@ -27,6 +27,8 @@ export const QUESTS = {
       },
     },
   },
+  // The keepers' families' stones, out by where their keys were (shared/story.js).
+  stones: { title: "The keepers' stones", steps: {} },
   // Gwen wants her gutting knife back from Silas, up at the light.
   knife: { title: "Gwen's knife", steps: {} },
   // Tam thinks something shines in the Molly Ann's crow's nest (the climb on the wreck).

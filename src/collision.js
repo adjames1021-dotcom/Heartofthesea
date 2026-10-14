@@ -83,6 +83,19 @@ export class CollisionWorld {
     this.bodies = [];
     this.statics = [];
     this.stamp = 0;
+    // Rooms under a hill (the temple's): inside one, the hill's ground doesn't
+    // count, the room's own floors do. { x0, x1, z0, z1 } in the world, and contains(x, y, z).
+    this.cavities = [];
+  }
+
+  addCavity(c) {
+    this.cavities.push(c);
+  }
+
+  /** Is (x, y, z) in a room under a hill (where the ground overhead isn't a floor)? */
+  inCavity(x, y, z) {
+    for (const c of this.cavities) if (x >= c.x0 && x <= c.x1 && z >= c.z0 && z <= c.z1 && c.contains(x, y, z)) return true;
+    return false;
   }
 
   #key(i, j) {
@@ -189,7 +202,7 @@ export class CollisionWorld {
         }
       }
     }
-    if (terrain) {
+    if (terrain && !(this.cavities.length && this.inCavity(c.x, c.y, c.z))) {
       const h = groundAt(c.x, c.z, _n);
       const pen = h - (c.y - r);
       if (pen > 0) {
@@ -223,7 +236,7 @@ export class CollisionWorld {
   probeDown(x, z, yTop, maxDrop = 2, { skip = null } = {}) {
     let best = null;
     const tn = new THREE.Vector3();
-    const th = groundAt(x, z, tn);
+    const th = this.cavities.length && this.inCavity(x, yTop, z) ? -Infinity : groundAt(x, z, tn);
     if (th <= yTop && th >= yTop - maxDrop) best = { y: th, normal: tn, collider: null };
     const list = this.nearby(x, z, 0.5, _list2);
     for (const col of list) {

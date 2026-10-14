@@ -206,8 +206,46 @@ function buildIslandMesh(isl, material) {
   return mesh;
 }
 
+// Holes in the ground: where the temple's rooms are, in under the big hill on
+// Saddle, the hill's ground isn't drawn (it would show inside them where it
+// comes down to the entrance). Boxes in the temple's own frame; src/temple.js
+// sets them. (Its shadow's still cast: that's drawn separately.)
+const HOLES = 12;
+export const terrainHoles = {
+  uHoleInv: { value: new THREE.Matrix4() },
+  uHoleMin: { value: Array.from({ length: HOLES }, () => new THREE.Vector3(1, 1, 1)) },
+  uHoleMax: { value: Array.from({ length: HOLES }, () => new THREE.Vector3(0, 0, 0)) },
+};
+
+/** World → the holes' frame, and the boxes ({x0, x1, y0, y1, z0, z1}) in it. */
+export function setTerrainHoles(inverse, boxes) {
+  terrainHoles.uHoleInv.value.copy(inverse);
+  boxes.slice(0, HOLES).forEach((b, i) => {
+    terrainHoles.uHoleMin.value[i].set(b.x0, b.y0, b.z0);
+    terrainHoles.uHoleMax.value[i].set(b.x1, b.y1, b.z1);
+  });
+}
+
+function withHoles(material) {
+  const before = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    before?.(shader, renderer);
+    Object.assign(shader.uniforms, terrainHoles);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vHoleP;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n\tvHoleP = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vHoleP;\nuniform mat4 uHoleInv;\nuniform vec3 uHoleMin[${HOLES}];\nuniform vec3 uHoleMax[${HOLES}];`)
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>\n\tvec3 hp = ( uHoleInv * vec4( vHoleP, 1.0 ) ).xyz;\n\tfor ( int i = 0; i < ${HOLES}; i ++ ) {\n\t\tif ( all( greaterThan( hp, uHoleMin[ i ] ) ) && all( lessThan( hp, uHoleMax[ i ] ) ) ) discard;\n\t}`,
+      );
+  };
+  return material;
+}
+
 export function buildTerrain() {
-  const material = deepenShadows(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  const material = withHoles(deepenShadows(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
   const group = new THREE.Group();
   group.name = 'terrain';
   for (const isl of ISLANDS) group.add(buildIslandMesh(isl, material));

@@ -51,6 +51,7 @@ import { Kittiwake } from './kittiwake.js';
 import { Beacon } from './beacon.js';
 import { Zawn } from './zawn.js';
 import { Temple } from './temple.js';
+import { KeeperStones } from './keeperstones.js';
 import { Story } from './story.js';
 import { Cinematic } from './cinematic.js';
 import { templePoint, templeHeart } from '../shared/temple.js';
@@ -225,7 +226,13 @@ const kittiwake = new Kittiwake({ scene, world, treasure, puzzles, progress });
 const beacon = new Beacon({ scene, world, puzzles, progress });
 const zawn = new Zawn({ scene, world, treasure, puzzles, progress });
 const temple = new Temple({ scene, world, progress });
-const setPieces = [kittiwake, beacon, zawn, temple];
+const keeperStones = new KeeperStones({ scene, world, progress });
+const setPieces = [kittiwake, beacon, zawn, temple, keeperStones];
+// A warm glow round the bear under the hill, as if from the braziers and torches.
+// (Always in the scene, so nothing has to be rebuilt as you go in and out.)
+const glowLight = new THREE.PointLight('#ffb070', 0, 16, 1.6);
+scene.add(glowLight);
+let underHill = 0;
 for (const sp of setPieces) sp.say = (text, s) => hud.say(text, s);
 
 // ---------- Dev camera (screenshots) ----------
@@ -404,7 +411,7 @@ function openingFilm() {
   const tw = towerFrame();
   return [
     { from: saddleAt(-520, 240, 560), to: saddleAt(-200, 190, 640), look: saddleAt(0, 25, 0), dur: 7, say: 'Before there were villages on these islands, there was a temple on Saddle.' },
-    { from: tp(70, 150, 70), to: tp(18, 62, 14), look: tp(0, -10, 2), lookTo: tp(0, -30, 3), dur: 7, say: 'In it the keepers kept the Heart of the Sea, and while it was kept, the sea was kind to the islands.' },
+    { from: tp(46, 130, 70), to: tp(9, 30, 8), look: tp(0, -4, 6), lookTo: tp(0, 0, 3), dur: 7, say: 'Deep in the hill the keepers kept the Heart of the Sea, and while it was kept, the sea was kind to the islands.' },
     { from: V3(tw.x + 70, tw.y + 55, tw.z + 50), to: V3(tw.x + 35, tw.y + 20, tw.z - 45), look: V3(tw.x, tw.y + 10, tw.z), dur: 7, say: 'When raiders came, the eight keepers locked it and hid its keys where the sea would keep them. None of them came back.' },
     { from: boatAt(55, 26, 40), to: boatAt(-7, 3.5, 6), look: boatAt(0, 1.2, 0), dur: 7.5, say: "Your boat was Elowen Tresize's. She spent thirty years looking for those keys, and she's left you a letter." },
   ];
@@ -414,9 +421,13 @@ function endingFilm() {
   const h = templeHeart();
   const H = V3(h.x, h.y, h.z);
   const off = (x, y, z) => H.clone().add(V3(x, y, z));
+  // Where its light comes out of the hill.
+  const top = groundAt(h.x, h.z);
+  const out = (x, y, z) => V3(h.x + x, top + y, h.z + z);
   return [
     { from: off(2.6, 0.9, 2.2), to: off(1.3, 0.4, -1.8), look: H, dur: 5, say: 'The Heart of the Sea wakes in your paws, and the old stones light up green.' },
-    { from: off(6, 4, 8), to: off(30, 70, 60), look: H, lookTo: off(0, 40, 0), dur: 6.5, say: 'Its light goes up over Saddle and out across the water, the way it used to.' },
+    { from: off(1.8, 1.2, 1.8), to: off(0.5, 16, 0.5), look: off(0, 40, 0), dur: 5, say: 'Its light goes up the shaft, through the hill,' },
+    { from: out(140, 50, 90), to: out(70, 110, 60), look: out(0, 30, 0), lookTo: out(0, 90, 0), dur: 7, say: 'and up over Saddle and out across the water, the way it used to.' },
     { from: saddleAt(300, 260, 400), to: saddleAt(-300, 220, 420), look: saddleAt(0, 45, 0), dur: 8, say: "Out on the islands, people stop what they're doing and look up." },
     { from: saddleAt(520, 6, 380), to: saddleAt(420, 10, 300), look: saddleAt(0, 70, 0), dur: 7, say: "The keepers' work is done at last. Elowen would have liked to see it." },
     { from: saddleAt(-700, 420, -300), to: saddleAt(-500, 380, 200), look: saddleAt(0, 30, 0), dur: 8, say: 'The Heart of the Sea', big: true },
@@ -843,7 +854,7 @@ function frame(now) {
     storm,
     camera,
     wind: env.wind,
-    inside: interior.inside,
+    inside: interior.inside || temple.inside(camera.position),
     night: atmosphere.uniforms.uNight.value,
     waterAt: (x, z) => heightAt(x, z, t, swell),
     fog: atmosphere.fog.color,
@@ -854,8 +865,14 @@ function frame(now) {
   // Below decks: the deck over you keeps the sun off (its shadow does that)
   // and much of the sky's light; the lamps and the companionway do the rest.
   atmosphere.hemi.intensity *= 1 - 0.35 * interior.cutK;
+  // Under the hill, in the temple: the sky's light doesn't get in, and the
+  // weather's only a rumble; there's the glow of the braziers round you.
+  underHill += ((temple.inside(camera.position) ? 1 : 0) - underHill) * (1 - Math.exp(-dt * 3));
+  atmosphere.hemi.intensity *= 1 - 0.62 * underHill;
+  glowLight.intensity = 16 * underHill;
+  glowLight.position.set(player.pos.x, player.pos.y + 2.4, player.pos.z);
   ocean.uniforms.uStorm.value = storm;
-  audio.setWeather(storm, env.wind.speed);
+  audio.setWeather(storm * (1 - 0.8 * underHill), env.wind.speed * (1 - 0.8 * underHill));
   islands.lighthouse?.update(dt, Math.max(atmosphere.uniforms.uNight.value, storm * 0.9));
   stormNotices(t, storm);
   acc += dt;
@@ -901,7 +918,9 @@ function frame(now) {
   // Digging and the map.
   if (input.pressed('KeyF') && player.mode === 'ground' && player.grounded && !player.carrying && !player.platform) {
     const p = player.digPoint;
-    if (treasure.canDig(p.x, p.z)) {
+    if (temple.inside(player.pos)) {
+      hud.say('Too hard to dig here.');
+    } else if (treasure.canDig(p.x, p.z)) {
       player.startDig(async (x, z) => {
         const res = await treasure.dig(x, z);
         if (res.result === 'crab') player.startle();
@@ -950,7 +969,7 @@ function frame(now) {
     if (input.pressed('ArrowLeft') && !journal.open) treasure.flip(-1);
   }
   player.sheltered = interior.inside;
-  player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis(), dryAt: (p) => boat.holds(p), poolAt: (p) => kittiwake.poolAt(p) });
+  player.update(dt, input, { t, waveScale: swell, camBasis: follow.basis(), dryAt: (p) => boat.holds(p), poolAt: (p) => kittiwake.poolAt(p) ?? temple.poolAt(p) });
   // (Should the bear ever end up nowhere at all, a bad number having got in
   // somewhere, put them back aboard rather than leave a blank screen.)
   if (!Number.isFinite(player.pos.x + player.pos.y + player.pos.z)) {
@@ -1017,7 +1036,7 @@ function frame(now) {
 }
 
 if (params.has('dev')) {
-  window.__game = { admin, groundAt, overboard, cinematic, openingFilm, endingFilm, story, ISLAND_BY_ID, composer, renderer, kittiwake, beacon, zawn, temple, setPieces, heightAt, waveNow, shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
+  window.__game = { admin, keeperStones, groundAt, overboard, cinematic, openingFilm, endingFilm, story, ISLAND_BY_ID, composer, renderer, kittiwake, beacon, zawn, temple, setPieces, heightAt, waveNow, shops, restaurants, player, boat, world, follow, camera, input, hud, treasure, puzzles, course, hatch, stack, islands, scene, bloom, fishing, interior, screens, wildlife, islandLife, villages, talk, journal, questWorld, gathering, cooking, decorating, finds, ocean, controls, stormFx, atmosphere, env, progress, THREE };
 }
 
 syncClock().finally(() => {

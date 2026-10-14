@@ -31,7 +31,7 @@ export const LANDMARKS = {
   tower: { name: 'the watch tower', island: 'beacon', at: () => [F('beacon').tower.x, F('beacon').tower.z], reach: 25, kind: 'tower', label: [9, 2, 'left'] },
   stones: { name: 'the standing stones', island: 'beacon', at: () => [F('beacon').stones.x, F('beacon').stones.z], reach: 15, kind: 'stones', label: [-9, 6, 'right'] },
   zawn: { name: 'the Zawn', island: 'cormorant', at: () => [F('cormorant').pool.x, F('cormorant').pool.z], reach: 35, kind: 'cave', label: [9, -4, 'left'] },
-  temple: { name: "the keepers' temple", island: 'saddle', at: () => [F('saddle').temple.at.x, F('saddle').temple.at.z], reach: 40, kind: 'temple', label: [10, 3, 'left'] },
+  temple: { name: "the keepers' temple", island: 'saddle', at: () => [F('saddle').temple.gate.x + 8, F('saddle').temple.gate.z], reach: 40, kind: 'temple', label: [10, 3, 'left'] },
 };
 
 /** Where a landmark is in the world: { x, z }. */

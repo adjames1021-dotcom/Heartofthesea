@@ -43,11 +43,15 @@ function saddleIsland() {
     h += (fbm(lx * 0.035, lz * 0.035, 5, 3) - 0.5) * 7 * sstep(14, 45, d);
     return h;
   };
-  // The keepers' temple (shared/temple.js), up in the saddle between the
-  // hills: the ground levelled into a podium for it, banked down to the
-  // hillside round it, and the pit inside it cut down deep.
-  const T = { at: { x: 12, z: -2 }, half: { x: 10, z: 48 }, pit: { z0: -5, z1: 11, half: 5, depth: 8 } };
-  T.floor = Math.round(ground(T.at.x, T.at.z) + 1);
+  // The keepers' temple (shared/temple.js), inside the big hill. Its gate is
+  // at the foot of the hill's east flank, facing the saddle: the ground in
+  // front of it levelled into a forecourt, and a cut into the hillside for the
+  // entrance hall, roofed over again (src/temple.js) where the hill's too thin
+  // over it. The rest is far enough under the hill not to show.
+  // turn: the temple's frame in the island's (its −z, in, is the island's −x).
+  const T = { gate: { x: 6, z: -15 }, floor: 46, turn: Math.PI / 2, court: { len: 20, half: 12 }, cut: { len: 16, half: 7 } };
+  // (The temple's frame from the island's: x across the gate, z out from it.)
+  const tf = (lx, lz) => [T.gate.z - lz, lx - T.gate.x];
   return {
     name: 'Saddle Island',
     land: 300,
@@ -57,17 +61,23 @@ function saddleIsland() {
       bay: BAY,
       buoy: { x: 22, z: 302 },
       temple: T,
-      clear: [{ x: T.at.x, z: T.at.z, r: 62 }],
+      clear: [{ x: T.gate.x + 8, z: T.gate.z, r: 30 }],
     },
     height(lx, lz) {
       let h = ground(lx, lz);
-      const dx = lx - T.at.x;
-      const dz = lz - T.at.z;
-      const box = Math.max(Math.abs(dx) - T.half.x - 2, Math.abs(dz) - T.half.z - 2);
-      if (box < 30) h = lerp(T.floor, h, sstep(0, 30, box));
-      // (The ground's only coarse here, a vertex every 4 m: cut a little wider than the pit, so its
-      // floor's all the way down under the pillars, and the walls round it hide the slope up.)
-      if (Math.abs(dx) < T.pit.half + 0.5 && dz > T.pit.z0 - 1.5 && dz < T.pit.z1 + 1.5) h = T.floor - T.pit.depth;
+      const [x, z] = tf(lx, lz);
+      // The forecourt: level out in front of the gate, banked down to the
+      // saddle round it; behind the gate line the hill comes back quickly.
+      const C = T.court;
+      const out = Math.max(Math.abs(x) - C.half, z - C.len);
+      const k = z >= 0 ? sstep(0, 14, out) : Math.max(sstep(0, 14, out), sstep(0, 6, -z));
+      h = lerp(T.floor - 0.3, h, k);
+      // The cut for the entrance hall: down to under its floor, sides sloping back up to the hill.
+      const U = T.cut;
+      if (z < 2 && z > -U.len - 6) {
+        const c = Math.max(sstep(U.half, U.half + 4, Math.abs(x)), sstep(U.len, U.len + 5, -z));
+        h = Math.min(h, lerp(T.floor - 0.5, h, c));
+      }
       return h;
     },
   };

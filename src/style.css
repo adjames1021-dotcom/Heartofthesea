@@ -506,6 +506,7 @@ html, body {
 .key-card.open { opacity: 1; transform: translate(-50%, 0); }
 .key-card h3 { margin: 4px 0 6px; font-weight: 600; }
 .key-card p { margin: 6px 0; font-size: 0.92rem; text-align: left; }
+.key-card p.found { font-style: italic; opacity: 0.85; }
 .key-card .close { text-align: right; opacity: 0.6; font-size: 0.8rem; }
 .key-row { display: flex; flex-wrap: wrap; gap: 2px 6px; justify-content: center; margin: 4px 0 8px; }
 .journal .key-row { justify-content: flex-start; flex-wrap: nowrap; gap: 3px; margin: 6px 0 10px; }

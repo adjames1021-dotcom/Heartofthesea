@@ -15,7 +15,7 @@ shared clock (`GET /api/time`, 24-minute days).
 
 | Island | What it is |
 | --- | --- |
-| Saddle Island | The big two-hilled island in the middle, wooded on its lower slopes. You start at anchor in its bay. Up in the saddle between the hills, the keepers' temple. |
+| Saddle Island | The big two-hilled island in the middle, wooded on its lower slopes. You start at anchor in its bay. In the big hill, the keepers' temple: its gate's at the hill's foot, facing the saddle. |
 | Gannet Stack | A tall rock spire on a pebble island, white with seabirds. |
 | The Horseshoe | A crescent with a lagoon and a sheer outer cliff. |
 | Pell's Bar | A long sandbar with one standing rock at its west end. |
@@ -339,9 +339,12 @@ it runs and keeps in a Durable Object (`Keeper`), so there's nothing to set up.
 ## The Heart of the Sea
 
 The main story (`shared/story.js`). Before there were villages on these
-islands there was a temple on Saddle, and in it a stone as green as deep
-water. When raiders came, its eight keepers locked it and hid the keys
-where the sea would keep them.
+islands there was a temple under the big hill on Saddle, and in it a stone
+as green as deep water. When raiders came, its eight keepers locked it and
+hid the keys where the sea would keep them. The keepers were eight families
+(the Pells, the Hoskens, the Treloars, the Jagos, the Nances, the Tresizes,
+the Penroses and the Rowes), and each kept its key for generations after,
+and moved it when it had to.
 
 - The first time in after it arrived, a short film tells you that much and
   comes down to your boat. Elowen Tresize, who had her before you, has left
@@ -349,22 +352,46 @@ where the sea would keep them.
 - Eight chapters, one at a time, in order. Each key is in the chest at one
   of the eight big places above (Pell's Bar, the Molly Ann's hatch, the
   Horseshoe, Gannet Stack, the Molly Ann's fore top, the Kittiwake, the
-  watch tower, the Zawn), but only when it's that chapter's turn. Each has a
-  tag on it saying where the next one is. The journal (J) keeps the clue and
-  the keys you have; the chart (Tab) rings where to go. A chest you already
-  had out before the story got there is back for you to fetch again.
-- With all eight, the temple gate opens. Inside are the keepers' traps:
-  blades swinging across a hall, a pit crossed on pillars (two of them
-  sink if you stand about), a corridor that puts up spikes in a wave, and a
-  ramp a boulder comes down (get in an alcove). Each has a brazier before it
-  that lights as you reach it; a trap sends you back to the last one lit.
-- At the top, the Heart on its stone. Lift it and the ending film plays; its
-  light stays up over Saddle afterwards.
+  watch tower, the Zawn), but only when it's that chapter's turn. Each comes
+  with its family's own words, and a tag saying where the next one is. The
+  journal (J) keeps it all, with the keys you have; the chart (Tab) rings
+  where to go. A chest you already had out before the story got there is
+  back for you to fetch again.
+- With the fourth key, at the top of Gannet Stack, a second letter from
+  Elowen: she was of the pilots' line, and the Kittiwake was her father's.
+- Each family left a stone by where its key was (E to read it), with its
+  sign and a count of notches cut under the sign. The counts go in your
+  journal; the temple's last door wants all eight.
+- With all eight keys, the gate opens: it's at the foot of the big hill, on
+  its east side, facing the saddle. The temple goes in under the hill and
+  down, about 280 m of it (`shared/temple.js` has the plan):
+  - the entrance hall, the eight families carved on its walls;
+  - five blades swinging across a hall;
+  - a pit crossed on pillars: some sink if you stand about, one slides;
+  - the keepers' hall, eight statues and eight plates in the floor: walk
+    the plates in the order you found the keys (get it wrong and the
+    statues throw darts);
+  - a long stair down, with steps fallen out of it (take it at a run);
+  - a corridor that puts up spikes in two waves: watch one go by, then run
+    as its first row drops; there's room to stop between them;
+  - a room of mirrors: turn them to carry a bar of daylight to the crystal
+    in the far door;
+  - a cistern: turn the wheel to flood it, and swim up with the water to a
+    door high in the far wall before it drains away again;
+  - a bridge of slabs over a chasm, each one dropping soon after you step on
+    it, two of them gone already;
+  - a ramp down that a boulder chases you along (into an alcove, quick);
+  - the round door with eight dials by it: set each to its family's count;
+  - and the cavern at the hill's heart: black water, stepping stones (some
+    sink), and the Heart on its stone under a shaft of daylight.
+- Each part has a brazier at its start that lights as you reach it, with a
+  line on what's ahead; a trap sends you back to the last one lit. Lift the Heart and the ending film
+  plays; its light comes up out of the hill afterwards, for good.
 
 The server keeps your place in it and hands out the keys (`worker/rules.js`):
-a key only comes with the right chest at the right time, the gate only
-opens with all eight and only from in front of it, and the Heart only from
-beside it.
+a key only comes with the right chest at the right time, a stone only goes
+in your journal from beside it, the gate only opens with all eight keys and
+only from in front of it, and the Heart only from beside it.
 
 ## Versions
 
@@ -483,9 +510,10 @@ src/interior.js        the cabin below, inside the hull; src/screens.js the cont
 src/treasure.js        maps, digging, chests, crabs, casks; src/mapview.js draws maps
 src/puzzles.js         notes and set pieces (Pell's Bar, the Horseshoe)
 src/hatch.js           the Molly Ann's hatch, yard, net and casks
+src/keeperstones.js    the keepers' families' stones, one by each key's place
 src/kittiwake.js       the Kittiwake: hull, hold, pump, door; src/beacon.js the watch tower, its lamp and the stones
 src/zawn.js            the arch, the tide cave, the quay, winch, gangway, lever and cellar
-src/temple.js          the keepers' temple: gate and keyholes, the traps, braziers, the Heart
+src/temple.js          the keepers' temple under the hill: its rooms, traps and puzzles, braziers, the Heart
 src/story.js           Elowen's letter, the key card, chests put back for the story
 src/cinematic.js       the opening and ending films (the shots are in src/main.js)
 src/course.js          the wreck climb; src/stack.js the Gannet Stack climb

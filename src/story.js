@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { paint, mergeParts } from './props.js';
-import { CHAPTERS, TEMPLE, DONE, LETTER, TEMPLE_CLUE } from '../shared/story.js';
+import { CHAPTERS, TEMPLE, DONE, LETTER, LETTER2, TEMPLE_CLUE } from '../shared/story.js';
 import { foreTopChest, hatchChest } from '../shared/wreck.js';
 import { gannetNest, ISLAND_BY_ID } from '../shared/world.js';
 import { kittiwakeChest } from '../shared/kittiwake.js';
@@ -52,6 +52,49 @@ export function keySvg(n, found = true, size = 34) {
   };
   return `<svg class="key" width="${size * 2.2}" height="${size}" viewBox="0 0 53 24" fill="${c}" stroke="${s}" stroke-width="1.3" stroke-linejoin="round">
     <g>${bows[k.bow]}</g><path d="M21 10.5h28v3h-3v4h-3v-4h-3v3h-3v-3h-16z"/></svg>`;
+}
+
+// The same signs, for drawing on a canvas (the temple's carvings, the keepers'
+// stones): in a 24-unit square, as on the keys' bows.
+const SIGNS = {
+  sun: { circles: [[12, 12, 7]], fill: [], stroke: ['M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2'] },
+  ship: { circles: [], fill: ['M5 13h14l-3 5H8z', 'M12 5l5 6h-5z'], stroke: ['M12 4v9'] },
+  ring: { circles: [[12, 12, 8]], hole: [12, 12, 4], fill: [], stroke: [] },
+  wing: { circles: [], fill: ['M4 14c4-1 6-6 8-10 2 4 4 9 8 10-4 1-6 4-8 6-2-2-4-5-8-6z'], stroke: [] },
+  star: { circles: [], fill: ['M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z'], stroke: [] },
+  anchor: { circles: [[12, 5, 2.5]], fill: [], stroke: ['M12 7.5V20M7 11h10M4 15c1 4 5 5 8 5s7-1 8-5'] },
+  flame: { circles: [], fill: ['M12 3c3 4 6 6 6 10a6 6 0 0 1-12 0c0-3 2-4 3-7 1 2 2 3 3 3 0-2-1-4 0-6z'], stroke: [] },
+  wave: { circles: [], fill: ['M3 12c2-4 5-4 6 0s4 4 6 0 5-4 6 0v6H3z'], stroke: [] },
+};
+
+/** Draw a keeper's sign (sun, ship, …) centred at (x, y), `size` across. */
+export function drawSign(ctx, sign, x, y, size, { fill = '#c9a24a', stroke = '#3a2f22', width = 1.6 } = {}) {
+  const d = SIGNS[sign];
+  if (!d) return;
+  ctx.save();
+  ctx.translate(x - size / 2, y - size / 2);
+  ctx.scale(size / 24, size / 24);
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = width;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  for (const [cx, cy, r] of d.circles) {
+    const p = new Path2D();
+    p.arc(cx, cy, r, 0, Math.PI * 2);
+    if (d.hole) p.arc(d.hole[0], d.hole[1], d.hole[2], 0, Math.PI * 2, true);
+    ctx.fill(p, 'evenodd');
+    ctx.stroke(p);
+  }
+  for (const f of d.fill) {
+    const p = new Path2D(f);
+    ctx.fill(p);
+    ctx.stroke(p);
+  }
+  ctx.lineWidth = width * 1.5;
+  ctx.strokeStyle = fill;
+  for (const f of d.stroke) ctx.stroke(new Path2D(f));
+  ctx.restore();
 }
 
 export class Story {
@@ -134,16 +177,18 @@ export class Story {
     return { x: isl.x, z: isl.z, r: Math.min(isl.land, 130), label: st.ch === TEMPLE ? 'the temple' : CHAPTERS[st.ch].key };
   }
 
-  readLetter() {
-    this.view.innerHTML = `<div class="letter">${LETTER.map((l) => (l ? `<p>${esc(l)}</p>` : '<p class="gap"></p>')).join('')}<p class="close">E to fold it up</p></div>`;
+  /** Read one of Elowen's letters: the first (on the chart table), or the second (from the top of Gannet Stack). */
+  readLetter(lines = LETTER) {
+    this.reading = lines;
+    this.view.innerHTML = `<div class="letter">${lines.map((l) => (l ? `<p>${esc(l)}</p>` : '<p class="gap"></p>')).join('')}<p class="close">E to fold it up</p></div>`;
     this.view.classList.add('open');
     if (document.pointerLockElement) document.exitPointerLock();
   }
 
-  /** Done reading: if it's the first time, the story's begun. */
+  /** Done reading: if it's the first letter, the first time, the story's begun. */
   closeLetter() {
     this.view.classList.remove('open');
-    if (this.state.ch !== 0) return;
+    if (this.reading !== LETTER || this.state.ch !== 0) return;
     this.progress
       .act('storyBegin', {})
       .then((res) => {
@@ -159,15 +204,22 @@ export class Story {
       <div class="key-big">${keySvg(n, true, 46)}</div>
       <h3>You found ${esc(CHAPTERS[n].key)}.</h3>
       <div class="key-row">${row}</div>
+      <p class="found">${esc(CHAPTERS[n].found)}</p>
       <p>${esc(next)}</p>
-      <p class="close">${n === 8 ? 'All eight.' : `${(st.keys ?? []).length} of 8.`} E to put it away</p>`;
+      <p class="close">${n === 8 ? 'All eight.' : `${(st.keys ?? []).length} of 8.`} E to put it away${n === 4 ? ' and read the letter' : ''}</p>`;
     this.card.classList.add('open');
-    this.cardT = 14;
+    this.cardKey = n;
+    this.cardT = n === 4 ? 0 : 20;
   }
 
   closeCard() {
     this.card.classList.remove('open');
     this.cardT = 0;
+    // With the gannet key, Elowen's second letter.
+    if (this.cardKey === 4) {
+      this.cardKey = null;
+      this.readLetter(LETTER2);
+    }
   }
 
   get cardOpen() {

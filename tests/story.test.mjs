@@ -9,7 +9,7 @@ import { kittiwakeChest } from '../shared/kittiwake.js';
 import { beaconSpot } from '../shared/beacon.js';
 import { zawnChest } from '../shared/zawn.js';
 import { templeGate, templeHeart } from '../shared/temple.js';
-import { CHAPTERS, TEMPLE, DONE, LETTER, TEMPLE_CLUE, DONE_NOTE, TARGETS } from '../shared/story.js';
+import { CHAPTERS, TEMPLE, DONE, LETTER, LETTER2, LETTER2_NOTE, KEEPERS, TEMPLE_CLUE, DONE_NOTE, TARGETS, stoneNote, stonePoint } from '../shared/story.js';
 
 const ctx = (now = 1000) => ({ secret: 'test-secret', now });
 const DIGS = { 'pells-bar': () => pellsBar().spot, horseshoe: () => horseshoeCove().spot, beacon: () => beaconSpot() };
@@ -103,11 +103,54 @@ test('saves from before the story begin it from the letter', async () => {
 });
 
 test("the story's writing: no shouting, no stock phrases", () => {
-  const texts = [...LETTER, TEMPLE_CLUE, DONE_NOTE, ...CHAPTERS.slice(1).flatMap((c) => [c.title, c.key, c.clue])];
+  const texts = [
+    ...LETTER,
+    ...LETTER2,
+    LETTER2_NOTE,
+    TEMPLE_CLUE,
+    DONE_NOTE,
+    ...CHAPTERS.slice(1).flatMap((c) => [c.title, c.key, c.clue, c.found]),
+    ...KEEPERS.slice(1).flatMap((k, i) => [k.carving, stoneNote(i + 1)]),
+  ];
   const banned = /greetings|traveller|traveler|ahoy|matey|adventurer|brave|quest|objective|ancient|legendary|epic|mysterious/i;
   for (const t of texts) {
     assert.ok(!t.includes('!'), `no exclamation marks: ${t}`);
     assert.ok(!banned.test(t), `no stock phrases: ${t}`);
     assert.ok(t.length <= 320, `not too long: ${t}`);
   }
+});
+
+test("each key comes with its family's words; the fourth with a second letter from Elowen", async () => {
+  let s = freshState(0);
+  s = (await apply(s, { type: 'storyBegin' }, ctx())).state;
+  for (let n = 1; n <= 4; n++) {
+    const r = await fetch(s, CHAPTERS[n].target, 1000 + n);
+    assert.equal(r.reply.key.n, n);
+    s = r.state;
+    assert.ok(s.journal.some((j) => j.quest === 'heart' && j.text === CHAPTERS[n].found), `key ${n}'s words in the journal`);
+    assert.equal(!!s.story.letter2, n >= 4);
+  }
+  assert.ok(s.journal.some((j) => j.text === LETTER2_NOTE));
+});
+
+test("the keepers' stones: read by them, once each, their counts in the journal", async () => {
+  let s = freshState(0);
+  const p = stonePoint(3);
+  // Not from a long way off.
+  let r = await apply(s, { type: 'stone', n: 3, x: p.x + 40, z: p.z }, ctx());
+  assert.equal(r.reply.ok, false);
+  assert.equal((await apply(s, { type: 'stone', n: 9, x: p.x, z: p.z }, ctx())).reply.ok, false);
+  r = await apply(s, { type: 'stone', n: 3, x: p.x + 1.5, z: p.z - 1 }, ctx());
+  assert.ok(r.reply.ok);
+  assert.equal(r.reply.notches, KEEPERS[3].notches);
+  s = r.state;
+  assert.deepEqual(s.story.stones, [3]);
+  assert.equal(s.journal.filter((j) => j.quest === 'stones').length, 1);
+  assert.match(s.journal.at(-1).text, /ring/);
+  r = await apply(s, { type: 'stone', n: 3, x: p.x, z: p.z }, ctx());
+  assert.ok(r.reply.already);
+  assert.equal(r.state.journal.filter((j) => j.quest === 'stones').length, 1, 'only the once');
+  // Every stone on dry ground, and every count a different place round the Heart.
+  for (let n = 1; n <= 8; n++) assert.ok(stonePoint(n).y > 0.5, `stone ${n} above the sea`);
+  assert.equal(new Set(KEEPERS.slice(1).map((k) => k.notches)).size, 8);
 });
